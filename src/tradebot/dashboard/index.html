@@ -1,0 +1,883 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>tradebot dashboard</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
+    h1 { margin: 0 0 8px 0; }
+    .muted { color: #666; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 14px; background: #fff; }
+    .card h2 { font-size: 14px; margin: 0 0 8px 0; color: #374151; }
+    .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; vertical-align: top; }
+    .tableWrap { overflow: auto; max-height: 360px; border: 1px solid #f3f4f6; border-radius: 10px; }
+    th { color: #374151; font-weight: 600; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #ddd; }
+    .ok { background: #ecfdf5; border-color: #a7f3d0; }
+    .warn { background: #fffbeb; border-color: #fde68a; }
+    .bad { background: #fef2f2; border-color: #fecaca; }
+    tr.good td { background: #f0fdf4; }
+    tr.exit td { background: #fef2f2; }
+    pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #f9fafb; padding: 10px; border-radius: 10px; border: 1px solid #eee; }
+    .col-6 { grid-column: span 6; }
+    .col-12 { grid-column: span 12; }
+    @media (max-width: 900px) {
+      .col-6 { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+  <h1>tradebot dashboard</h1>
+  <div class="muted" id="subtitle">loading…</div>
+
+  <div class="grid" style="margin-top: 16px;">
+    <div class="card col-6">
+      <h2>Account</h2>
+      <div class="kvs" id="account"></div>
+    </div>
+    <div class="card col-6">
+      <h2>Bot state</h2>
+      <div class="kvs" id="state"></div>
+      <div style="margin-top:10px;">
+        <div class="muted" style="margin-bottom:6px;">Strategy (applies to live + rebalance selection)</div>
+        <select id="strategySelect" style="width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></select>
+
+        <div class="muted" style="margin: 10px 0 6px 0;">Per-asset stop loss (live + risk-check)</div>
+        <select id="stopLossSelect" style="width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <option value="">None</option>
+          <option value="0.01">1%</option><option value="0.02">2%</option><option value="0.03">3%</option><option value="0.04">4%</option><option value="0.05">5%</option>
+          <option value="0.06">6%</option><option value="0.07">7%</option><option value="0.08">8%</option><option value="0.09">9%</option><option value="0.10">10%</option>
+          <option value="0.11">11%</option><option value="0.12">12%</option><option value="0.13">13%</option><option value="0.14">14%</option><option value="0.15">15%</option>
+          <option value="0.16">16%</option><option value="0.17">17%</option><option value="0.18">18%</option><option value="0.19">19%</option><option value="0.20">20%</option>
+        </select>
+
+        <div class="muted" style="margin: 10px 0 6px 0;">Config (JSON) — edit and save</div>
+        <textarea id="configEditor" style="width:100%; height:160px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px;"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+          <input id="token" placeholder="token (optional)" style="flex:1; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <button id="saveBtn" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#111827; color:#fff;">Save</button>
+          <span id="saveStatus" class="muted"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card col-12">
+      <h2>Equity curve</h2>
+      <div id="equityChart" class="muted">loading…</div>
+    </div>
+
+    <div class="card col-12">
+      <h2>Backtest</h2>
+      <div class="muted">These dates are the evaluation window (the backtest will only score performance within this range; it may fetch earlier data as warmup for indicators).</div>
+      <div class="muted">Per-asset stop loss is configured in the main config (live + risk-check), not the backtest panel yet.</div>
+      <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap: wrap; margin-top:8px;">
+        <div>
+          <div class="muted">Evaluation start</div>
+          <input id="btStart" placeholder="YYYY-MM-DD" style="padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+        </div>
+        <div>
+          <div class="muted">Evaluation end</div>
+          <input id="btEnd" placeholder="YYYY-MM-DD" style="padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+        </div>
+        <div>
+          <div class="muted">Presets</div>
+          <div style="display:flex; gap:6px;">
+            <button id="btPreset1y" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Last 1y</button>
+            <button id="btPreset5y" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Last 5y</button>
+          </div>
+        </div>
+        <div>
+          <div class="muted">Assets</div>
+          <select id="btAssets" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+            <option value="both" selected>Both</option>
+            <option value="equities">Stocks only</option>
+            <option value="crypto">Crypto only</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted">Rebalance frequency</div>
+          <select id="btRebalance" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+            <option value="weekly" selected>Weekly</option>
+            <option value="daily">Daily</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted">Rebalance style</div>
+          <select id="btRebalanceMode" style="width:200px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+            <option value="target_notional" selected>Target % notional</option>
+            <option value="no_add_to_losers">Don't add to losers</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted">Liquidation</div>
+          <select id="btLiquidation" style="width:220px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+            <option value="liquidate_non_selected" selected>Liquidate non-selected</option>
+            <option value="hold_until_exit">Hold until exit signal</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted">Per-asset stop loss</div>
+          <select id="btStopLoss" style="width:180px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+            <option value="">None</option>
+            <option value="0.01">1%</option><option value="0.02">2%</option><option value="0.03">3%</option><option value="0.04">4%</option><option value="0.05">5%</option>
+            <option value="0.06">6%</option><option value="0.07">7%</option><option value="0.08">8%</option><option value="0.09">9%</option><option value="0.10">10%</option>
+            <option value="0.11">11%</option><option value="0.12">12%</option><option value="0.13">13%</option><option value="0.14">14%</option><option value="0.15">15%</option>
+            <option value="0.16">16%</option><option value="0.17">17%</option><option value="0.18">18%</option><option value="0.19">19%</option><option value="0.20">20%</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted">Slippage (bps)</div>
+          <input id="btSlip" placeholder="10" value="10" style="width:120px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+        </div>
+        <div>
+          <div class="muted">Single symbol (optional)</div>
+          <input id="btSymbol" placeholder="AAPL or BTC/USD" style="min-width:280px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+        </div>
+        <div>
+          <div class="muted">Max drawdown stop</div>
+          <select id="btDDPreset" style="width:180px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+            <option value="">None</option>
+            <option value="0.20" selected>20%</option>
+            <option value="0.30">30%</option>
+            <option value="0.40">40%</option>
+            <option value="0.50">50%</option>
+          </select>
+        </div>
+        <div>
+          <div class="muted">Custom DD stop</div>
+          <input id="btDD" placeholder="e.g. 0.25" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button id="btRun" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#111827; color:#fff;">Run backtest</button>
+          <button id="btClearCache" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#374151; color:#fff;">Clear cache</button>
+          <span id="btStatus" class="muted"></span>
+        </div>
+      </div>
+      <div id="btMetrics" class="muted" style="margin-top:8px;"></div>
+      <div id="btChart" class="muted" style="margin-top:8px;">(no results yet)</div>
+      <div style="margin-top:10px;">
+        <h2>Open positions at end (unrealized)</h2>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Last close</th><th>Value</th><th>Unrealized P/L</th><th>Unrealized %</th></tr>
+            </thead>
+            <tbody id="btOpenPos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <h2>Trades (realized)</h2>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr><th>Symbol</th><th>Entry</th><th>Exit</th><th>Qty</th><th>Entry Px</th><th>Exit Px</th><th>P/L</th><th>P/L %</th><th>Reason</th></tr>
+            </thead>
+            <tbody id="btTrades"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:6px;">Note: backtest runs in the background and uses daily closes; it can take a bit.</div>
+      <div style="margin-top:10px;">
+        <h2>Backtest history</h2>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr><th>Job</th><th>State</th><th>Progress</th><th>Error</th><th></th></tr>
+            </thead>
+            <tbody id="btJobs"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card col-12">
+      <h2>Exposure (held + pending orders)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Symbol</th>
+            <th>Held Qty</th>
+            <th>Market Value</th>
+            <th>Pending Buy Qty</th>
+            <th>Pending Buy $</th>
+            <th>Est Price</th>
+            <th>Est Qty (from $)</th>
+            <th>Pending Sell Qty</th>
+            <th>Pending Sell $</th>
+            <th>Avg Entry</th>
+            <th>Unrealized P/L</th>
+            <th>Unrealized %</th>
+          </tr>
+        </thead>
+        <tbody id="exposure"></tbody>
+      </table>
+      <div class="muted" style="margin-top:8px;">Click a row to expand open orders for that symbol.</div>
+    </div>
+
+    <div class="card col-12">
+      <h2>Last run summary</h2>
+      <div class="grid">
+        <div class="card col-6">
+          <h2>Last rebalance</h2>
+          <div class="kvs" id="rebalanceSummary"></div>
+          <div style="margin-top:10px;">
+            <h2>Entry signals (selected)</h2>
+            <div class="tableWrap">
+              <table>
+                <thead>
+                  <tr><th>Symbol</th><th>Score</th><th>Close</th><th>MA long</th><th>Ann vol</th></tr>
+                </thead>
+                <tbody id="entrySignals"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin-top:8px;"><details><summary class="muted">Raw JSON</summary><pre id="rebalance"></pre></details></div>
+        </div>
+        <div class="card col-6">
+          <h2>Last risk check</h2>
+          <div class="kvs" id="riskSummary"></div>
+          <div style="margin-top:10px;">
+            <h2>Exit signals</h2>
+            <div class="tableWrap">
+              <table>
+                <thead>
+                  <tr><th>Symbol</th><th>Asset</th><th>Reason</th><th>Close</th><th>MA long</th></tr>
+                </thead>
+                <tbody id="exitSignals"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="margin-top:8px;"><details><summary class="muted">Raw JSON</summary><pre id="risk"></pre></details></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card col-12">
+      <h2>Orders</h2>
+      <div class="muted" id="orderSummary" style="margin: 6px 0 10px 0;">loading…</div>
+      <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
+        <button id="cancelAllBtn" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#7f1d1d; color:#fff;">Cancel all open orders (paper)</button>
+        <span id="cancelStatus" class="muted"></span>
+      </div>
+      <div class="grid">
+        <div class="col-6">
+          <h2>Open orders</h2>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr><th>Symbol</th><th>Side</th><th>Status</th><th>Type</th><th>Notional</th><th>Qty</th><th>Limit</th><th>Stop</th><th>Created</th></tr>
+              </thead>
+              <tbody id="openOrders"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="col-6">
+          <h2>Recent fills</h2>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr><th>Symbol</th><th>Side</th><th>Filled Qty</th><th>Avg Price</th><th>Filled At</th></tr>
+              </thead>
+              <tbody id="recentFills"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card col-12">
+      <h2>Last placed orders</h2>
+      <table>
+        <thead>
+          <tr><th>Symbol</th><th>Side</th><th>Notional</th><th>Id</th></tr>
+        </thead>
+        <tbody id="lastPlaced"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + " -> " + r.status);
+  return await r.json();
+}
+
+function money(x) {
+  if (x === null || x === undefined || Number.isNaN(x)) return "—";
+  return "$" + Number(x).toLocaleString(undefined, {maximumFractionDigits: 2, minimumFractionDigits: 2});
+}
+
+function pct(x) {
+  if (x === null || x === undefined || Number.isNaN(x)) return "—";
+  return (100*Number(x)).toFixed(2) + "%";
+}
+
+function kv(el, k, v) {
+  const kEl = document.createElement('div');
+  kEl.textContent = k;
+  kEl.className = 'muted';
+  const vEl = document.createElement('div');
+  vEl.textContent = v;
+  el.appendChild(kEl);
+  el.appendChild(vEl);
+}
+
+function fmtDate(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+let btJobId = null;
+
+function setBacktestDatesYears(years) {
+  const end = new Date();
+  const start = new Date();
+  start.setFullYear(end.getFullYear() - years);
+  const sEl = document.getElementById('btStart');
+  const eEl = document.getElementById('btEnd');
+  if (sEl) sEl.value = fmtDate(start);
+  if (eEl) eEl.value = fmtDate(end);
+}
+
+function setDefaultBacktestDates() {
+  const sEl = document.getElementById('btStart');
+  const eEl = document.getElementById('btEnd');
+  if (sEl && eEl && !sEl.value && !eEl.value) {
+    setBacktestDatesYears(1);
+  }
+}
+
+async function runBacktest() {
+  const status = document.getElementById('btStatus');
+  const token = document.getElementById('token')?.value || '';
+  const start = document.getElementById('btStart')?.value;
+  const end = document.getElementById('btEnd')?.value;
+  const asset_mode = (document.getElementById('btAssets')?.value || 'both');
+  const rebalance = (document.getElementById('btRebalance')?.value || 'weekly');
+  const rebalance_mode = (document.getElementById('btRebalanceMode')?.value || 'target_notional');
+  const liquidation_mode = (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected');
+  const slippage_bps = Number(document.getElementById('btSlip')?.value || '10');
+  const symbol = (document.getElementById('btSymbol')?.value || '').trim();
+  const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
+  const per_asset_stop_loss_pct = stopLoss ? Number(stopLoss) : null;
+  const ddCustom = (document.getElementById('btDD')?.value || '').trim();
+  const ddPreset = (document.getElementById('btDDPreset')?.value || '').trim();
+  const ddStopRaw = ddCustom || ddPreset;
+  const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
+  status.textContent = 'starting…';
+  const body = {start, end, slippage_bps, initial_equity: 100000, asset_mode, rebalance, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct};
+  const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const j = await r.json();
+  btJobId = j.job_id;
+  status.textContent = `job ${btJobId} started`;
+}
+
+async function pollBacktest() {
+  if (!btJobId) return;
+  const st = await getJSON('/api/backtest/status?job_id=' + encodeURIComponent(btJobId));
+  const el = document.getElementById('btStatus');
+  if (st.state === 'running' || st.state === 'fetching_data' || st.state === 'fetching_crypto') {
+    el.textContent = `${st.state} ${st.progress||0}/${st.total||0}`;
+  }
+  if (st.state === 'done') {
+    el.textContent = 'done';
+    const res = await getJSON('/api/backtest/result?job_id=' + encodeURIComponent(btJobId));
+    renderBacktest(res);
+    btJobId = null;
+  }
+  if (st.state === 'error') {
+    el.textContent = 'error: ' + st.error;
+    const met = document.getElementById('btMetrics');
+    if (st.traceback) met.textContent = st.traceback;
+    btJobId = null;
+  }
+}
+
+function renderBacktest(res) {
+  const m = res.metrics || {};
+  const met = document.getElementById('btMetrics');
+  met.textContent = `Return: ${pct(m.return)} • CAGR: ${pct(m.cagr)} • Max DD: ${pct(m.max_drawdown)} • Obs DD: ${pct(m.max_observed_drawdown)} • Ann vol: ${pct(m.ann_vol)} • Sharpe: ${Number(m.sharpe||0).toFixed(2)} • Trades: ${m.trade_count ?? '—'} • Win rate: ${m.win_rate==null ? '—' : pct(m.win_rate)} • DD-stop events: ${m.dd_stop_event_count ?? 0} • Start: ${money(m.start_equity)} • End: ${money(m.end_equity)}`;
+
+  const curve = res.equity_curve || [];
+  const ec = document.getElementById('btChart');
+  if (curve.length < 2) { ec.textContent='(no curve)'; return; }
+  const w = 1100, h = 260, pad = 20;
+  const ys = curve.map(p => Number(p.equity));
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const spanY = (maxY - minY) || 1;
+  const pts = curve.map((p, i) => {
+    const x = pad + (i * (w - 2*pad) / (curve.length - 1));
+    const y = pad + (h - 2*pad) * (1 - ((Number(p.equity) - minY) / spanY));
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  ec.innerHTML = `
+    <div class="muted" style="margin-bottom:6px;">range: ${money(minY)} → ${money(maxY)} • points: ${curve.length}</div>
+    <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">
+      <rect x="0" y="0" width="${w}" height="${h}" fill="#fff" stroke="#e5e7eb" />
+      <polyline fill="none" stroke="#16a34a" stroke-width="2" points="${pts}" />
+    </svg>
+  `;
+
+  // Open positions table
+  const op = document.getElementById('btOpenPos');
+  if (op) {
+    op.innerHTML = '';
+    const openp = res.open_positions || [];
+    for (const p of openp.slice(0, 200)) {
+      const tr = document.createElement('tr');
+      const pnl = Number(p.unrealized_pnl || 0);
+      if (pnl > 0) tr.className = 'good';
+      if (pnl < 0) tr.className = 'exit';
+      const ac = (p.avg_cost!=null) ? ('$' + Number(p.avg_cost).toFixed(2)) : '—';
+      const lc = (p.last_close!=null) ? ('$' + Number(p.last_close).toFixed(2)) : '—';
+      const pp = (p.unrealized_pnl_pct!=null) ? pct(p.unrealized_pnl_pct) : '—';
+      tr.innerHTML = `<td>${p.symbol}</td><td>${Number(p.qty||0).toFixed(4)}</td><td>${ac}</td><td>${lc}</td><td>${money(p.market_value||0)}</td><td>${money(pnl)}</td><td>${pp}</td>`;
+      op.appendChild(tr);
+    }
+    if (op.children.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="7" class="muted">(none)</td>`;
+      op.appendChild(tr);
+    }
+  }
+
+  // Trades table
+  const tb = document.getElementById('btTrades');
+  if (tb) {
+    tb.innerHTML = '';
+    const trades = res.trades || [];
+    trades.sort((a,b) => String(b.exit_date||'').localeCompare(String(a.exit_date||'')));
+    for (const t of trades.slice(0, 500)) {
+      const tr = document.createElement('tr');
+      const pnl = Number(t.pnl || 0);
+      if (pnl > 0) tr.className = 'good';
+      if (pnl < 0) tr.className = 'exit';
+      const ep = (t.entry_price!=null) ? ('$' + Number(t.entry_price).toFixed(2)) : '—';
+      const xp = (t.exit_price!=null) ? ('$' + Number(t.exit_price).toFixed(2)) : '—';
+      const pp = (t.pnl_pct!=null) ? pct(t.pnl_pct) : '—';
+      tr.innerHTML = `<td>${t.symbol}</td><td>${t.entry_date||'—'}</td><td>${t.exit_date||'—'}</td><td>${Number(t.qty||0).toFixed(4)}</td><td>${ep}</td><td>${xp}</td><td>${money(pnl)}</td><td>${pp}</td><td>${t.reason||''}</td>`;
+      tb.appendChild(tr);
+    }
+    if (tb.children.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="9" class="muted">(no realized trades yet)</td>`;
+      tb.appendChild(tr);
+    }
+  }
+}
+
+async function main() {
+  const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies] = await Promise.all([
+    getJSON('/api/health'),
+    getJSON('/api/config'),
+    getJSON('/api/account'),
+    getJSON('/api/state'),
+    getJSON('/api/exposure'),
+    getJSON('/api/artifacts'),
+    getJSON('/api/equity-curve?limit=500'),
+    getJSON('/api/open-orders'),
+    getJSON('/api/recent-fills?limit=200'),
+    getJSON('/api/order-summary'),
+    getJSON('/api/backtest/jobs?limit=20'),
+    getJSON('/api/strategies')
+  ]);
+
+  const frozen = artifacts.last_account?.payload?.frozen;
+  const dd = artifacts.last_account?.payload?.drawdown;
+  const status = frozen ? 'FROZEN' : 'OK';
+  document.getElementById('subtitle').textContent = `paper=${acct.paper} • status=${status}${(dd!==undefined && dd!==null) ? (' • dd=' + pct(dd)) : ''} • updated ${health.ts}`;
+
+  const accountEl = document.getElementById('account');
+  accountEl.innerHTML = '';
+  kv(accountEl, 'Account', acct.account_number);
+  kv(accountEl, 'Equity', money(acct.equity));
+  kv(accountEl, 'Cash', money(acct.cash));
+  kv(accountEl, 'Buying power', money(acct.buying_power));
+
+  const stateEl = document.getElementById('state');
+  stateEl.innerHTML = '';
+  kv(stateEl, 'Peak equity', money(st.peak_equity));
+  kv(stateEl, 'Mode', cfg.mode);
+  kv(stateEl, 'Dry run (config)', String(cfg.dry_run));
+
+  // Strategy dropdown
+  const stratSel = document.getElementById('strategySelect');
+  if (stratSel && strategies) {
+    if (!stratSel.dataset.loaded) {
+      stratSel.innerHTML = '';
+      for (const s of strategies) {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        stratSel.appendChild(opt);
+      }
+      stratSel.dataset.loaded = '1';
+    }
+    stratSel.value = cfg.strategy_id || 'baseline_trendvol';
+  }
+
+  // Stop loss dropdown
+  const slSel = document.getElementById('stopLossSelect');
+  if (slSel) {
+    const v = cfg.risk?.per_asset_stop_loss_pct;
+    slSel.value = (v===null || v===undefined) ? '' : String(v);
+  }
+
+  // Config editor
+  const editor = document.getElementById('configEditor');
+  if (editor && (!editor.value || editor.dataset.loaded !== '1')) {
+    editor.value = JSON.stringify(cfg, null, 2);
+    editor.dataset.loaded = '1';
+  }
+
+  // Equity curve chart (simple SVG polyline)
+  const ec = document.getElementById('equityChart');
+  if (!curve || curve.length < 2) {
+    ec.textContent = '(need at least 2 points; run risk-check a few times)';
+  } else {
+    const w = 1100, h = 260, pad = 20;
+    const ys = curve.map(p => Number(p.equity));
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const spanY = (maxY - minY) || 1;
+
+    const pts = curve.map((p, i) => {
+      const x = pad + (i * (w - 2*pad) / (curve.length - 1));
+      const y = pad + (h - 2*pad) * (1 - ((Number(p.equity) - minY) / spanY));
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    ec.innerHTML = `
+      <div class="muted" style="margin-bottom:6px;">range: ${money(minY)} → ${money(maxY)} • points: ${curve.length}</div>
+      <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">
+        <rect x="0" y="0" width="${w}" height="${h}" fill="#fff" stroke="#e5e7eb" />
+        <polyline fill="none" stroke="#2563eb" stroke-width="2" points="${pts}" />
+      </svg>
+    `;
+  }
+
+  const tb = document.getElementById('exposure');
+  tb.innerHTML = '';
+  for (const p of (exposure || [])) {
+    const pendingBuyN = (p.pending_buy_notional && p.pending_buy_notional !== 0) ? money(p.pending_buy_notional) : '—';
+    const pendingSellN = (p.pending_sell_notional && p.pending_sell_notional !== 0) ? money(p.pending_sell_notional) : '—';
+    const pendingBuyQ = (p.pending_buy_qty && p.pending_buy_qty !== 0) ? p.pending_buy_qty : '—';
+    const pendingSellQ = (p.pending_sell_qty && p.pending_sell_qty !== 0) ? p.pending_sell_qty : '—';
+    const estPrice = (p.est_price!==null && p.est_price!==undefined) ? ('$' + Number(p.est_price).toFixed(2) + ' (close)') : '—';
+    const estQty = (p.est_pending_buy_qty!==null && p.est_pending_buy_qty!==undefined) ? Number(p.est_pending_buy_qty).toFixed(4) : '—';
+
+    const hasOrders = (p.open_orders && p.open_orders.length);
+    const caret = hasOrders ? '▸' : '';
+
+    const tr = document.createElement('tr');
+    tr.style.cursor = hasOrders ? 'pointer' : 'default';
+    tr.innerHTML = `<td class="muted">${caret}</td><td>${p.symbol}</td><td>${p.held_qty}</td><td>${money(p.market_value)}</td><td>${pendingBuyQ}</td><td>${pendingBuyN}</td><td>${estPrice}</td><td>${estQty}</td><td>${pendingSellQ}</td><td>${pendingSellN}</td><td>${money(p.avg_entry_price)}</td><td>${money(p.unrealized_pl)}</td><td>${pct(p.unrealized_plpc)}</td>`;
+    tb.appendChild(tr);
+
+    if (hasOrders) {
+      const detail = document.createElement('tr');
+      detail.style.display = 'none';
+      const ordersHtml = p.open_orders.map(o => {
+        const lim = (o.limit_price!==null && o.limit_price!==undefined) ? ('$' + Number(o.limit_price).toFixed(2)) : '—';
+        const stp = (o.stop_price!==null && o.stop_price!==undefined) ? ('$' + Number(o.stop_price).toFixed(2)) : '—';
+        return `<tr>
+          <td style="font-family: ui-monospace, monospace; font-size: 11px;">${o.id}</td>
+          <td>${o.side}</td><td>${o.status}</td><td>${o.type||''}</td>
+          <td>${o.qty||'—'}</td><td>${o.notional ? money(o.notional) : '—'}</td>
+          <td>${lim}</td><td>${stp}</td><td>${o.created_at||''}</td>
+        </tr>`;
+      }).join('');
+
+      detail.innerHTML = `<td colspan="13">
+        <div style="padding:8px 0;">
+          <table>
+            <thead>
+              <tr><th>Order Id</th><th>Side</th><th>Status</th><th>Type</th><th>Qty</th><th>Notional</th><th>Limit</th><th>Stop</th><th>Created</th></tr>
+            </thead>
+            <tbody>${ordersHtml}</tbody>
+          </table>
+        </div>
+      </td>`;
+      tb.appendChild(detail);
+
+      tr.addEventListener('click', () => {
+        const open = detail.style.display !== 'none';
+        detail.style.display = open ? 'none' : '';
+        tr.querySelector('td').textContent = open ? '▸' : '▾';
+      });
+    }
+  }
+
+  // Backtest history
+  const jb = document.getElementById('btJobs');
+  if (jb) {
+    jb.innerHTML = '';
+    for (const j of (btJobs || [])) {
+      const tr = document.createElement('tr');
+      const btn = `<button data-job="${j.job_id}" class="btViewBtn" style="padding:3px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">View</button>`;
+      tr.innerHTML = `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${j.job_id}</td><td>${j.state||''}</td><td>${(j.progress||0)}/${(j.total||0)}</td><td>${(j.error||'').slice(0,80)}</td><td>${btn}</td>`;
+      jb.appendChild(tr);
+    }
+
+    // wire view buttons
+    document.querySelectorAll('.btViewBtn').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const job = el.getAttribute('data-job');
+        document.getElementById('btStatus').textContent = 'loading job ' + job + '…';
+        try {
+          const res = await getJSON('/api/backtest/result?job_id=' + encodeURIComponent(job));
+          renderBacktest(res);
+          document.getElementById('btStatus').textContent = 'viewing ' + job;
+        } catch (err) {
+          document.getElementById('btStatus').textContent = 'error loading ' + job;
+        }
+      });
+    });
+    if (jb.children.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="4" class="muted">(none)</td>`;
+      jb.appendChild(tr);
+    }
+  }
+
+  // Summary
+  const os = document.getElementById('orderSummary');
+  if (os && orderSummary) {
+    os.textContent = `open orders: ${orderSummary.open_count} (notional ~${money(orderSummary.open_notional)}) • fills: ${orderSummary.fills_count}`;
+  }
+
+  // Open orders
+  const oo = document.getElementById('openOrders');
+  oo.innerHTML = '';
+  for (const o of (openOrders || [])) {
+    const tr = document.createElement('tr');
+    const lim = (o.limit_price!==null && o.limit_price!==undefined) ? ('$' + Number(o.limit_price).toFixed(2)) : '—';
+    const stp = (o.stop_price!==null && o.stop_price!==undefined) ? ('$' + Number(o.stop_price).toFixed(2)) : '—';
+    tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${o.status}</td><td>${o.type||''}</td><td>${o.notional_usd ? money(o.notional_usd) : '—'}</td><td>${o.qty || '—'}</td><td>${lim}</td><td>${stp}</td><td>${o.created_at || ''}</td>`;
+    oo.appendChild(tr);
+  }
+
+  // Recent fills
+  const rf = document.getElementById('recentFills');
+  rf.innerHTML = '';
+  for (const o of (recentFills || [])) {
+    const tr = document.createElement('tr');
+    const px = (o.filled_avg_price!==null && o.filled_avg_price!==undefined && o.filled_avg_price !== '') ? ('$' + Number(o.filled_avg_price).toFixed(2)) : '—';
+    tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${o.filled_qty || '—'}</td><td>${px}</td><td>${o.filled_at || ''}</td>`;
+    rf.appendChild(tr);
+  }
+
+  // Last placed orders
+  const lp = document.getElementById('lastPlaced');
+  lp.innerHTML = '';
+  const placed = artifacts.last_placed_orders?.payload?.orders || [];
+  for (const o of placed) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${money(o.notional_usd)}</td><td style="font-family: ui-monospace, monospace; font-size: 11px;">${o.id}</td>`;
+    lp.appendChild(tr);
+  }
+
+  // Last run summaries
+  const rbSum = document.getElementById('rebalanceSummary');
+  const rkSum = document.getElementById('riskSummary');
+
+  if (rbSum) {
+    rbSum.innerHTML = '';
+    const rb = artifacts.last_rebalance?.payload;
+    if (!rb) {
+      kv(rbSum, 'Status', '—');
+    } else {
+      kv(rbSum, 'Frozen', String(rb.frozen));
+      kv(rbSum, 'Universe', `eq=${rb.universe?.equities ?? '—'} cr=${rb.universe?.crypto ?? '—'}`);
+      kv(rbSum, 'Selected equities', (rb.selected?.equities || []).join(', ') || '—');
+      kv(rbSum, 'Selected crypto', (rb.selected?.crypto || []).join(', ') || '—');
+      kv(rbSum, 'Planned orders', String((rb.plans || []).length));
+
+      // Entry signals table (selected)
+      const entBody = document.getElementById('entrySignals');
+      if (entBody) {
+        entBody.innerHTML = '';
+        const addRow = (sym, v) => {
+          const tr = document.createElement('tr');
+          const scoreNum = (v?.score!==null && v?.score!==undefined) ? Number(v.score) : null;
+          const score = (scoreNum!==null && !Number.isNaN(scoreNum)) ? scoreNum.toFixed(4) : '—';
+          const close = (v?.last_close!==null && v?.last_close!==undefined) ? ('$' + Number(v.last_close).toFixed(2)) : '—';
+          const maL = (v?.ma_long!==null && v?.ma_long!==undefined) ? ('$' + Number(v.ma_long).toFixed(2)) : '—';
+          const vol = (v?.ann_vol!==null && v?.ann_vol!==undefined) ? (Number(v.ann_vol).toFixed(2)) : '—';
+          if (scoreNum !== null && scoreNum >= 0.25) tr.className = 'good';
+          tr.innerHTML = `<td>${sym}</td><td>${score}</td><td>${close}</td><td>${maL}</td><td>${vol}</td>`;
+          entBody.appendChild(tr);
+        };
+
+        const eqEnt = rb.entry_signals?.equities || {};
+        const crEnt = rb.entry_signals?.crypto || {};
+        const entries = [];
+        for (const [sym, v] of Object.entries(eqEnt)) entries.push([sym, v]);
+        for (const [sym, v] of Object.entries(crEnt)) entries.push([sym, v]);
+        entries.sort((a,b) => (Number(b[1]?.score||0) - Number(a[1]?.score||0)));
+        for (const [sym,v] of entries) addRow(sym, v);
+        if (entBody.children.length === 0) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td colspan="5" class="muted">(none)</td>`;
+          entBody.appendChild(tr);
+        }
+      }
+    }
+  }
+
+  if (rkSum) {
+    rkSum.innerHTML = '';
+    const rk = artifacts.last_risk_check?.payload;
+    if (!rk) {
+      kv(rkSum, 'Status', '—');
+    } else {
+      kv(rkSum, 'Equity', money(rk.equity));
+      kv(rkSum, 'Peak equity', money(rk.peak_equity));
+      kv(rkSum, 'Drawdown', pct(rk.drawdown));
+      kv(rkSum, 'Frozen', String(rk.frozen));
+      const exits = (rk.exit_signals || []);
+      kv(rkSum, 'Exit signals', String(exits.length));
+
+      const exBody = document.getElementById('exitSignals');
+      if (exBody) {
+        exBody.innerHTML = '';
+        for (const e of exits) {
+          const tr = document.createElement('tr');
+          tr.className = 'exit';
+          const close = (e.last_close!==null && e.last_close!==undefined) ? ('$' + Number(e.last_close).toFixed(2)) : '—';
+          const maL = (e.ma_long!==null && e.ma_long!==undefined) ? ('$' + Number(e.ma_long).toFixed(2)) : '—';
+          tr.innerHTML = `<td>${e.symbol}</td><td>${e.asset_class}</td><td>${e.reason}</td><td>${close}</td><td>${maL}</td>`;
+          exBody.appendChild(tr);
+        }
+        if (exBody.children.length === 0) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td colspan="5" class="muted">(none)</td>`;
+          exBody.appendChild(tr);
+        }
+      }
+    }
+  }
+
+  document.getElementById('rebalance').textContent = artifacts.last_rebalance ? JSON.stringify(artifacts.last_rebalance, null, 2) : '(none yet)';
+  document.getElementById('risk').textContent = artifacts.last_risk_check ? JSON.stringify(artifacts.last_risk_check, null, 2) : '(none yet)';
+}
+
+setDefaultBacktestDates();
+
+main().catch(err => {
+  document.getElementById('subtitle').textContent = 'error: ' + err;
+});
+
+// Auto-refresh
+async function saveConfig() {
+  const status = document.getElementById('saveStatus');
+  try {
+    const token = document.getElementById('token')?.value || '';
+    const body = JSON.parse(document.getElementById('configEditor').value);
+    // sync dropdowns into config
+    const strat = document.getElementById('strategySelect')?.value;
+    if (strat) body.strategy_id = strat;
+    const sl = document.getElementById('stopLossSelect')?.value;
+    body.risk = body.risk || {};
+    body.risk.per_asset_stop_loss_pct = sl ? Number(sl) : null;
+    status.textContent = 'saving…';
+    const r = await fetch('/api/config' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(r.status + ' ' + t);
+    }
+    status.textContent = 'saved';
+  } catch (e) {
+    status.textContent = 'error: ' + e;
+  }
+}
+
+document.getElementById('saveBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  saveConfig();
+});
+
+async function cancelAllOpenOrders() {
+  const status = document.getElementById('cancelStatus');
+  try {
+    const token = document.getElementById('token')?.value || '';
+    status.textContent = 'canceling…';
+    const r = await fetch('/api/cancel-all-open-orders' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+      method: 'POST'
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(r.status + ' ' + t);
+    }
+    status.textContent = 'canceled';
+  } catch (e) {
+    status.textContent = 'error: ' + e;
+  }
+}
+
+document.getElementById('cancelAllBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (confirm('Cancel ALL open orders on this Alpaca paper account?')) {
+    cancelAllOpenOrders();
+  }
+});
+
+document.getElementById('btRun')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  runBacktest().catch(err => {
+    document.getElementById('btStatus').textContent = 'error: ' + err;
+  });
+});
+
+document.getElementById('btPreset1y')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  setBacktestDatesYears(1);
+});
+
+document.getElementById('btPreset5y')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  setBacktestDatesYears(5);
+});
+
+document.getElementById('btClearCache')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (!confirm('Delete cached bar data? Next backtest will refetch.')) return;
+  const status = document.getElementById('btStatus');
+  try {
+    const token = document.getElementById('token')?.value || '';
+    status.textContent = 'clearing cache…';
+    const r = await fetch('/api/backtest/clear-cache' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {method:'POST'});
+    if (!r.ok) throw new Error(await r.text());
+    status.textContent = 'cache cleared';
+  } catch (err) {
+    status.textContent = 'error clearing cache: ' + err;
+  }
+});
+
+setInterval(() => {
+  main().catch(() => {});
+  pollBacktest().catch(() => {});
+}, 10_000);
+</script>
+</body>
+</html>

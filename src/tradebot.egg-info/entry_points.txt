@@ -1,0 +1,2 @@
+[console_scripts]
+tradebot = tradebot.cli:main

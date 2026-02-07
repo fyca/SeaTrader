@@ -1,0 +1,44 @@
+mode: paper
+strategy_id: regime_filtered_trendvol
+dry_run: false
+allocation:
+  equities: 0.5
+  crypto: 0.5
+limits:
+  max_equity_positions: 10
+  max_crypto_positions: 5
+  min_stock_price: 5.0
+  min_avg_dollar_volume_20d: 20000000.0
+  min_avg_crypto_dollar_volume_20d: 5000000.0
+risk:
+  max_drawdown_freeze: 0.2
+  warn_drawdown: 0.1
+  per_asset_stop_loss_pct: 0.05
+signals:
+  timeframe: 1D
+  lookback_days: 420
+  equity:
+    ma_long: 200
+    ma_short: 50
+    vol_lookback: 20
+    max_ann_vol: 0.8
+  crypto:
+    ma_long: 120
+    ma_short: 30
+    vol_lookback: 20
+    max_ann_vol: 2.5
+execution:
+  use_limit_orders: false
+  limit_offset_bps: 10
+  max_orders_per_run: 25
+  max_single_order_notional_usd: 2500.0
+  max_total_notional_usd: 15000.0
+scheduling:
+  weekly_rebalance_day: MON
+  daily_risk_check_time_local: '18:05'
+universe:
+  equity_benchmark_symbols:
+  - SPY
+  - QQQ
+  crypto_symbols_allowlist: []
+  exclude_leveraged_etfs: true
