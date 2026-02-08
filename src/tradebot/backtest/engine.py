@@ -536,8 +536,10 @@ def run_backtest(
                 p0 = px(sym, day)
                 if p0 is None:
                     continue
+                p_exec = exec_px(sym, day) or p0
                 curQ = positions_qty.get(sym, 0.0)
-                curN = curQ * p0
+                # Use execution-time price for sizing so slippage is applied to transaction value (not close).
+                curN = curQ * p_exec
                 deltaN = tgtN - curN
                 if abs(deltaN) < 1e-6:
                     continue
@@ -553,12 +555,16 @@ def run_backtest(
                                 continue
 
                     # buy at execution time + slippage
-                    base_px = exec_px(sym, day) or p0
+                    base_px = p_exec
                     buy_px = base_px * (1 + params.slippage_bps / 10000.0)
-                    cost = deltaN * (1 + params.slippage_bps / 10000.0)
-                    if cost > cash:
-                        cost = cash
-                    q_add = cost / buy_px if buy_px else 0.0
+
+                    # desired add in notional terms at base_px
+                    desired_q = (deltaN / base_px) if base_px else 0.0
+                    if desired_q <= 0:
+                        continue
+                    # spend at buy_px (includes slippage)
+                    q_add = min(desired_q, cash / buy_px) if buy_px else 0.0
+                    cost = q_add * buy_px
                     if q_add <= 0:
                         continue
                     cash -= cost
@@ -588,10 +594,9 @@ def run_backtest(
 
                 else:
                     # sell at execution time - slippage
-                    base_px = exec_px(sym, day) or p0
-                    sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+                    sell_px = p_exec * (1 - params.slippage_bps / 10000.0)
                     sellN = min(curN, abs(deltaN))
-                    q_sub = sellN / p0
+                    q_sub = (sellN / p_exec) if p_exec else 0.0
                     q_sub = min(q_sub, positions_qty.get(sym, 0.0))
                     proceeds = q_sub * sell_px
                     cash += proceeds
