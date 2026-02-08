@@ -12,6 +12,18 @@ This repo is designed to be:
 
 ---
 
+## Screenshots
+
+### Dashboard
+
+![SeaTrader dashboard](docs/screenshots/dashboard.png)
+
+### Strategy Builder
+
+![SeaTrader strategy builder](docs/screenshots/builder.png)
+
+---
+
 ## Where we started → where we are
 
 ### Initial goal
