@@ -19,24 +19,23 @@
   </script>
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
   <style>
-    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
+    body { margin: 0; }
     h1 { margin: 0 0 8px 0; }
-    .muted { color: #666; }
     .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
-    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 14px; background: #fff; }
-    .card h2 { font-size: 14px; margin: 0 0 8px 0; color: #374151; }
+    .card h2 { font-size: 14px; margin: 0 0 8px 0; }
     .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; vertical-align: top; }
-    .tableWrap { overflow: auto; max-height: 360px; border: 1px solid #f3f4f6; border-radius: 10px; }
-    th { color: #374151; font-weight: 600; }
-    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #ddd; }
-    .ok { background: #ecfdf5; border-color: #a7f3d0; }
-    .warn { background: #fffbeb; border-color: #fde68a; }
-    .bad { background: #fef2f2; border-color: #fecaca; }
-    tr.good td { background: #f0fdf4; }
-    tr.exit td { background: #fef2f2; }
-    pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #f9fafb; padding: 10px; border-radius: 10px; border: 1px solid #eee; }
+    th, td { padding: 6px 8px; text-align: left; vertical-align: top; }
+    .tableWrap { overflow: auto; max-height: 360px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+
+    .ok { background: color-mix(in srgb, var(--accent-2) 14%, transparent); border-color: color-mix(in srgb, var(--accent-2) 38%, var(--border)); }
+    .warn { background: color-mix(in srgb, #f59e0b 14%, transparent); border-color: color-mix(in srgb, #f59e0b 38%, var(--border)); }
+    .bad { background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: color-mix(in srgb, var(--danger) 34%, var(--border)); }
+
+    tr.good td { background: color-mix(in srgb, var(--accent-2) 10%, transparent); }
+    tr.exit td { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+    pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--panel-2); padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border); }
     .col-6 { grid-column: span 6; }
     .col-12 { grid-column: span 12; }
     @media (max-width: 900px) {
@@ -88,12 +87,12 @@
       <div style="margin-top:10px;">
         <div class="row" style="justify-content: space-between; align-items: center;">
           <div class="muted" style="margin-bottom:6px;">Strategy (applies to live + rebalance selection)</div>
-          <a href="/builder" style="text-decoration:none;"><button type="button" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Open Strategy Builder</button></a>
+          <a href="/builder" style="text-decoration:none;"><button type="button" class="secondary">Open Strategy Builder</button></a>
         </div>
-        <select id="strategySelect" style="width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></select>
+        <select id="strategySelect" style="width:100%;"></select>
 
         <div class="muted" style="margin: 10px 0 6px 0;">Per-asset stop loss (live + risk-check)</div>
-        <select id="stopLossSelect" style="width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+        <select id="stopLossSelect" style="width:100%;">
           <option value="">None</option>
           <option value="0.01">1%</option><option value="0.02">2%</option><option value="0.03">3%</option><option value="0.04">4%</option><option value="0.05">5%</option>
           <option value="0.06">6%</option><option value="0.07">7%</option><option value="0.08">8%</option><option value="0.09">9%</option><option value="0.10">10%</option>
@@ -104,8 +103,8 @@
         <div class="muted" style="margin: 10px 0 6px 0;">Config (JSON) — edit and save</div>
         <textarea id="configEditor" style="width:100%; height:160px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px;"></textarea>
         <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
-          <input id="token" placeholder="token (optional)" style="flex:1; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
-          <button id="saveBtn" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#111827; color:#fff;">Save</button>
+          <input id="token" placeholder="token (optional)" style="flex:1;" />
+          <button id="saveBtn" class="primary">Save</button>
           <span id="saveStatus" class="muted"></span>
         </div>
       </div>
@@ -123,33 +122,33 @@
       <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap: wrap; margin-top:8px;">
         <div>
           <div class="muted">Evaluation start</div>
-          <input id="btStart" placeholder="YYYY-MM-DD" style="padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <input id="btStart" placeholder="YYYY-MM-DD" />
         </div>
         <div>
           <div class="muted">Evaluation end</div>
-          <input id="btEnd" placeholder="YYYY-MM-DD" style="padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <input id="btEnd" placeholder="YYYY-MM-DD" />
         </div>
         <div>
           <div class="muted">Presets</div>
           <div style="display:flex; gap:6px;">
-            <button id="btPreset1y" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Last 1y</button>
-            <button id="btPreset5y" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Last 5y</button>
+            <button id="btPreset1y" class="secondary">Last 1y</button>
+            <button id="btPreset5y" class="secondary">Last 5y</button>
           </div>
         </div>
         <div>
           <div class="muted">Strategy</div>
-          <select id="btStrategy" style="width:260px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></select>
+          <select id="btStrategy" style="width:260px;"></select>
         </div>
         <div>
           <div class="muted">Execution time</div>
-          <select id="btExecTime" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <select id="btExecTime" style="width:160px;">
             <option value="open">Morning (open)</option>
             <option value="close" selected>Evening (close)</option>
           </select>
         </div>
         <div>
           <div class="muted">Assets</div>
-          <select id="btAssets" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <select id="btAssets" style="width:160px;">
             <option value="both" selected>Both</option>
             <option value="equities">Stocks only</option>
             <option value="crypto">Crypto only</option>
@@ -157,28 +156,28 @@
         </div>
         <div>
           <div class="muted">Rebalance frequency</div>
-          <select id="btRebalance" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <select id="btRebalance" style="width:160px;">
             <option value="weekly" selected>Weekly</option>
             <option value="daily">Daily</option>
           </select>
         </div>
         <div>
           <div class="muted">Rebalance style</div>
-          <select id="btRebalanceMode" style="width:200px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <select id="btRebalanceMode" style="width:200px;">
             <option value="target_notional" selected>Target % notional</option>
             <option value="no_add_to_losers">Don't add to losers</option>
           </select>
         </div>
         <div>
           <div class="muted">Liquidation</div>
-          <select id="btLiquidation" style="width:220px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <select id="btLiquidation" style="width:220px;">
             <option value="liquidate_non_selected" selected>Liquidate non-selected</option>
             <option value="hold_until_exit">Hold until exit signal</option>
           </select>
         </div>
         <div>
           <div class="muted">Per-asset stop loss</div>
-          <select id="btStopLoss" style="width:180px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <select id="btStopLoss" style="width:180px;">
             <option value="">None</option>
             <option value="0.01">1%</option><option value="0.02">2%</option><option value="0.03">3%</option><option value="0.04">4%</option><option value="0.05">5%</option>
             <option value="0.06">6%</option><option value="0.07">7%</option><option value="0.08">8%</option><option value="0.09">9%</option><option value="0.10">10%</option>
@@ -188,11 +187,11 @@
         </div>
         <div>
           <div class="muted">Slippage (bps)</div>
-          <input id="btSlip" placeholder="10" value="10" style="width:120px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <input id="btSlip" placeholder="10" value="10" style="width:120px;" />
         </div>
         <div>
           <div class="muted">Exclude if symbol P/L % &lt;=</div>
-          <input id="btSymFloor" placeholder="e.g. -0.005" value="-0.005" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <input id="btSymFloor" placeholder="e.g. -0.005" value="-0.005" style="width:160px;" />
           <label class="muted" style="display:block; margin-top:4px;">
             <input id="btSymFloorLiquidate" type="checkbox" checked /> Immediately liquidate when excluded
           </label>
@@ -202,18 +201,18 @@
         </div>
         <div>
           <div class="muted">Hover holdings list</div>
-          <select id="btHoldMode" style="width:180px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <select id="btHoldMode" style="width:180px;">
             <option value="top" selected>Top 15 by value</option>
             <option value="bottom">Bottom 15 by value</option>
           </select>
         </div>
         <div>
           <div class="muted">Single symbol (optional)</div>
-          <input id="btSymbol" placeholder="AAPL or BTC/USD" style="min-width:280px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <input id="btSymbol" placeholder="AAPL or BTC/USD" style="min-width:280px;" />
         </div>
         <div>
           <div class="muted">Max drawdown stop</div>
-          <select id="btDDPreset" style="width:180px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+          <select id="btDDPreset" style="width:180px;">
             <option value="">None</option>
             <option value="0.20" selected>20%</option>
             <option value="0.30">30%</option>
@@ -223,11 +222,11 @@
         </div>
         <div>
           <div class="muted">Custom DD stop</div>
-          <input id="btDD" placeholder="e.g. 0.25" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <input id="btDD" placeholder="e.g. 0.25" style="width:160px;" />
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <button id="btRun" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#111827; color:#fff;">Run backtest</button>
-          <button id="btClearCache" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#374151; color:#fff;">Clear cache</button>
+          <button id="btRun" class="primary">Run backtest</button>
+          <button id="btClearCache" class="secondary">Clear cache</button>
           <span id="btStatus" class="muted"></span>
         </div>
       </div>
@@ -282,16 +281,16 @@
         <div class="row">
           <div>
             <div class="muted">Preset</div>
-            <select id="btPreset" style="width:280px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></select>
+            <select id="btPreset" style="width:280px;"></select>
           </div>
           <div>
             <div class="muted">New preset name</div>
-            <input id="btPresetName" placeholder="e.g. weekly_safe_v2" style="min-width:240px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+            <input id="btPresetName" placeholder="e.g. weekly_safe_v2" style="min-width:240px;" />
           </div>
           <div style="display:flex; gap:8px; align-items:flex-end;">
-            <button id="btPresetLoad" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Load preset → UI</button>
-            <button id="btPresetSave" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Save UI → preset</button>
-            <button id="btPresetApply" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#111827; color:#fff;">Apply preset to live config</button>
+            <button id="btPresetLoad" class="secondary">Load preset → UI</button>
+            <button id="btPresetSave" class="secondary">Save UI → preset</button>
+            <button id="btPresetApply" class="primary">Apply preset to live config</button>
             <span id="btPresetStatus" class="muted"></span>
           </div>
         </div>
@@ -379,7 +378,7 @@
       <h2>Orders</h2>
       <div class="muted" id="orderSummary" style="margin: 6px 0 10px 0;">loading…</div>
       <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
-        <button id="cancelAllBtn" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#7f1d1d; color:#fff;">Cancel all open orders (paper)</button>
+        <button id="cancelAllBtn" class="danger">Cancel all open orders (paper)</button>
         <span id="cancelStatus" class="muted"></span>
       </div>
       <div class="grid">
@@ -1191,7 +1190,7 @@ async function main() {
     jb.innerHTML = '';
     for (const j of (btJobs || [])) {
       const tr = document.createElement('tr');
-      const btn = `<button data-job="${j.job_id}" class="btViewBtn" style="padding:3px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">View</button>`;
+      const btn = `<button data-job="${j.job_id}" class="btViewBtn secondary" style="padding:3px 8px;">View</button>`;
       const rm = j.result_metrics || {};
       const rp = j.result_params || {};
       const rRet = (rm.return==null) ? '—' : pct(rm.return);

@@ -7,6 +7,9 @@ from playwright.sync_api import sync_playwright
 OUT = Path("docs/screenshots")
 OUT.mkdir(parents=True, exist_ok=True)
 
+THEMES = ["classic", "fun", "dark"]
+DENSITIES = ["comfortable"]
+
 PAGES = [
     ("dashboard", "http://127.0.0.1:8008/"),
     ("builder", "http://127.0.0.1:8008/builder"),
@@ -16,12 +19,26 @@ PAGES = [
 def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
 
-        for name, url in PAGES:
-            page.goto(url, wait_until="networkidle")
-            page.wait_for_timeout(1000)
-            page.screenshot(path=str(OUT / f"{name}.png"), full_page=True)
+        for theme in THEMES:
+            for dens in DENSITIES:
+                for name, url in PAGES:
+                    page.goto(url, wait_until="domcontentloaded")
+                    # set theme/density after we are on same-origin
+                    page.evaluate(
+                        """([theme, dens]) => {
+                          try { localStorage.setItem('ui_theme', theme); } catch(e) {}
+                          try { localStorage.setItem('ui_density', dens); } catch(e) {}
+                        }""",
+                        [theme, dens],
+                    )
+                    page.reload(wait_until="networkidle")
+                    page.wait_for_timeout(800)
+                    page.screenshot(
+                        path=str(OUT / f"{name}-{theme}-{dens}.png"),
+                        full_page=True,
+                    )
 
         browser.close()
 

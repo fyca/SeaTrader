@@ -16,11 +16,41 @@ This repo is designed to be:
 
 ### Dashboard
 
-![SeaTrader dashboard](docs/screenshots/dashboard.png)
+**Classic**
+
+![SeaTrader dashboard (classic)](docs/screenshots/dashboard-classic-comfortable.png)
+
+<details>
+<summary>Fun / Dark</summary>
+
+**Fun**
+
+![SeaTrader dashboard (fun)](docs/screenshots/dashboard-fun-comfortable.png)
+
+**Dark**
+
+![SeaTrader dashboard (dark)](docs/screenshots/dashboard-dark-comfortable.png)
+
+</details>
 
 ### Strategy Builder
 
-![SeaTrader strategy builder](docs/screenshots/builder.png)
+**Classic**
+
+![SeaTrader strategy builder (classic)](docs/screenshots/builder-classic-comfortable.png)
+
+<details>
+<summary>Fun / Dark</summary>
+
+**Fun**
+
+![SeaTrader strategy builder (fun)](docs/screenshots/builder-fun-comfortable.png)
+
+**Dark**
+
+![SeaTrader strategy builder (dark)](docs/screenshots/builder-dark-comfortable.png)
+
+</details>
 
 ---
 
