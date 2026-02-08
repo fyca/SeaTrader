@@ -246,6 +246,24 @@ tbody tr:hover {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+/* Toasts */
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  max-width: 460px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+  z-index: 9999;
+}
+.toastTitle { font-weight: 700; }
+.toastMsg { margin-top: 4px; }
+.toast.ok { border-color: color-mix(in srgb, var(--accent-2) 40%, var(--border)); }
+.toast.err { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+
 /* Code-ish */
 
 .codewrap {

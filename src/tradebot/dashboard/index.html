@@ -416,6 +416,20 @@ async function getJSON(url) {
   return await r.json();
 }
 
+async function postJSON(url, body) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body || {})
+  });
+  if (!r.ok) {
+    let t = '';
+    try { t = await r.text(); } catch(e) {}
+    throw new Error(url + ' -> ' + r.status + (t ? (': ' + t.slice(0,200)) : ''));
+  }
+  return await r.json();
+}
+
 function money(x) {
   if (x === null || x === undefined || Number.isNaN(x)) return "—";
   return "$" + Number(x).toLocaleString(undefined, {maximumFractionDigits: 2, minimumFractionDigits: 2});
@@ -854,6 +868,14 @@ async function renderBacktest(res) {
   }
 }
 
+function toast(kind, title, msg) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (kind || 'ok');
+  el.innerHTML = `<div class="toastTitle">${title||''}</div><div class="toastMsg muted">${msg||''}</div>`;
+  document.body.appendChild(el);
+  setTimeout(()=>{ try { el.remove(); } catch(e){} }, 3600);
+}
+
 function applyTheme(t) {
   document.documentElement.dataset.theme = t || 'classic';
   try { localStorage.setItem('ui_theme', document.documentElement.dataset.theme); } catch(e) {}
@@ -1108,8 +1130,10 @@ async function main() {
       try {
         await postJSON('/api/backtest/presets/save', {name, params: collectBTParams()});
         if (presetStatus) presetStatus.textContent = 'saved preset ' + name + ' (refresh page to see in dropdown)';
+        toast('ok','Preset saved', name);
       } catch (err) {
         if (presetStatus) presetStatus.textContent = 'save error: ' + (err?.message || err);
+        toast('err','Preset save error', String(err?.message || err));
       }
     });
   }
@@ -1126,6 +1150,7 @@ async function main() {
         const res = await postJSON('/api/backtest/presets/apply-live', {name});
         if (!res.ok) throw new Error(res.error||'failed');
         if (presetStatus) presetStatus.textContent = 'applied preset ' + name + ' to live config';
+        toast('ok','Applied to config', name);
       } catch (err) {
         if (presetStatus) presetStatus.textContent = 'apply error: ' + (err?.message || err);
       }
