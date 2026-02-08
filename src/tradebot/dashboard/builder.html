@@ -21,8 +21,32 @@
   </style>
 </head>
 <body>
-  <h1>Strategy Builder</h1>
-  <div class="muted">Build and save rule-based strategies (entry rules + weighted score factors). Saved strategies will appear in the main Strategy dropdown.</div>
+  <div class="topbar">
+    <div class="topbarInner">
+      <div class="brand">
+        <div class="brandMark" aria-hidden="true"></div>
+        <div>
+          <div class="brandTitle">Strategy Builder</div>
+          <div class="muted" style="font-size:12px; margin-top:2px;">Rule-based strategies + presets</div>
+        </div>
+      </div>
+      <div class="row" style="align-items:center; gap:10px;">
+        <a href="/" class="muted" style="text-decoration:none;"><span class="pill">Dashboard</span></a>
+        <a href="/builder" class="muted" style="text-decoration:none;"><span class="pill">Builder</span></a>
+        <div class="pill">
+          <span class="muted" style="font-size:12px;">Theme</span>
+          <select id="themeSel" style="padding:6px 8px;">
+            <option value="classic">Classic</option>
+            <option value="fun">Fun</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="muted">Build and save rule-based strategies (entry rules + weighted score factors). Saved strategies will appear in the main Strategy dropdown.</div>
 
   <div class="card">
     <div class="row">
@@ -894,5 +918,6 @@ document.getElementById('addPresetCross').addEventListener('click', (e)=>{e.prev
 document.getElementById('syncFactorsToJson').addEventListener('click', (e)=>{e.preventDefault(); syncFactorsToJson();});
 document.getElementById('syncFactorsFromJson').addEventListener('click', (e)=>{e.preventDefault(); syncFactorsFromJson();});
 </script>
+  </div>
 </body>
 </html>

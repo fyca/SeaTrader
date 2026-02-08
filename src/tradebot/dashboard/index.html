@@ -41,20 +41,30 @@
   </style>
 </head>
 <body>
-  <div class="row" style="justify-content: space-between; align-items:flex-end; gap:12px;">
-    <div>
-      <h1 style="margin:0;">SeaTrader</h1>
-      <div class="muted" id="subtitle">loading…</div>
-    </div>
-    <div>
-      <div class="muted" style="margin-bottom:6px;">Theme</div>
-      <select id="themeSel" style="padding:6px 8px;">
-        <option value="classic">Classic</option>
-        <option value="fun">Fun</option>
-        <option value="dark">Dark</option>
-      </select>
+  <div class="topbar">
+    <div class="topbarInner">
+      <div class="brand">
+        <div class="brandMark" aria-hidden="true"></div>
+        <div>
+          <div class="brandTitle">SeaTrader</div>
+          <div class="muted" id="subtitle" style="font-size:12px; margin-top:2px;">loading…</div>
+        </div>
+      </div>
+      <div class="row" style="align-items:center; gap:10px;">
+        <a href="/" class="muted" style="text-decoration:none;" title="Dashboard"><span class="pill">Dashboard</span></a>
+        <a href="/builder" class="muted" style="text-decoration:none;" title="Strategy Builder"><span class="pill">Builder</span></a>
+        <div class="pill">
+          <span class="muted" style="font-size:12px;">Theme</span>
+          <select id="themeSel" style="padding:6px 8px;">
+            <option value="classic">Classic</option>
+            <option value="fun">Fun</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+      </div>
     </div>
   </div>
+  <div class="container">
 
   <div class="grid" style="margin-top: 16px;">
     <div class="card col-6">
@@ -397,6 +407,7 @@
       </table>
     </div>
   </div>
+</div>
 
 <script>
 async function getJSON(url) {
