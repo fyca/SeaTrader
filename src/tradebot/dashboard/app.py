@@ -457,13 +457,29 @@ def create_app(*, config_path: str) -> FastAPI:
         spy_series = fetch_close_series("SPY", start, end)
 
         trades = [t for t in (res.get("trades") or []) if str(t.get("symbol") or "").upper() == symbol]
-        # markers by date
+        events = [e for e in (res.get("events") or []) if str(e.get("symbol") or "").upper() == symbol]
+
+        # markers by date from events (preferred)
         markers = []
-        for t in trades:
-            if t.get("entry_date"):
-                markers.append({"date": t.get("entry_date"), "type": "buy", "qty": t.get("qty"), "price": t.get("entry_price"), "pnl": None})
-            if t.get("exit_date"):
-                markers.append({"date": t.get("exit_date"), "type": "sell", "qty": t.get("qty"), "price": t.get("exit_price"), "pnl": t.get("pnl"), "reason": t.get("reason")})
+        for e in events:
+            if e.get("type") in ("buy", "sell"):
+                markers.append({
+                    "date": e.get("date"),
+                    "type": e.get("type"),
+                    "qty": e.get("qty"),
+                    "price": e.get("price"),
+                    "notional": e.get("notional"),
+                    "reason": e.get("reason"),
+                    "pnl": e.get("pnl"),
+                })
+
+        # Back-compat fallback: if no events recorded, derive minimal markers from realized trades
+        if not markers:
+            for t in trades:
+                if t.get("entry_date"):
+                    markers.append({"date": t.get("entry_date"), "type": "buy", "qty": t.get("qty"), "price": t.get("entry_price"), "pnl": None})
+                if t.get("exit_date"):
+                    markers.append({"date": t.get("exit_date"), "type": "sell", "qty": t.get("qty"), "price": t.get("exit_price"), "pnl": t.get("pnl"), "reason": t.get("reason")})
 
         return {
             "ok": True,
@@ -473,6 +489,7 @@ def create_app(*, config_path: str) -> FastAPI:
             "series": to_points(sym_series),
             "spy": to_points(spy_series),
             "trades": trades,
+            "events": events,
             "markers": markers,
         }
 

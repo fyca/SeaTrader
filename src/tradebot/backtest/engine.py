@@ -57,7 +57,8 @@ class BacktestResult:
     params: dict
     equity_curve: list[dict]
     metrics: dict
-    trades: list[dict]
+    trades: list[dict]               # realized (sells/trims/exits)
+    events: list[dict]               # buys + sells + other lifecycle events
     open_positions: list[dict]
     realized_pnl_by_symbol: dict
     excluded_symbols: list[str]
@@ -107,6 +108,7 @@ def run_backtest(
     positions_avg_cost: dict[str, float] = {}
     positions_entry_date: dict[str, str] = {}
     trades: list[dict] = []
+    events: list[dict] = []
     realized_pnl_by_symbol: dict[str, float] = {}
     excluded: set[str] = set()
 
@@ -190,13 +192,15 @@ def run_backtest(
     curve: list[dict] = []
 
     def _record_trade(t: dict) -> None:
+        """Record a realized trade (typically sells/trims/exits)."""
         trades.append(t)
         sym = str(t.get("symbol") or "").strip()
         pnl = float(t.get("pnl") or 0.0)
         if sym:
             realized_pnl_by_symbol[sym] = float(realized_pnl_by_symbol.get(sym, 0.0) + pnl)
-            # realized-only exclusion handled in daily evaluation step (supports percent + unrealized)
-            pass
+
+    def _event(e: dict) -> None:
+        events.append(e)
 
     def _liquidate_excluded(day: pd.Timestamp, *, reason: str) -> None:
         """If a symbol is excluded, immediately sell any remaining position."""
@@ -216,19 +220,29 @@ def run_backtest(
             avg_cost = positions_avg_cost.get(sym, p0)
             entry_date = positions_entry_date.get(sym)
             pnl = (sell_px - avg_cost) * q
-            _record_trade(
-                {
-                    "symbol": sym,
-                    "entry_date": entry_date,
-                    "exit_date": day.strftime("%Y-%m-%d"),
-                    "qty": q,
-                    "entry_price": avg_cost,
-                    "exit_price": sell_px,
-                    "pnl": pnl,
-                    "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
-                    "reason": reason,
-                }
-            )
+            rec = {
+                "symbol": sym,
+                "entry_date": entry_date,
+                "exit_date": day.strftime("%Y-%m-%d"),
+                "qty": q,
+                "entry_price": avg_cost,
+                "exit_price": sell_px,
+                "pnl": pnl,
+                "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                "reason": reason,
+            }
+            _record_trade(rec)
+            _event({
+                "type": "sell",
+                "symbol": sym,
+                "date": day.strftime("%Y-%m-%d"),
+                "qty": float(q),
+                "price": float(sell_px),
+                "notional": float(q * sell_px),
+                "new_qty": 0.0,
+                "reason": rec["reason"],
+                "pnl": float(pnl),
+            })
             positions_qty.pop(sym, None)
             positions_avg_cost.pop(sym, None)
             positions_entry_date.pop(sym, None)
@@ -310,19 +324,29 @@ def run_backtest(
                     avg_cost = positions_avg_cost.get(sym, p0)
                     entry_date = positions_entry_date.get(sym)
                     pnl = (sell_px - avg_cost) * q
-                    _record_trade(
-                        {
-                            "symbol": sym,
-                            "entry_date": entry_date,
-                            "exit_date": day.strftime("%Y-%m-%d"),
-                            "qty": q,
-                            "entry_price": avg_cost,
-                            "exit_price": sell_px,
-                            "pnl": pnl,
-                            "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
-                            "reason": "portfolio_dd_stop",
-                        }
-                    )
+                    rec = {
+                        "symbol": sym,
+                        "entry_date": entry_date,
+                        "exit_date": day.strftime("%Y-%m-%d"),
+                        "qty": q,
+                        "entry_price": avg_cost,
+                        "exit_price": sell_px,
+                        "pnl": pnl,
+                        "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                        "reason": "portfolio_dd_stop",
+                    }
+                    _record_trade(rec)
+                    _event({
+                        "type": "sell",
+                        "symbol": sym,
+                        "date": day.strftime("%Y-%m-%d"),
+                        "qty": float(q),
+                        "price": float(sell_px),
+                        "notional": float(q * sell_px),
+                        "new_qty": 0.0,
+                        "reason": rec["reason"],
+                        "pnl": float(pnl),
+                    })
                 positions_qty.clear()
                 positions_avg_cost.clear()
                 positions_entry_date.clear()
@@ -347,19 +371,29 @@ def run_backtest(
                     cash += q * sell_px
                     entry_date = positions_entry_date.get(sym)
                     pnl = (sell_px - avg_cost) * q
-                    _record_trade(
-                        {
-                            "symbol": sym,
-                            "entry_date": entry_date,
-                            "exit_date": day.strftime("%Y-%m-%d"),
-                            "qty": q,
-                            "entry_price": avg_cost,
-                            "exit_price": sell_px,
-                            "pnl": pnl,
-                            "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
-                            "reason": "per_asset_stop_loss",
-                        }
-                    )
+                    rec = {
+                        "symbol": sym,
+                        "entry_date": entry_date,
+                        "exit_date": day.strftime("%Y-%m-%d"),
+                        "qty": q,
+                        "entry_price": avg_cost,
+                        "exit_price": sell_px,
+                        "pnl": pnl,
+                        "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                        "reason": "per_asset_stop_loss",
+                    }
+                    _record_trade(rec)
+                    _event({
+                        "type": "sell",
+                        "symbol": sym,
+                        "date": day.strftime("%Y-%m-%d"),
+                        "qty": float(q),
+                        "price": float(sell_px),
+                        "notional": float(q * sell_px),
+                        "new_qty": 0.0,
+                        "reason": rec["reason"],
+                        "pnl": float(pnl),
+                    })
                     positions_qty.pop(sym, None)
                     positions_avg_cost.pop(sym, None)
                     positions_entry_date.pop(sym, None)
@@ -469,19 +503,29 @@ def run_backtest(
                     avg_cost = positions_avg_cost.get(sym, p0)
                     entry_date = positions_entry_date.get(sym)
                     pnl = (sell_px - avg_cost) * q
-                    _record_trade(
-                        {
-                            "symbol": sym,
-                            "entry_date": entry_date,
-                            "exit_date": day.strftime("%Y-%m-%d"),
-                            "qty": q,
-                            "entry_price": avg_cost,
-                            "exit_price": sell_px,
-                            "pnl": pnl,
-                            "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
-                            "reason": "rebalance_liquidate",
-                        }
-                    )
+                    rec = {
+                        "symbol": sym,
+                        "entry_date": entry_date,
+                        "exit_date": day.strftime("%Y-%m-%d"),
+                        "qty": q,
+                        "entry_price": avg_cost,
+                        "exit_price": sell_px,
+                        "pnl": pnl,
+                        "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                        "reason": "rebalance_liquidate",
+                    }
+                    _record_trade(rec)
+                    _event({
+                        "type": "sell",
+                        "symbol": sym,
+                        "date": day.strftime("%Y-%m-%d"),
+                        "qty": float(q),
+                        "price": float(sell_px),
+                        "notional": float(q * sell_px),
+                        "new_qty": 0.0,
+                        "reason": rec["reason"],
+                        "pnl": float(pnl),
+                    })
 
                     positions_qty.pop(sym, None)
                     positions_avg_cost.pop(sym, None)
@@ -514,11 +558,14 @@ def run_backtest(
                     cost = deltaN * (1 + params.slippage_bps / 10000.0)
                     if cost > cash:
                         cost = cash
-                    q_add = cost / buy_px
+                    q_add = cost / buy_px if buy_px else 0.0
+                    if q_add <= 0:
+                        continue
                     cash -= cost
-                    newQ = positions_qty.get(sym, 0.0) + q_add
-                    # avg cost update
                     prevQ = positions_qty.get(sym, 0.0)
+                    newQ = prevQ + q_add
+
+                    # avg cost update
                     prevCost = positions_avg_cost.get(sym, buy_px)
                     if prevQ <= 0:
                         positions_entry_date[sym] = day.strftime("%Y-%m-%d")
@@ -526,6 +573,18 @@ def run_backtest(
                     else:
                         positions_avg_cost[sym] = (prevQ * prevCost + q_add * buy_px) / (prevQ + q_add)
                     positions_qty[sym] = newQ
+
+                    # record buy event
+                    _event({
+                        "type": "buy",
+                        "symbol": sym,
+                        "date": day.strftime("%Y-%m-%d"),
+                        "qty": float(q_add),
+                        "price": float(buy_px),
+                        "notional": float(cost),
+                        "new_qty": float(newQ),
+                        "reason": "rebalance_buy",
+                    })
 
                 else:
                     # sell at execution time - slippage
@@ -540,19 +599,29 @@ def run_backtest(
                     avg_cost = positions_avg_cost.get(sym, p0)
                     entry_date = positions_entry_date.get(sym)
                     pnl = (sell_px - avg_cost) * q_sub
-                    _record_trade(
-                        {
-                            "symbol": sym,
-                            "entry_date": entry_date,
-                            "exit_date": day.strftime("%Y-%m-%d"),
-                            "qty": q_sub,
-                            "entry_price": avg_cost,
-                            "exit_price": sell_px,
-                            "pnl": pnl,
-                            "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
-                            "reason": "rebalance_trim" if sym in keep else "rebalance_sell",
-                        }
-                    )
+                    rec = {
+                        "symbol": sym,
+                        "entry_date": entry_date,
+                        "exit_date": day.strftime("%Y-%m-%d"),
+                        "qty": q_sub,
+                        "entry_price": avg_cost,
+                        "exit_price": sell_px,
+                        "pnl": pnl,
+                        "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                        "reason": "rebalance_trim" if sym in keep else "rebalance_sell",
+                    }
+                    _record_trade(rec)
+                    _event({
+                        "type": "sell",
+                        "symbol": sym,
+                        "date": day.strftime("%Y-%m-%d"),
+                        "qty": float(q_sub),
+                        "price": float(sell_px),
+                        "notional": float(proceeds),
+                        "new_qty": float(max(0.0, positions_qty.get(sym, 0.0) - q_sub)),
+                        "reason": rec["reason"],
+                        "pnl": float(pnl),
+                    })
 
                     newQ = max(0.0, positions_qty.get(sym, 0.0) - q_sub)
                     positions_qty[sym] = newQ
@@ -662,6 +731,7 @@ def run_backtest(
         equity_curve=curve,
         metrics=metrics,
         trades=trades,
+        events=events,
         open_positions=open_pos,
         realized_pnl_by_symbol=realized_pnl_by_symbol,
         excluded_symbols=sorted(excluded),
