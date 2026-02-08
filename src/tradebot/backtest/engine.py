@@ -18,6 +18,8 @@ class BacktestParams:
     initial_equity: float = 100000.0
     slippage_bps: float = 10.0
     rebalance: Literal["weekly", "daily"] = "weekly"
+    # Trade execution time within the day (affects pricing only; chart remains daily)
+    execution_time: Literal["open", "close"] = "close"
     strategy_id: str = "baseline_trendvol"
     asset_mode: Literal["both", "equities", "crypto"] = "both"
     rebalance_mode: Literal["target_notional", "no_add_to_losers"] = "target_notional"
@@ -109,8 +111,9 @@ def run_backtest(
     max_observed_dd = 0.0
     dd_stop_trigger_day: pd.Timestamp | None = None
 
-    # Precompute close series
+    # Precompute close/open series
     closes: dict[str, pd.Series] = {}
+    opens: dict[str, pd.Series] = {}
     def _naive_utc_index(idx: pd.Index) -> pd.DatetimeIndex:
         di = pd.to_datetime(idx)
         # If tz-aware, drop tz to compare with naive backtest dates
@@ -133,8 +136,13 @@ def run_backtest(
             dfx.index = _naive_utc_index(dfx.index)
             dfx = dfx.sort_index()
             closes[sym] = dfx["close"].astype(float)
+            if "open" in dfx.columns:
+                opens[sym] = dfx["open"].astype(float)
+            else:
+                opens[sym] = pd.Series(dtype=float)
         else:
             closes[sym] = pd.Series(dtype=float)
+            opens[sym] = pd.Series(dtype=float)
 
     def px(sym: str, day: pd.Timestamp) -> float | None:
         s = closes.get(sym)
@@ -146,6 +154,24 @@ def run_backtest(
             return None
         v = float(sub.iloc[-1])
         return v if np.isfinite(v) and v > 0 else None
+
+    def px_open(sym: str, day: pd.Timestamp) -> float | None:
+        s = opens.get(sym)
+        if s is None or len(s) == 0:
+            return None
+        sub = s.loc[:day]
+        if len(sub) == 0:
+            return None
+        v = float(sub.iloc[-1])
+        return v if np.isfinite(v) and v > 0 else None
+
+    def exec_px(sym: str, day: pd.Timestamp) -> float | None:
+        # open if requested; fallback to close
+        if params.execution_time == "open":
+            v = px_open(sym, day)
+            if v is not None:
+                return v
+        return px(sym, day)
 
     def portfolio_value(day: pd.Timestamp) -> float:
         total = cash
@@ -179,7 +205,8 @@ def run_backtest(
             p0 = px(sym, day)
             if p0 is None:
                 continue
-            sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+            base_px = exec_px(sym, day) or p0
+            sell_px = base_px * (1 - params.slippage_bps / 10000.0)
             q = positions_qty.get(sym, 0.0)
             cash += q * sell_px
             avg_cost = positions_avg_cost.get(sym, p0)
@@ -267,12 +294,13 @@ def run_backtest(
             max_observed_dd = max(max_observed_dd, float(dd))
             if (not stopped_until_next_rebalance) and dd >= params.portfolio_dd_stop:
                 dd_stop_events += 1
-                # liquidate everything at close - slippage
+                # liquidate everything at execution time - slippage
                 for sym in list(positions_qty.keys()):
                     p0 = px(sym, day)
                     if p0 is None:
                         continue
-                    sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+                    base_px = exec_px(sym, day) or p0
+                    sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     q = positions_qty.get(sym, 0.0)
                     cash += q * sell_px
                     avg_cost = positions_avg_cost.get(sym, p0)
@@ -308,8 +336,9 @@ def run_backtest(
                 if avg_cost is None or avg_cost <= 0:
                     continue
                 if (p0 / avg_cost - 1.0) <= -sl:
-                    # stop out full position at close - slippage
-                    sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+                    # stop out full position at execution time - slippage
+                    base_px = exec_px(sym, day) or p0
+                    sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     q = positions_qty.get(sym, 0.0)
                     cash += q * sell_px
                     entry_date = positions_entry_date.get(sym)
@@ -428,7 +457,8 @@ def run_backtest(
                     p0 = px(sym, day)
                     if p0 is None:
                         continue
-                    sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+                    base_px = exec_px(sym, day) or p0
+                    sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     q = positions_qty.get(sym, 0.0)
                     cash += q * sell_px
 
@@ -474,8 +504,9 @@ def run_backtest(
                                 # keep current position; don't add
                                 continue
 
-                    # buy at close + slippage
-                    buy_px = p0 * (1 + params.slippage_bps / 10000.0)
+                    # buy at execution time + slippage
+                    base_px = exec_px(sym, day) or p0
+                    buy_px = base_px * (1 + params.slippage_bps / 10000.0)
                     cost = deltaN * (1 + params.slippage_bps / 10000.0)
                     if cost > cash:
                         cost = cash
@@ -493,8 +524,9 @@ def run_backtest(
                     positions_qty[sym] = newQ
 
                 else:
-                    # sell at close - slippage
-                    sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+                    # sell at execution time - slippage
+                    base_px = exec_px(sym, day) or p0
+                    sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     sellN = min(curN, abs(deltaN))
                     q_sub = sellN / p0
                     q_sub = min(q_sub, positions_qty.get(sym, 0.0))

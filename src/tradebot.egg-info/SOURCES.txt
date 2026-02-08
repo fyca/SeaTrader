@@ -21,6 +21,7 @@ src/tradebot/dashboard/auth.py
 src/tradebot/dashboard/backtest_symbol.py
 src/tradebot/dashboard/benchmarks.py
 src/tradebot/dashboard/config_api.py
+src/tradebot/dashboard/presets.py
 src/tradebot/execution/alpaca.py
 src/tradebot/execution/guardrails.py
 src/tradebot/execution/plan.py

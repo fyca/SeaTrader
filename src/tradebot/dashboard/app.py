@@ -470,6 +470,53 @@ def create_app(*, config_path: str) -> FastAPI:
             "markers": markers,
         }
 
+    @app.get("/api/backtest/presets")
+    def backtest_presets():
+        from tradebot.dashboard.presets import load_presets
+        return {"presets": load_presets()}
+
+    @app.post("/api/backtest/presets/save")
+    async def backtest_presets_save(req: Request):
+        require_token(req)
+        body = await req.json()
+        name = body.get("name")
+        params = body.get("params") or {}
+        from tradebot.dashboard.presets import save_preset
+        save_preset(name, params)
+        return {"ok": True}
+
+    @app.post("/api/backtest/presets/apply-live")
+    async def backtest_presets_apply_live(req: Request):
+        require_token(req)
+        body = await req.json()
+        name = body.get("name")
+        from tradebot.dashboard.presets import get_preset
+        p = get_preset(name)
+        if not p:
+            return {"ok": False, "error": "unknown preset"}
+        params = p.get("params") or {}
+
+        # Apply overlapping params to live config
+        # (Backtest has more knobs than live; we only map safe overlaps.)
+        from pathlib import Path
+        import yaml
+
+        cfg_path = Path(config_path)
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+
+        if params.get("strategy_id"):
+            cfg["strategy_id"] = params.get("strategy_id")
+
+        if params.get("per_asset_stop_loss_pct") is not None:
+            cfg.setdefault("risk", {})
+            cfg["risk"]["per_asset_stop_loss_pct"] = params.get("per_asset_stop_loss_pct")
+
+        # Optional: map backtest portfolio_dd_stop to live freeze threshold if user wants
+        # (not done automatically; different semantics).
+
+        cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
+        return {"ok": True}
+
     @app.post("/api/backtest/clear-cache")
     async def backtest_clear_cache(req: Request):
         require_token(req)

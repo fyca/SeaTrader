@@ -99,6 +99,13 @@
           <select id="btStrategy" style="width:260px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></select>
         </div>
         <div>
+          <div class="muted">Execution time</div>
+          <select id="btExecTime" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+            <option value="open">Morning (open)</option>
+            <option value="close" selected>Evening (close)</option>
+          </select>
+        </div>
+        <div>
           <div class="muted">Assets</div>
           <select id="btAssets" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
             <option value="both" selected>Both</option>
@@ -228,7 +235,28 @@
           </table>
         </div>
       </div>
-      <div class="muted" style="margin-top:6px;">Note: backtest runs in the background and uses daily closes; it can take a bit.</div>
+      <div style="margin-top:10px;" class="card">
+        <h2>Backtest presets</h2>
+        <div class="row">
+          <div>
+            <div class="muted">Preset</div>
+            <select id="btPreset" style="width:280px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></select>
+          </div>
+          <div>
+            <div class="muted">New preset name</div>
+            <input id="btPresetName" placeholder="e.g. weekly_safe_v2" style="min-width:240px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          </div>
+          <div style="display:flex; gap:8px; align-items:flex-end;">
+            <button id="btPresetLoad" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Load preset → UI</button>
+            <button id="btPresetSave" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">Save UI → preset</button>
+            <button id="btPresetApply" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#111827; color:#fff;">Apply preset to live config</button>
+            <span id="btPresetStatus" class="muted"></span>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:6px;">Presets are stored in <code>config/backtest_presets.yaml</code>. Apply-to-live updates overlapping fields in <code>config/config.yaml</code> (e.g., strategy_id and stop-loss).</div>
+      </div>
+
+      <div class="muted" style="margin-top:6px;">Note: backtest runs in the background and uses daily prices; it can take a bit.</div>
       <div style="margin-top:10px;">
         <h2>Backtest history</h2>
         <div class="tableWrap">
@@ -436,6 +464,7 @@ async function runBacktest() {
   const start = document.getElementById('btStart')?.value;
   const end = document.getElementById('btEnd')?.value;
   const strategy_id = (document.getElementById('btStrategy')?.value || 'baseline_trendvol');
+  const execution_time = (document.getElementById('btExecTime')?.value || 'close');
   const asset_mode = (document.getElementById('btAssets')?.value || 'both');
   const rebalance = (document.getElementById('btRebalance')?.value || 'weekly');
   const rebalance_mode = (document.getElementById('btRebalanceMode')?.value || 'target_notional');
@@ -453,7 +482,7 @@ async function runBacktest() {
   const ddStopRaw = ddCustom || ddPreset;
   const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
   status.textContent = 'starting…';
-  const body = {start, end, slippage_bps, initial_equity: 100000, strategy_id, asset_mode, rebalance, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_usd, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
+  const body = {start, end, slippage_bps, initial_equity: 100000, strategy_id, execution_time, asset_mode, rebalance, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_usd, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
   const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -794,7 +823,7 @@ async function renderBacktest(res) {
 }
 
 async function main() {
-  const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies] = await Promise.all([
+  const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies, btPresets] = await Promise.all([
     getJSON('/api/health'),
     getJSON('/api/config'),
     getJSON('/api/account'),
@@ -806,7 +835,8 @@ async function main() {
     getJSON('/api/recent-fills?limit=200'),
     getJSON('/api/order-summary'),
     getJSON('/api/backtest/jobs?limit=20'),
-    getJSON('/api/strategies')
+    getJSON('/api/strategies'),
+    getJSON('/api/backtest/presets')
   ]);
 
   const frozen = artifacts.last_account?.payload?.frozen;
@@ -940,6 +970,117 @@ async function main() {
         tr.querySelector('td').textContent = open ? '▸' : '▾';
       });
     }
+  }
+
+  // Backtest presets
+  const presetSel = document.getElementById('btPreset');
+  const presetStatus = document.getElementById('btPresetStatus');
+  const presets = (btPresets && btPresets.presets) ? btPresets.presets : [];
+  if (presetSel) {
+    if (!presetSel.dataset.loaded) {
+      presetSel.innerHTML = '';
+      for (const p of presets) {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        presetSel.appendChild(opt);
+      }
+      presetSel.dataset.loaded = '1';
+    }
+  }
+
+  function collectBTParams() {
+    const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
+    const per_asset_stop_loss_pct = stopLoss ? Number(stopLoss) : null;
+    const ddCustom = (document.getElementById('btDD')?.value || '').trim();
+    const ddPreset = (document.getElementById('btDDPreset')?.value || '').trim();
+    const ddStopRaw = ddCustom || ddPreset;
+    const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
+    const symFloorRaw = (document.getElementById('btSymFloor')?.value || '').trim();
+    const symbol_pnl_floor_usd = symFloorRaw ? Number(symFloorRaw) : null;
+
+    return {
+      strategy_id: (document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
+      execution_time: (document.getElementById('btExecTime')?.value || 'close'),
+      asset_mode: (document.getElementById('btAssets')?.value || 'both'),
+      rebalance: (document.getElementById('btRebalance')?.value || 'weekly'),
+      rebalance_mode: (document.getElementById('btRebalanceMode')?.value || 'target_notional'),
+      liquidation_mode: (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected'),
+      slippage_bps: Number(document.getElementById('btSlip')?.value || '10'),
+      per_asset_stop_loss_pct,
+      portfolio_dd_stop,
+      symbol_pnl_floor_usd,
+      symbol_pnl_floor_liquidate: Boolean(document.getElementById('btSymFloorLiquidate')?.checked),
+      symbol_pnl_floor_include_unrealized: Boolean(document.getElementById('btSymFloorInclUnreal')?.checked),
+    };
+  }
+
+  function applyBTParamsToUI(p) {
+    if (!p) return;
+    const setVal = (id, v) => { const el=document.getElementById(id); if(el && v!==undefined && v!==null) el.value=String(v); };
+    setVal('btStrategy', p.strategy_id);
+    setVal('btExecTime', p.execution_time);
+    setVal('btAssets', p.asset_mode);
+    setVal('btRebalance', p.rebalance);
+    setVal('btRebalanceMode', p.rebalance_mode);
+    setVal('btLiquidation', p.liquidation_mode);
+    setVal('btSlip', p.slippage_bps);
+    setVal('btStopLoss', p.per_asset_stop_loss_pct);
+    setVal('btDD', '');
+    setVal('btDDPreset', p.portfolio_dd_stop);
+    setVal('btSymFloor', p.symbol_pnl_floor_usd);
+    const liq = document.getElementById('btSymFloorLiquidate');
+    if (liq && p.symbol_pnl_floor_liquidate!==undefined) liq.checked = Boolean(p.symbol_pnl_floor_liquidate);
+    const iu = document.getElementById('btSymFloorInclUnreal');
+    if (iu && p.symbol_pnl_floor_include_unrealized!==undefined) iu.checked = Boolean(p.symbol_pnl_floor_include_unrealized);
+  }
+
+  const btnLoad = document.getElementById('btPresetLoad');
+  if (btnLoad && !btnLoad.dataset.wired) {
+    btnLoad.dataset.wired = '1';
+    btnLoad.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const name = presetSel?.value;
+      const p = presets.find(x=>x.name===name);
+      if (!p) return;
+      applyBTParamsToUI(p.params || {});
+      if (presetStatus) presetStatus.textContent = 'loaded preset ' + name;
+    });
+  }
+
+  const btnSave = document.getElementById('btPresetSave');
+  if (btnSave && !btnSave.dataset.wired) {
+    btnSave.dataset.wired = '1';
+    btnSave.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const name = (document.getElementById('btPresetName')?.value || '').trim();
+      if (!name) { if(presetStatus) presetStatus.textContent='enter a preset name'; return; }
+      if (presetStatus) presetStatus.textContent = 'saving…';
+      try {
+        await postJSON('/api/backtest/presets/save', {name, params: collectBTParams()});
+        if (presetStatus) presetStatus.textContent = 'saved preset ' + name + ' (refresh page to see in dropdown)';
+      } catch (err) {
+        if (presetStatus) presetStatus.textContent = 'save error: ' + (err?.message || err);
+      }
+    });
+  }
+
+  const btnApply = document.getElementById('btPresetApply');
+  if (btnApply && !btnApply.dataset.wired) {
+    btnApply.dataset.wired = '1';
+    btnApply.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const name = presetSel?.value;
+      if (!name) { if(presetStatus) presetStatus.textContent='select a preset'; return; }
+      if (presetStatus) presetStatus.textContent = 'applying to config…';
+      try {
+        const res = await postJSON('/api/backtest/presets/apply-live', {name});
+        if (!res.ok) throw new Error(res.error||'failed');
+        if (presetStatus) presetStatus.textContent = 'applied preset ' + name + ' to live config';
+      } catch (err) {
+        if (presetStatus) presetStatus.textContent = 'apply error: ' + (err?.message || err);
+      }
+    });
   }
 
   // Backtest history
