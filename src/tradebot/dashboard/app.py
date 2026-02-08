@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from tradebot.dashboard.auth import check_token
 from tradebot.dashboard.actions import require_token
@@ -30,6 +31,11 @@ def _read_json(path: Path):
 
 def create_app(*, config_path: str) -> FastAPI:
     app = FastAPI(title="tradebot dashboard")
+
+    # Static assets (themes, icons, etc.)
+    static_dir = Path(__file__).with_name("static")
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     @app.get("/", response_class=HTMLResponse)
     def index():

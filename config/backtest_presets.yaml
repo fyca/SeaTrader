@@ -16,6 +16,6 @@ presets:
       per_asset_stop_loss_pct: 0.05
       portfolio_dd_stop: 0.20
       execution_time: close
-      symbol_pnl_floor_usd: null
+      symbol_pnl_floor_pct: -0.005
       symbol_pnl_floor_liquidate: true
       symbol_pnl_floor_include_unrealized: true

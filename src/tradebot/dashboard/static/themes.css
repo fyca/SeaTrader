@@ -1,0 +1,169 @@
+/* Theme presets for SeaTrader dashboard + builder.
+
+Usage:
+- Set <html data-theme="classic|fun|dark">.
+- Default theme is classic.
+
+Keep this file small and variable-driven so we can add themes without touching HTML.
+*/
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 8px 24px rgba(0,0,0,.08);
+
+  --ring: 0 0 0 3px rgba(59,130,246,.25);
+
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --panel-2: #f9fafb;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e5e7eb;
+
+  --accent: #2563eb;
+  --accent-2: #16a34a;
+  --danger: #dc2626;
+
+  --btn-bg: #111827;
+  --btn-text: #ffffff;
+  --btn-bg-2: #ffffff;
+  --btn-text-2: #111827;
+
+  --code-bg: #0b1020;
+  --code-text: #e5e7eb;
+  --code-border: #111827;
+}
+
+:root[data-theme="classic"] {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #ffffff;
+  --text: #111111;
+  --muted: #666666;
+  --border: #e5e7eb;
+
+  --accent: #2563eb;
+  --accent-2: #16a34a;
+  --danger: #7f1d1d;
+
+  --btn-bg: #111827;
+  --btn-text: #ffffff;
+  --btn-bg-2: #ffffff;
+  --btn-text-2: #111827;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+}
+
+:root[data-theme="fun"] {
+  --bg: #0b1020;
+  --panel: rgba(255,255,255,.06);
+  --panel-2: rgba(255,255,255,.03);
+  --text: #e5e7eb;
+  --muted: rgba(229,231,235,.75);
+  --border: rgba(255,255,255,.10);
+
+  --accent: #7c3aed;
+  --accent-2: #22c55e;
+  --danger: #fb7185;
+
+  --btn-bg: linear-gradient(135deg, #7c3aed, #2563eb);
+  --btn-text: #ffffff;
+  --btn-bg-2: rgba(255,255,255,.10);
+  --btn-text-2: #e5e7eb;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+  --shadow-md: 0 14px 40px rgba(0,0,0,.35);
+
+  --code-bg: rgba(0,0,0,.45);
+  --code-text: #e5e7eb;
+  --code-border: rgba(255,255,255,.12);
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b1220;
+  --panel: #0f172a;
+  --panel-2: #0b1220;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --border: rgba(148,163,184,.20);
+
+  --accent: #60a5fa;
+  --accent-2: #22c55e;
+  --danger: #f87171;
+
+  --btn-bg: #1f2937;
+  --btn-text: #e5e7eb;
+  --btn-bg-2: #0b1220;
+  --btn-text-2: #e5e7eb;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.25);
+  --shadow-md: 0 14px 40px rgba(0,0,0,.40);
+}
+
+/* Shared components */
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+}
+
+a { color: var(--accent); }
+
+.muted { color: var(--muted) !important; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+input, select, textarea, button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+input:focus, select:focus, textarea:focus, button:focus {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+button.primary {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid transparent;
+}
+
+button.secondary {
+  background: var(--btn-bg-2);
+  color: var(--btn-text-2);
+}
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid transparent;
+}
+
+.codewrap {
+  background: var(--code-bg);
+  color: var(--code-text);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-md);
+}
+
+.nodeRow {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-sm);
+}

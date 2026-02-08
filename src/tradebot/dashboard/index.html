@@ -3,7 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>tradebot dashboard</title>
+  <title>SeaTrader dashboard</title>
+  <link rel="stylesheet" href="/static/themes.css" />
+  <script>
+    (function(){
+      try {
+        var t = localStorage.getItem('ui_theme') || 'classic';
+        document.documentElement.dataset.theme = t;
+      } catch(e) { document.documentElement.dataset.theme = 'classic'; }
+    })();
+  </script>
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
   <style>
     body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
@@ -32,8 +41,20 @@
   </style>
 </head>
 <body>
-  <h1>tradebot dashboard</h1>
-  <div class="muted" id="subtitle">loading…</div>
+  <div class="row" style="justify-content: space-between; align-items:flex-end; gap:12px;">
+    <div>
+      <h1 style="margin:0;">SeaTrader</h1>
+      <div class="muted" id="subtitle">loading…</div>
+    </div>
+    <div>
+      <div class="muted" style="margin-bottom:6px;">Theme</div>
+      <select id="themeSel" style="padding:6px 8px;">
+        <option value="classic">Classic</option>
+        <option value="fun">Fun</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
+  </div>
 
   <div class="grid" style="margin-top: 16px;">
     <div class="card col-6">
@@ -149,8 +170,8 @@
           <input id="btSlip" placeholder="10" value="10" style="width:120px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
         </div>
         <div>
-          <div class="muted">Exclude if symbol total realized P/L &lt;= (USD)</div>
-          <input id="btSymFloor" placeholder="e.g. -500" value="-500" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
+          <div class="muted">Exclude if symbol P/L % &lt;=</div>
+          <input id="btSymFloor" placeholder="e.g. -0.005" value="-0.005" style="width:160px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;" />
           <label class="muted" style="display:block; margin-top:4px;">
             <input id="btSymFloorLiquidate" type="checkbox" checked /> Immediately liquidate when excluded
           </label>
@@ -473,7 +494,7 @@ async function runBacktest() {
   const symbol = (document.getElementById('btSymbol')?.value || '').trim();
   const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
   const symFloorRaw = (document.getElementById('btSymFloor')?.value || '').trim();
-  const symbol_pnl_floor_usd = symFloorRaw ? Number(symFloorRaw) : null;
+  const symbol_pnl_floor_pct = symFloorRaw ? Number(symFloorRaw) : null;
   const symbol_pnl_floor_liquidate = Boolean(document.getElementById('btSymFloorLiquidate')?.checked);
   const symbol_pnl_floor_include_unrealized = Boolean(document.getElementById('btSymFloorInclUnreal')?.checked);
   const per_asset_stop_loss_pct = stopLoss ? Number(stopLoss) : null;
@@ -482,7 +503,7 @@ async function runBacktest() {
   const ddStopRaw = ddCustom || ddPreset;
   const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
   status.textContent = 'starting…';
-  const body = {start, end, slippage_bps, initial_equity: 100000, strategy_id, execution_time, asset_mode, rebalance, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_usd, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
+  const body = {start, end, slippage_bps, initial_equity: 100000, strategy_id, execution_time, asset_mode, rebalance, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
   const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -822,7 +843,24 @@ async function renderBacktest(res) {
   }
 }
 
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t || 'classic';
+  try { localStorage.setItem('ui_theme', document.documentElement.dataset.theme); } catch(e) {}
+}
+
+function initThemePicker() {
+  const sel = document.getElementById('themeSel');
+  const saved = (()=>{ try { return localStorage.getItem('ui_theme'); } catch(e) { return null; } })();
+  applyTheme(saved || document.documentElement.dataset.theme || 'classic');
+  if (sel) {
+    sel.value = document.documentElement.dataset.theme || 'classic';
+    sel.addEventListener('change', ()=> applyTheme(sel.value));
+  }
+}
+
 async function main() {
+  initThemePicker();
+
   const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies, btPresets] = await Promise.all([
     getJSON('/api/health'),
     getJSON('/api/config'),
@@ -997,7 +1035,7 @@ async function main() {
     const ddStopRaw = ddCustom || ddPreset;
     const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
     const symFloorRaw = (document.getElementById('btSymFloor')?.value || '').trim();
-    const symbol_pnl_floor_usd = symFloorRaw ? Number(symFloorRaw) : null;
+    const symbol_pnl_floor_pct = symFloorRaw ? Number(symFloorRaw) : null;
 
     return {
       strategy_id: (document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
@@ -1009,7 +1047,7 @@ async function main() {
       slippage_bps: Number(document.getElementById('btSlip')?.value || '10'),
       per_asset_stop_loss_pct,
       portfolio_dd_stop,
-      symbol_pnl_floor_usd,
+      symbol_pnl_floor_pct,
       symbol_pnl_floor_liquidate: Boolean(document.getElementById('btSymFloorLiquidate')?.checked),
       symbol_pnl_floor_include_unrealized: Boolean(document.getElementById('btSymFloorInclUnreal')?.checked),
     };
@@ -1028,7 +1066,7 @@ async function main() {
     setVal('btStopLoss', p.per_asset_stop_loss_pct);
     setVal('btDD', '');
     setVal('btDDPreset', p.portfolio_dd_stop);
-    setVal('btSymFloor', p.symbol_pnl_floor_usd);
+    setVal('btSymFloor', p.symbol_pnl_floor_pct);
     const liq = document.getElementById('btSymFloorLiquidate');
     if (liq && p.symbol_pnl_floor_liquidate!==undefined) liq.checked = Boolean(p.symbol_pnl_floor_liquidate);
     const iu = document.getElementById('btSymFloorInclUnreal');

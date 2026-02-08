@@ -26,9 +26,14 @@ class BacktestParams:
     liquidation_mode: Literal["liquidate_non_selected", "hold_until_exit"] = "liquidate_non_selected"
     per_asset_stop_loss_pct: float | None = None
 
-    # If cumulative realized P/L for a symbol falls below this USD value,
+    # If (realized + optional unrealized) P/L percent for a symbol falls below this threshold,
     # permanently exclude it from further trading for the rest of the backtest.
-    symbol_pnl_floor_usd: float | None = None
+    #
+    # Percent is computed relative to current cost basis when a position is held:
+    #   (realized_pnl + unrealized_pnl) / (avg_cost * qty)
+    #
+    # Example: -0.005 = -0.5%
+    symbol_pnl_floor_pct: float | None = None
 
     # If True, immediately liquidate any currently-held position when a symbol hits the P/L floor.
     # If False, the symbol is excluded from new entries but existing holdings are not force-sold.
@@ -190,9 +195,8 @@ def run_backtest(
         pnl = float(t.get("pnl") or 0.0)
         if sym:
             realized_pnl_by_symbol[sym] = float(realized_pnl_by_symbol.get(sym, 0.0) + pnl)
-            floor = params.symbol_pnl_floor_usd
-            if floor is not None and realized_pnl_by_symbol[sym] <= float(floor):
-                excluded.add(sym)
+            # realized-only exclusion handled in daily evaluation step (supports percent + unrealized)
+            pass
 
     def _liquidate_excluded(day: pd.Timestamp, *, reason: str) -> None:
         """If a symbol is excluded, immediately sell any remaining position."""
@@ -263,26 +267,26 @@ def run_backtest(
         peak_equity = max(peak_equity, equity)
 
         # Evaluate symbol P/L floor (optionally include unrealized) and exclude+liquidate
-        floor = params.symbol_pnl_floor_usd
+        floor = params.symbol_pnl_floor_pct
         if floor is not None:
             fl = float(floor)
-            # Consider held positions: realized + unrealized (if enabled)
-            if params.symbol_pnl_floor_include_unrealized:
-                for sym, q in list(positions_qty.items()):
-                    p0 = px(sym, day)
-                    if p0 is None:
-                        continue
-                    avg_cost = positions_avg_cost.get(sym)
-                    if avg_cost is None or avg_cost <= 0:
-                        continue
-                    unreal = (p0 - avg_cost) * q
-                    tot = float(realized_pnl_by_symbol.get(sym, 0.0) + unreal)
-                    if tot <= fl:
-                        excluded.add(sym)
-            else:
-                for sym, rpnl in list(realized_pnl_by_symbol.items()):
-                    if float(rpnl) <= fl:
-                        excluded.add(sym)
+            # We can only compute a meaningful percent while a position is held
+            for sym, q in list(positions_qty.items()):
+                p0 = px(sym, day)
+                if p0 is None:
+                    continue
+                avg_cost = positions_avg_cost.get(sym)
+                if avg_cost is None or avg_cost <= 0:
+                    continue
+                basis = float(avg_cost * q)
+                if basis == 0:
+                    continue
+                unreal = float((p0 - avg_cost) * q)
+                realized = float(realized_pnl_by_symbol.get(sym, 0.0))
+                tot = realized + (unreal if params.symbol_pnl_floor_include_unrealized else 0.0)
+                pct = float(tot / basis)
+                if pct <= fl:
+                    excluded.add(sym)
 
         # If symbol is excluded already, optionally liquidate at start of day
         if params.symbol_pnl_floor_liquidate:
