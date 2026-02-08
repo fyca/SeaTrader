@@ -132,6 +132,26 @@
             </div>
           </div>
 
+          <div class="row" style="margin-top:10px; align-items:flex-end; justify-content:space-between;">
+            <div class="row" style="align-items:flex-end;">
+              <div>
+                <div class="muted">Preset</div>
+                <select id="btPreset" style="width:280px;"></select>
+              </div>
+              <div>
+                <div class="muted">New preset name</div>
+                <input id="btPresetName" placeholder="e.g. weekly_safe_v2" style="min-width:240px;" />
+              </div>
+            </div>
+            <div class="row" style="align-items:flex-end; gap:8px;">
+              <button id="btPresetLoad" class="secondary">Load preset → UI</button>
+              <button id="btPresetSave" class="secondary">Save UI → preset</button>
+              <button id="btPresetApply" class="primary">Apply preset to live config</button>
+              <span id="btPresetStatus" class="muted"></span>
+            </div>
+          </div>
+          <div class="muted" style="margin-top:6px;">Presets are stored in <code>config/backtest_presets.yaml</code>.</div>
+
           <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap: wrap; margin-top:10px;">
             <div>
               <div class="muted">Evaluation start</div>
@@ -285,26 +305,8 @@
           </table>
         </div>
       </div>
-      <div style="margin-top:10px;" class="card">
-        <h2>Backtest presets</h2>
-        <div class="row">
-          <div>
-            <div class="muted">Preset</div>
-            <select id="btPreset" style="width:280px;"></select>
-          </div>
-          <div>
-            <div class="muted">New preset name</div>
-            <input id="btPresetName" placeholder="e.g. weekly_safe_v2" style="min-width:240px;" />
-          </div>
-          <div style="display:flex; gap:8px; align-items:flex-end;">
-            <button id="btPresetLoad" class="secondary">Load preset → UI</button>
-            <button id="btPresetSave" class="secondary">Save UI → preset</button>
-            <button id="btPresetApply" class="primary">Apply preset to live config</button>
-            <span id="btPresetStatus" class="muted"></span>
-          </div>
-        </div>
-        <div class="muted" style="margin-top:6px;">Presets are stored in <code>config/backtest_presets.yaml</code>. Apply-to-live updates overlapping fields in <code>config/config.yaml</code> (e.g., strategy_id and stop-loss).</div>
-      </div>
+      <!-- backtest presets moved to top -->
+</div>
 
       <div class="muted" style="margin-top:6px;">Note: backtest runs in the background and uses daily prices; it can take a bit.</div>
       <div style="margin-top:10px;">
