@@ -242,7 +242,8 @@ table {
 
 thead th {
   position: sticky;
-  top: 60px;
+  top: 0; /* sticky inside scroll containers */
+  z-index: 5;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   backdrop-filter: blur(8px);
 }
