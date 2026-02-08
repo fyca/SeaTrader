@@ -48,9 +48,15 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             sp500 = set(get_sp500_symbols())
             assets = clients.trading.get_all_assets()
             tradable_eq = sorted({a.symbol for a in assets if getattr(a, "tradable", False) and getattr(a, "status", None) == "active" and a.symbol in sp500})
+            # Ensure SPY is available for regime filter strategies
+            if "SPY" not in tradable_eq:
+                tradable_eq.append("SPY")
 
             crypto_assets = list_tradable_crypto(clients.trading)
             tradable_cr = sorted({a.symbol for a in crypto_assets if a.symbol.endswith("/USD")})
+            # Ensure BTC/USD available for regime filter strategies
+            if "BTC/USD" not in tradable_cr:
+                tradable_cr.append("BTC/USD")
 
             # Single-symbol mode
             sym = params.get("symbol")
@@ -98,6 +104,16 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                         crypto_bars.update(fetch_crypto_bars_range(clients.crypto, syms, start=warmup_start, end=end_dt))
                         _write(status_path, {"state": "fetching_crypto", "progress": min(i + chunkc, len(tradable_cr)), "total": len(tradable_cr)})
                     save_cached_frames("crypto", tradable_cr, cfg.signals.lookback_days, cache_start, cache_end, crypto_bars)
+
+            # Normalize stop-loss input: allow UI to pass 5 meaning 5%
+            if params.get("per_asset_stop_loss_pct") is not None:
+                try:
+                    v = float(params.get("per_asset_stop_loss_pct"))
+                    if v > 1.0:
+                        v = v / 100.0
+                    params["per_asset_stop_loss_pct"] = v
+                except Exception:
+                    params["per_asset_stop_loss_pct"] = None
 
             # Run backtest
             p = BacktestParams(**params)
@@ -156,7 +172,7 @@ def get_result(job_id: str) -> dict | None:
 
 def list_jobs(limit: int = 20) -> list[dict]:
     BASE.mkdir(parents=True, exist_ok=True)
-    jobs = []
+    jobs: list[dict] = []
     for d in BASE.iterdir():
         if not d.is_dir():
             continue
@@ -164,7 +180,32 @@ def list_jobs(limit: int = 20) -> list[dict]:
         if not status_p.exists():
             continue
         st = json.loads(status_p.read_text())
-        jobs.append({"job_id": d.name, **st})
+        item: dict = {"job_id": d.name, **st}
+
+        # Attach lightweight result summary for easier scanning
+        res_p = d / "result.json"
+        if res_p.exists():
+            try:
+                res = json.loads(res_p.read_text())
+                m = (res or {}).get("metrics") or {}
+                p = (res or {}).get("params") or {}
+                item["result_metrics"] = {
+                    "return": m.get("return"),
+                    "cagr": m.get("cagr"),
+                    "sharpe": m.get("sharpe"),
+                    "max_drawdown": m.get("max_drawdown"),
+                    "end_equity": m.get("end_equity"),
+                }
+                item["result_params"] = {
+                    "strategy_id": p.get("strategy_id"),
+                    "asset_mode": p.get("asset_mode"),
+                    "rebalance": p.get("rebalance"),
+                }
+            except Exception:
+                pass
+
+        jobs.append(item)
+
     # sort by mtime desc
     jobs.sort(key=lambda x: (BASE / x["job_id"] / "status.json").stat().st_mtime, reverse=True)
     return jobs[: max(1, min(limit, 200))]

@@ -1,0 +1,875 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Strategy Builder</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
+    .muted { color: #666; }
+    .row { display:flex; gap:10px; flex-wrap: wrap; align-items:flex-end; }
+    input, select, textarea, button { padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px; }
+    textarea { width: 100%; height: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+    button.primary { background:#111827; color:#fff; }
+    .card { border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin-top:12px; }
+    table { width:100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom:1px solid #eee; padding:6px 8px; text-align:left; }
+
+    /* Code-block-ish look */
+    .codewrap { background:#0b1020; color:#e5e7eb; border:1px solid #111827; border-radius:12px; padding:10px 12px; }
+    .codewrap pre { margin:0; white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height:1.35; }
+    .nodeRow select, .nodeRow input, .nodeRow button { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .nodeRow { background:#0b1020; border:1px solid #111827; border-radius:10px; padding:8px 10px; }
+  </style>
+</head>
+<body>
+  <h1>Strategy Builder</h1>
+  <div class="muted">Build and save rule-based strategies (entry rules + weighted score factors). Saved strategies will appear in the main Strategy dropdown.</div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="muted">Strategy ID</div>
+        <input id="sid" placeholder="my_strategy" />
+      </div>
+      <div>
+        <div class="muted">Name</div>
+        <input id="sname" placeholder="My Strategy" style="min-width:240px;" />
+      </div>
+      <div>
+        <div class="muted">Pages</div>
+        <div class="row">
+          <a href="/" class="muted">Dashboard</a>
+          <a href="/builder" class="muted">Builder</a>
+        </div>
+      </div>
+      <div>
+        <button class="primary" id="save">Save</button>
+        <button id="load">Load</button>
+        <button id="del" style="background:#7f1d1d; color:#fff;">Delete</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Entry rules (builder)</h2>
+    <div class="muted">Now supports nested AND/OR groups. This builds the same JSON format the engine understands: {"all": [...] } and {"any": [...]}.</div>
+
+    <div class="row" style="margin-top:8px;">
+      <button id="addRootCond" class="primary">Add condition</button>
+      <button id="addRootGroup">Add group</button>
+      <button id="syncToJson">Sync → JSON</button>
+      <button id="syncFromJson">Load ← JSON</button>
+      <span id="condStatus" class="muted"></span>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
+      <span class="muted">Entry presets:</span>
+      <button id="pTrend">SMA50 &gt; SMA200</button>
+      <button id="pCloseAbove">CLOSE &gt; SMA200</button>
+      <button id="pSlope">SMA50 slope(5d) &gt; 0</button>
+      <button id="pCross">Golden cross (SMA50 cross above SMA200)</button>
+      <button id="pBreak">CLOSE &gt;= HIGHEST(20)</button>
+      <button id="pAbove50">CLOSE &gt; SMA50</button>
+      <button id="pNotExt">DIST_SMA200 &lt; 20%</button>
+      <button id="pLowVol">ANN_VOL20 &lt; 0.80</button>
+      <button id="pRsiOS">RSI14 &lt; 30</button>
+      <button id="pRsiOk">RSI14 &lt; 70</button>
+      <button id="pRsiRange">RSI14 40–70</button>
+    </div>
+
+    <div id="ruleTree" style="margin-top:10px;"></div>
+
+    <details style="margin-top:10px;">
+      <summary class="muted">Entry rule (code view)</summary>
+      <div class="codewrap" style="margin-top:8px;"><pre id="entryCode"></pre></div>
+    </details>
+
+    <details style="margin-top:10px;"><summary class="muted">Entry rule JSON</summary><textarea id="entry"></textarea></details>
+  </div>
+
+  <div class="card">
+    <h2>Exit rules (builder)</h2>
+    <div class="muted">Exit rule is evaluated as: if it returns true, the strategy should SELL/exit.</div>
+
+    <div class="row" style="margin-top:8px;">
+      <button id="addExitRootCond" class="primary">Add condition</button>
+      <button id="addExitRootGroup">Add group</button>
+      <button id="syncExitToJson">Sync → JSON</button>
+      <button id="syncExitFromJson">Load ← JSON</button>
+      <span id="exitStatus" class="muted"></span>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
+      <span class="muted">Exit presets:</span>
+      <button id="xTrend">CLOSE &lt; SMA200</button>
+      <button id="xRsiOB">RSI14 &gt; 70</button>
+      <button id="xRsiExtreme">RSI14 &gt; 80</button>
+    </div>
+
+    <div id="exitRuleTree" style="margin-top:10px;"></div>
+
+    <details style="margin-top:10px;">
+      <summary class="muted">Exit rule (code view)</summary>
+      <div class="codewrap" style="margin-top:8px;"><pre id="exitCode"></pre></div>
+    </details>
+
+    <details style="margin-top:10px;"><summary class="muted">Exit rule JSON</summary><textarea id="exit"></textarea></details>
+  </div>
+
+  <div class="card">
+    <h2>Score factors (builder)</h2>
+    <div class="muted">Weighted sum of factors. Each factor is either an indicator (numeric) or a boolean condition (counts as 0/1).</div>
+
+    <div class="row" style="margin-top:8px;">
+      <button id="addFactor" class="primary">Add factor</button>
+      <span class="muted">Factor presets:</span>
+      <button id="addPresetDist" >+ DIST_SMA(200)</button>
+      <button id="addPresetDist50" >+ DIST_SMA(50)</button>
+      <button id="addPresetVol" >+ ANN_VOL(20)</button>
+      <button id="addPresetBreak" >+ BREAKOUT(20)</button>
+      <button id="addPresetRsiOS" >+ (RSI14&lt;30)</button>
+      <button id="addPresetRsiOB" >+ (RSI14&gt;70)</button>
+      <button id="addPresetSlope" >+ (SMA50 slope&gt;0)</button>
+      <button id="addPresetCross" >+ (GoldenCross)</button>
+      <button id="syncFactorsToJson">Sync → JSON</button>
+      <button id="syncFactorsFromJson">Load ← JSON</button>
+      <span id="factorStatus" class="muted"></span>
+    </div>
+
+    <div style="margin-top:10px;">
+      <table>
+        <thead>
+          <tr><th>Weight</th><th>Type</th><th>Spec</th><th></th></tr>
+        </thead>
+        <tbody id="factorRows"></tbody>
+      </table>
+    </div>
+
+    <details style="margin-top:10px;"><summary class="muted">Factors JSON</summary><textarea id="factors"></textarea></details>
+  </div>
+
+  <div class="card">
+    <h2>Preview</h2>
+    <div class="row">
+      <div>
+        <div class="muted">Symbol</div>
+        <input id="psym" placeholder="AAPL or BTC/USD" />
+      </div>
+      <div>
+        <button class="primary" id="preview">Preview</button>
+        <span id="pstatus" class="muted"></span>
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <h2>Result</h2>
+      <div id="pSummary" class="muted"></div>
+      <div class="row" style="margin-top:8px;">
+        <div style="flex:1; min-width:320px;" class="card">
+          <h2>Factor breakdown</h2>
+          <table>
+            <thead><tr><th>Weight</th><th>Kind</th><th>Value</th><th>Contrib</th></tr></thead>
+            <tbody id="pFactors"></tbody>
+          </table>
+        </div>
+        <div style="flex:1; min-width:320px;" class="card">
+          <h2>Indicators</h2>
+          <table>
+            <thead><tr><th>Name</th><th>Value</th></tr></thead>
+            <tbody id="pInd"></tbody>
+          </table>
+        </div>
+      </div>
+      <details style="margin-top:8px;"><summary class="muted">Raw JSON</summary><pre id="pout"></pre></details>
+    </div>
+  </div>
+
+<script>
+async function getJSON(url) { const r=await fetch(url); if(!r.ok) throw new Error(await r.text()); return await r.json(); }
+async function postJSON(url, body) { const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!r.ok) throw new Error(await r.text()); return await r.json(); }
+
+function defaults() {
+  document.getElementById('entry').value = JSON.stringify({all:[
+    {left:{kind:'sma',n:50}, op:'>', right:{kind:'sma',n:200}},
+    {left:{kind:'rsi',n:14}, op:'<', right:70}
+  ]}, null, 2);
+
+  document.getElementById('exit').value = JSON.stringify({any:[
+    {left:{kind:'close'}, op:'<', right:{kind:'sma', n:200}}
+  ]}, null, 2);
+
+  document.getElementById('factors').value = JSON.stringify([
+    {weight: 1.0, value: {kind:'close'}},
+    {weight: -0.5, value: {kind:'ann_vol', n:20}},
+    {weight: 0.2, value: {left:{kind:'rsi',n:14}, op:'<', right:30}}
+  ], null, 2);
+}
+
+function indicatorOptions() {
+  return [
+    {kind:'close', label:'CLOSE', needsN:false},
+    {kind:'sma', label:'SMA(n)', needsN:true},
+    {kind:'ema', label:'EMA(n)', needsN:true},
+    {kind:'rsi', label:'RSI(n)', needsN:true},
+    {kind:'highest', label:'HIGHEST(n)', needsN:true},
+    {kind:'lowest', label:'LOWEST(n)', needsN:true},
+    {kind:'roc', label:'ROC(n) (close/close[-n]-1)', needsN:true},
+    {kind:'ret_1d', label:'RET_1D (daily return)', needsN:false},
+    {kind:'ann_vol', label:'ANN_VOL(n)', needsN:true},
+
+    // Presets / derived
+    {kind:'dist_sma', label:'DIST_SMA(n) (close/sma-1)', needsN:true},
+    {kind:'breakout', label:'BREAKOUT(n) (0/1)', needsN:true},
+  ];
+}
+
+function makeIndicatorSelect(idPrefix) {
+  const sel = document.createElement('select');
+  for (const o of indicatorOptions()) {
+    const opt = document.createElement('option');
+    opt.value = o.kind;
+    opt.textContent = o.label;
+    sel.appendChild(opt);
+  }
+  sel.dataset.prefix = idPrefix;
+  return sel;
+}
+
+function makeNInput() {
+  const inp = document.createElement('input');
+  inp.type = 'number';
+  inp.min = '1';
+  inp.step = '1';
+  inp.placeholder = 'n';
+  inp.style.width = '80px';
+  return inp;
+}
+
+function readIndicator(kindSel, nInp) {
+  const kind = kindSel.value;
+  const meta = indicatorOptions().find(x => x.kind === kind);
+  if (meta && meta.needsN) {
+    const n = Number(nInp.value || '0');
+    return {kind, n};
+  }
+  return {kind};
+}
+
+function writeIndicator(spec, kindSel, nInp) {
+  const kind = spec?.kind || 'close';
+  kindSel.value = kind;
+  const meta = indicatorOptions().find(x => x.kind === kind);
+  if (meta && meta.needsN) {
+    nInp.style.display = '';
+    nInp.value = String(spec?.n ?? 14);
+  } else {
+    nInp.style.display = 'none';
+    nInp.value = '';
+  }
+}
+
+function setNVisibility(kindSel, nInp) {
+  const kind = kindSel.value;
+  const meta = indicatorOptions().find(x => x.kind === kind);
+  if (meta && meta.needsN) {
+    nInp.style.display = '';
+    if (!nInp.value) nInp.value = (kind==='sma' ? '50' : kind==='ann_vol' ? '20' : kind==='rsi' ? '14' : '20');
+  } else {
+    nInp.style.display = 'none';
+    nInp.value = '';
+  }
+}
+
+let _nodeId = 1;
+function newId() { return String(_nodeId++); }
+
+function makeDefaultCond() {
+  return {type:'cond', id:newId(), left:{kind:'sma',n:50}, op:'>', right:{kind:'sma',n:200}};
+}
+
+function makeGroup(op='all', children=[]) {
+  return {type:'group', id:newId(), op, children};
+}
+
+let ruleModel = makeGroup('all', [
+  {type:'cond', id:newId(), left:{kind:'sma',n:50}, op:'>', right:{kind:'sma',n:200}},
+  {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'<', right:70}
+]);
+let exitModel = makeGroup('any', [
+  {type:'cond', id:newId(), left:{kind:'close'}, op:'<', right:{kind:'sma',n:200}}
+]);
+
+function fmtInd(spec) {
+  const k = (spec?.kind || 'close').toLowerCase();
+  const n = spec?.n;
+  if (k==='close') return 'CLOSE';
+  if (k==='sma') return `SMA(${n})`;
+  if (k==='ema') return `EMA(${n})`;
+  if (k==='rsi') return `RSI(${n||14})`;
+  if (k==='highest') return `HIGHEST(${n})`;
+  if (k==='lowest') return `LOWEST(${n})`;
+  if (k==='roc') return `ROC(${n})`;
+  if (k==='ret_1d') return 'RET_1D';
+  if (k==='ann_vol') return `ANN_VOL(${n||20})`;
+  if (k==='dist_sma') return `DIST_SMA(${n})`;
+  if (k==='breakout') return `BREAKOUT(${n||20})`;
+  if (k==='cross_above') return `CROSS_ABOVE(${spec?.fast},${spec?.slow})`;
+  if (k==='sma_slope') return `SMA_SLOPE(${spec?.n},${spec?.lookback||5})`;
+  return k.toUpperCase();
+}
+
+function fmtRight(right) {
+  if (typeof right === 'number') return String(right);
+  if (right && typeof right === 'object') return fmtInd(right);
+  return '—';
+}
+
+function nodeToCode(node, depth=0) {
+  const pad = '  '.repeat(depth);
+  if (node.type === 'group') {
+    const head = (node.op==='any') ? 'ANY' : 'ALL';
+    const inner = (node.children||[]).map(ch => nodeToCode(ch, depth+1)).join(',\n');
+    return `${pad}${head}(\n${inner}\n${pad})`;
+  }
+  return `${pad}${fmtInd(node.left)} ${node.op} ${fmtRight(node.right)}`;
+}
+
+function updateCodeViews() {
+  const ec = document.getElementById('entryCode');
+  if (ec) ec.textContent = nodeToCode(ruleModel, 0);
+  const xc = document.getElementById('exitCode');
+  if (xc) xc.textContent = nodeToCode(exitModel, 0);
+}
+
+function renderRuleTree() {
+  const root = document.getElementById('ruleTree');
+  root.innerHTML = '';
+  root.appendChild(renderNode(ruleModel, 0, null));
+  updateCodeViews();
+}
+
+function renderExitTree() {
+  const root = document.getElementById('exitRuleTree');
+  root.innerHTML='';
+  root.appendChild(renderNode(exitModel, 0, null));
+  updateCodeViews();
+}
+
+function renderNode(node, depth, parent) {
+  const wrap = document.createElement('div');
+  wrap.style.marginLeft = (depth * 16) + 'px';
+  wrap.style.borderLeft = depth ? '2px solid #f3f4f6' : 'none';
+  wrap.style.paddingLeft = depth ? '10px' : '0px';
+  wrap.style.marginTop = '8px';
+
+  if (node.type === 'group') {
+    const header = document.createElement('div');
+    header.className = 'row';
+
+    const label = document.createElement('div');
+    label.className = 'muted';
+    label.textContent = depth === 0 ? 'ROOT GROUP' : 'GROUP';
+
+    const opSel = document.createElement('select');
+    for (const x of [{v:'all', t:'AND (all)'}, {v:'any', t:'OR (any)'}]) {
+      const o = document.createElement('option'); o.value=x.v; o.textContent=x.t; opSel.appendChild(o);
+    }
+    opSel.value = node.op;
+    opSel.addEventListener('change', ()=>{ node.op = opSel.value; syncCondsToJson(); });
+
+    const addC = document.createElement('button');
+    addC.textContent = 'Add condition';
+    addC.className = 'primary';
+    addC.addEventListener('click', (e)=>{ e.preventDefault(); node.children.push(makeDefaultCond()); renderRuleTree(); });
+
+    const addG = document.createElement('button');
+    addG.textContent = 'Add group';
+    addG.addEventListener('click', (e)=>{ e.preventDefault(); node.children.push(makeGroup('all', [])); renderRuleTree(); });
+
+    const del = document.createElement('button');
+    del.textContent = 'Remove group';
+    del.style.background = '#fff';
+    del.disabled = (depth===0);
+    del.addEventListener('click', (e)=>{
+      e.preventDefault();
+      if (!parent) return;
+      parent.children = parent.children.filter(ch => ch.id !== node.id);
+      renderRuleTree();
+    });
+
+    header.appendChild(label);
+    header.appendChild(opSel);
+    header.appendChild(addC);
+    header.appendChild(addG);
+    header.appendChild(del);
+    wrap.appendChild(header);
+
+    if (!node.children.length) {
+      const empty = document.createElement('div');
+      empty.className='muted';
+      empty.textContent='(empty group)';
+      empty.style.marginTop='6px';
+      wrap.appendChild(empty);
+    }
+
+    for (const ch of node.children) {
+      wrap.appendChild(renderNode(ch, depth+1, node));
+    }
+
+    return wrap;
+  }
+
+  // condition node
+  const row = document.createElement('div');
+  row.className = 'row nodeRow';
+
+  const leftKind = makeIndicatorSelect('L');
+  const leftN = makeNInput();
+  writeIndicator(node.left, leftKind, leftN);
+  setNVisibility(leftKind,leftN);
+  leftKind.addEventListener('change', ()=>{ setNVisibility(leftKind,leftN); node.left = readIndicator(leftKind,leftN); syncCondsToJson(); });
+  leftN.addEventListener('input', ()=>{ node.left = readIndicator(leftKind,leftN); syncCondsToJson(); });
+
+  const op = document.createElement('select');
+  for (const x of ['>','>=','<','<=','==']) { const o=document.createElement('option'); o.value=x; o.textContent=x; op.appendChild(o); }
+  op.value = node.op;
+  op.addEventListener('change', ()=>{ node.op = op.value; syncCondsToJson(); });
+
+  const rightType = document.createElement('select');
+  for (const x of ['number','indicator']) { const o=document.createElement('option'); o.value=x; o.textContent=x; rightType.appendChild(o); }
+
+  const rightNum = document.createElement('input');
+  rightNum.type='number'; rightNum.step='any'; rightNum.placeholder='value'; rightNum.style.width='120px';
+
+  const rightKind = makeIndicatorSelect('R');
+  const rightN = makeNInput();
+
+  function applyRightType() {
+    if (rightType.value==='number') {
+      rightNum.style.display='';
+      rightKind.style.display='none';
+      rightN.style.display='none';
+    } else {
+      rightNum.style.display='none';
+      rightKind.style.display='';
+      setNVisibility(rightKind,rightN);
+    }
+  }
+
+  rightType.addEventListener('change', ()=>{ applyRightType(); syncCondsToJson(); });
+  rightKind.addEventListener('change', ()=>{ setNVisibility(rightKind,rightN); node.right = readIndicator(rightKind,rightN); syncCondsToJson(); });
+  rightN.addEventListener('input', ()=>{ node.right = readIndicator(rightKind,rightN); syncCondsToJson(); });
+  rightNum.addEventListener('input', ()=>{ node.right = Number(rightNum.value); syncCondsToJson(); });
+
+  // init right
+  if (typeof node.right === 'number') {
+    rightType.value='number';
+    rightNum.value=String(node.right);
+    applyRightType();
+  } else {
+    rightType.value='indicator';
+    writeIndicator(node.right || {kind:'sma',n:200}, rightKind, rightN);
+    setNVisibility(rightKind,rightN);
+    applyRightType();
+  }
+
+  const del = document.createElement('button');
+  del.textContent='Remove';
+  del.addEventListener('click', (e)=>{
+    e.preventDefault();
+    if (!parent) return;
+    parent.children = parent.children.filter(ch => ch.id !== node.id);
+    renderRuleTree();
+  });
+
+  row.appendChild(leftKind); row.appendChild(leftN);
+  row.appendChild(op);
+  row.appendChild(rightType);
+  row.appendChild(rightNum);
+  row.appendChild(rightKind);
+  row.appendChild(rightN);
+  row.appendChild(del);
+
+  wrap.appendChild(row);
+  return wrap;
+}
+
+function modelToRule(node) {
+  if (node.type === 'group') {
+    const key = node.op === 'any' ? 'any' : 'all';
+    return {[key]: node.children.map(modelToRule)};
+  }
+  return {left: node.left, op: node.op, right: node.right};
+}
+
+function ruleToModel(rule) {
+  if (rule && typeof rule === 'object' && ('all' in rule || 'any' in rule)) {
+    const op = ('any' in rule) ? 'any' : 'all';
+    const arr = rule[op] || [];
+    return makeGroup(op, arr.map(ruleToModel));
+  }
+  // condition
+  return {type:'cond', id:newId(), left: rule.left, op: rule.op, right: rule.right};
+}
+
+function syncCondsToJson() {
+  document.getElementById('entry').value = JSON.stringify(modelToRule(ruleModel), null, 2);
+  document.getElementById('condStatus').textContent = 'synced';
+}
+
+function syncCondsFromJson() {
+  const txt = document.getElementById('entry').value;
+  let obj;
+  try { obj = JSON.parse(txt); } catch { obj = {all:[]}; }
+  ruleModel = ruleToModel(obj);
+  renderRuleTree();
+  document.getElementById('condStatus').textContent = 'loaded';
+}
+
+function syncExitToJson() {
+  document.getElementById('exit').value = JSON.stringify(modelToRule(exitModel), null, 2);
+  document.getElementById('exitStatus').textContent = 'synced';
+}
+
+function syncExitFromJson() {
+  const txt = document.getElementById('exit').value;
+  let obj;
+  try { obj = JSON.parse(txt); } catch { obj = {any:[]}; }
+  exitModel = ruleToModel(obj);
+  renderExitTree();
+  document.getElementById('exitStatus').textContent = 'loaded';
+}
+
+function addFactorRow(f) {
+  const tbody = document.getElementById('factorRows');
+  const tr = document.createElement('tr');
+
+  const w = document.createElement('input');
+  w.type='number'; w.step='any'; w.style.width='100px';
+
+  const type = document.createElement('select');
+  for (const x of ['indicator','condition','number']) {
+    const opt=document.createElement('option'); opt.value=x; opt.textContent=x; type.appendChild(opt);
+  }
+
+  const specWrap = document.createElement('div');
+  specWrap.className='row';
+
+  const indKind = makeIndicatorSelect('F');
+  const indN = makeNInput();
+
+  const num = document.createElement('input');
+  num.type='number'; num.step='any'; num.placeholder='value'; num.style.width='140px';
+
+  // Condition spec (reuse a mini condition editor)
+  const cLeft = makeIndicatorSelect('CL');
+  const cLeftN = makeNInput();
+  const cOp = document.createElement('select');
+  for (const x of ['>','>=','<','<=','==']) { const o=document.createElement('option'); o.value=x; o.textContent=x; cOp.appendChild(o);} 
+  const cRightType = document.createElement('select');
+  for (const x of ['number','indicator']) { const o=document.createElement('option'); o.value=x; o.textContent=x; cRightType.appendChild(o);} 
+  const cRightNum = document.createElement('input'); cRightNum.type='number'; cRightNum.step='any'; cRightNum.placeholder='value'; cRightNum.style.width='120px';
+  const cRight = makeIndicatorSelect('CR');
+  const cRightN = makeNInput();
+
+  function renderSpec() {
+    specWrap.innerHTML='';
+    if (type.value==='indicator') {
+      specWrap.appendChild(indKind); specWrap.appendChild(indN);
+      setNVisibility(indKind, indN);
+    } else if (type.value==='number') {
+      specWrap.appendChild(num);
+    } else {
+      specWrap.appendChild(cLeft); specWrap.appendChild(cLeftN);
+      specWrap.appendChild(cOp);
+      specWrap.appendChild(cRightType);
+      specWrap.appendChild(cRightNum);
+      specWrap.appendChild(cRight);
+      specWrap.appendChild(cRightN);
+      setNVisibility(cLeft,cLeftN);
+      cRightType.dispatchEvent(new Event('change'));
+    }
+  }
+
+  cLeft.addEventListener('change', ()=>setNVisibility(cLeft,cLeftN));
+  cRight.addEventListener('change', ()=>setNVisibility(cRight,cRightN));
+  cRightType.addEventListener('change', ()=>{
+    if (cRightType.value==='number') {
+      cRightNum.style.display='';
+      cRight.style.display='none';
+      cRightN.style.display='none';
+    } else {
+      cRightNum.style.display='none';
+      cRight.style.display='';
+      setNVisibility(cRight,cRightN);
+    }
+  });
+
+  type.addEventListener('change', renderSpec);
+
+  const del = document.createElement('button'); del.textContent='Remove';
+
+  tr.appendChild(document.createElement('td')).appendChild(w);
+  tr.appendChild(document.createElement('td')).appendChild(type);
+  tr.appendChild(document.createElement('td')).appendChild(specWrap);
+  tr.appendChild(document.createElement('td')).appendChild(del);
+
+  del.addEventListener('click', (e)=>{e.preventDefault(); tr.remove();});
+
+  // init
+  w.value = String(f?.weight ?? 1.0);
+  const v = f?.value;
+  if (typeof v === 'number') {
+    type.value='number';
+    num.value=String(v);
+  } else if (v && v.left && v.op) {
+    type.value='condition';
+    writeIndicator(v.left, cLeft, cLeftN);
+    setNVisibility(cLeft,cLeftN);
+    cOp.value=v.op;
+    if (typeof v.right === 'number') {
+      cRightType.value='number';
+      cRightType.dispatchEvent(new Event('change'));
+      cRightNum.value=String(v.right);
+    } else {
+      cRightType.value='indicator';
+      cRightType.dispatchEvent(new Event('change'));
+      writeIndicator(v.right, cRight, cRightN);
+      setNVisibility(cRight,cRightN);
+    }
+  } else {
+    type.value='indicator';
+    writeIndicator(v || {kind:'close'}, indKind, indN);
+    setNVisibility(indKind, indN);
+  }
+  renderSpec();
+
+  tbody.appendChild(tr);
+}
+
+function syncFactorsToJson() {
+  const tbody = document.getElementById('factorRows');
+  const rows = Array.from(tbody.children);
+  const factors = [];
+  for (const tr of rows) {
+    const weight = Number(tr.querySelector('td:nth-child(1) input').value || '0');
+    const type = tr.querySelector('td:nth-child(2) select').value;
+    const specCell = tr.querySelector('td:nth-child(3)');
+
+    let value = null;
+    if (type==='number') {
+      value = Number(specCell.querySelector('input').value);
+    } else if (type==='indicator') {
+      const sel = specCell.querySelector('select');
+      const n = specCell.querySelector('input');
+      value = readIndicator(sel,n);
+    } else {
+      const sels = specCell.querySelectorAll('select');
+      const leftKind = sels[0];
+      const op = sels[1];
+      const rightType = sels[2];
+      const inputs = specCell.querySelectorAll('input');
+      const leftN = inputs[0];
+      const rightNum = inputs[1];
+      const rightN = inputs[2];
+      const rightKind = sels[3];
+      value = {left: readIndicator(leftKind,leftN), op: op.value};
+      if (rightType.value==='number') value.right = Number(rightNum.value);
+      else value.right = readIndicator(rightKind,rightN);
+    }
+
+    factors.push({weight, value});
+  }
+  document.getElementById('factors').value = JSON.stringify(factors, null, 2);
+  document.getElementById('factorStatus').textContent='synced';
+}
+
+function syncFactorsFromJson() {
+  const tbody = document.getElementById('factorRows');
+  tbody.innerHTML='';
+  let arr;
+  try { arr = JSON.parse(document.getElementById('factors').value); } catch { arr=[]; }
+  for (const f of (arr||[])) addFactorRow(f);
+  document.getElementById('factorStatus').textContent='loaded';
+}
+
+defaults();
+// initialize builders from JSON
+syncCondsFromJson();
+syncExitFromJson();
+syncFactorsFromJson();
+
+async function save() {
+  const status = document.getElementById('status');
+  try {
+    const id = document.getElementById('sid').value.trim();
+    const name = document.getElementById('sname').value.trim();
+    if(!id) throw new Error('missing id');
+    const entry = JSON.parse(document.getElementById('entry').value);
+    const exit = JSON.parse(document.getElementById('exit').value);
+    const factors = JSON.parse(document.getElementById('factors').value);
+    const obj = {id, name, entry, exit, score_factors: factors};
+    status.textContent = 'saving…';
+    await postJSON('/api/strategy/' + encodeURIComponent(id), obj);
+    status.textContent = 'saved';
+  } catch(e) {
+    status.textContent = 'error: ' + e;
+  }
+}
+
+async function load() {
+  const status = document.getElementById('status');
+  try {
+    const id = document.getElementById('sid').value.trim();
+    if(!id) throw new Error('missing id');
+    status.textContent = 'loading…';
+    const obj = await getJSON('/api/strategy/' + encodeURIComponent(id));
+    document.getElementById('sname').value = obj.name || '';
+    document.getElementById('entry').value = JSON.stringify(obj.entry || {all:[]}, null, 2);
+    document.getElementById('exit').value = JSON.stringify(obj.exit || {any:[]}, null, 2);
+    document.getElementById('factors').value = JSON.stringify(obj.score_factors || [], null, 2);
+    status.textContent = 'loaded';
+  } catch(e) {
+    status.textContent = 'error: ' + e;
+  }
+}
+
+async function preview() {
+  const status = document.getElementById('pstatus');
+  const out = document.getElementById('pout');
+  try {
+    const id = document.getElementById('sid').value.trim();
+    const symbol = document.getElementById('psym').value.trim();
+    if(!id) throw new Error('missing strategy id');
+    if(!symbol) throw new Error('missing symbol');
+    status.textContent = 'running…';
+    out.textContent = '';
+    const res = await postJSON('/api/strategy/' + encodeURIComponent(id) + '/preview', {symbol});
+
+    // summary
+    const sum = document.getElementById('pSummary');
+    const entry = res.entry_ok ? 'ENTRY: YES' : 'ENTRY: NO';
+    const exit = res.exit_ok ? 'EXIT: YES' : 'EXIT: NO';
+    sum.textContent = `${res.symbol} • ${entry} • ${exit} • score=${Number(res.score||0).toFixed(4)}`;
+
+    // factors table
+    const fb = document.getElementById('pFactors');
+    fb.innerHTML = '';
+    for (const f of (res.breakdown || [])) {
+      const tr = document.createElement('tr');
+      const w = (f.weight!=null) ? Number(f.weight).toFixed(3) : '—';
+      const k = f.kind || '';
+      const v = (f.value==null) ? '—' : Number(f.value).toFixed(6);
+      const c = (f.contrib==null) ? '—' : Number(f.contrib).toFixed(6);
+      tr.innerHTML = `<td>${w}</td><td>${k}</td><td>${v}</td><td>${c}</td>`;
+      fb.appendChild(tr);
+    }
+    if (fb.children.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="4" class="muted">(no factors)</td>`;
+      fb.appendChild(tr);
+    }
+
+    // indicators table
+    const ib = document.getElementById('pInd');
+    ib.innerHTML = '';
+    const inds = res.indicators || {};
+    for (const key of Object.keys(inds).sort()) {
+      const tr = document.createElement('tr');
+      const val = inds[key];
+      tr.innerHTML = `<td>${key}</td><td>${(val==null) ? '—' : Number(val).toFixed(6)}</td>`;
+      ib.appendChild(tr);
+    }
+    if (ib.children.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="2" class="muted">(none)</td>`;
+      ib.appendChild(tr);
+    }
+
+    out.textContent = JSON.stringify(res, null, 2);
+    status.textContent = 'done';
+  } catch(e) {
+    status.textContent = 'error: ' + e;
+  }
+}
+
+async function delStrat() {
+  const status = document.getElementById('status');
+  try {
+    const id = document.getElementById('sid').value.trim();
+    if(!id) throw new Error('missing id');
+    if(!confirm('Delete strategy ' + id + '?')) return;
+    status.textContent='deleting…';
+    const r = await fetch('/api/strategy/' + encodeURIComponent(id), {method:'DELETE'});
+    if(!r.ok) throw new Error(await r.text());
+    status.textContent='deleted';
+  } catch(e) {
+    status.textContent = 'error: ' + e;
+  }
+}
+
+document.getElementById('save').addEventListener('click', (e)=>{e.preventDefault(); syncCondsToJson(); syncExitToJson(); syncFactorsToJson(); save();});
+document.getElementById('load').addEventListener('click', (e)=>{e.preventDefault(); load().then(()=>{syncCondsFromJson(); syncExitFromJson(); syncFactorsFromJson();});});
+document.getElementById('del').addEventListener('click', (e)=>{e.preventDefault(); delStrat();});
+document.getElementById('preview').addEventListener('click', (e)=>{e.preventDefault(); syncCondsToJson(); syncExitToJson(); syncFactorsToJson(); preview();});
+
+document.getElementById('addRootCond').addEventListener('click', (e)=>{e.preventDefault(); ruleModel.children.push(makeDefaultCond()); renderRuleTree();});
+document.getElementById('addRootGroup').addEventListener('click', (e)=>{e.preventDefault(); ruleModel.children.push(makeGroup('all', [])); renderRuleTree();});
+document.getElementById('syncToJson').addEventListener('click', (e)=>{e.preventDefault(); syncCondsToJson();});
+document.getElementById('syncFromJson').addEventListener('click', (e)=>{e.preventDefault(); syncCondsFromJson();});
+
+// Entry presets
+const _entryPresets = {
+  pTrend: {type:'cond', id:newId(), left:{kind:'sma',n:50}, op:'>', right:{kind:'sma',n:200}},
+  pCloseAbove: {type:'cond', id:newId(), left:{kind:'close'}, op:'>', right:{kind:'sma',n:200}},
+  // slope uses a derived indicator not in the dropdown editor yet (n + lookback)
+  pSlope: {type:'cond', id:newId(), left:{kind:'sma_slope',n:50,lookback:5}, op:'>', right:0},
+  pCross: {type:'cond', id:newId(), left:{kind:'cross_above',fast:50,slow:200}, op:'==', right:1},
+  pBreak: {type:'cond', id:newId(), left:{kind:'close'}, op:'>=', right:{kind:'highest',n:20}},
+  pRsiOS: {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'<', right:30},
+  pRsiOk: {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'<', right:70},
+  pAbove50: {type:'cond', id:newId(), left:{kind:'close'}, op:'>', right:{kind:'sma',n:50}},
+  pNotExt: {type:'cond', id:newId(), left:{kind:'dist_sma',n:200}, op:'<', right:0.20},
+  pLowVol: {type:'cond', id:newId(), left:{kind:'ann_vol',n:20}, op:'<', right:0.80},
+  // Adds a group: RSI>40 AND RSI<70
+  pRsiRange: makeGroup('all', [
+    {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'>', right:40},
+    {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'<', right:70},
+  ]),
+};
+for (const k of Object.keys(_entryPresets)) {
+  document.getElementById(k).addEventListener('click', (e)=>{e.preventDefault(); ruleModel.children.push(_entryPresets[k]); renderRuleTree();});
+}
+
+// Exit controls
+document.getElementById('addExitRootCond').addEventListener('click', (e)=>{e.preventDefault(); exitModel.children.push(makeDefaultCond()); renderExitTree();});
+document.getElementById('addExitRootGroup').addEventListener('click', (e)=>{e.preventDefault(); exitModel.children.push(makeGroup('any', [])); renderExitTree();});
+document.getElementById('syncExitToJson').addEventListener('click', (e)=>{e.preventDefault(); syncExitToJson();});
+document.getElementById('syncExitFromJson').addEventListener('click', (e)=>{e.preventDefault(); syncExitFromJson();});
+
+// Exit presets
+const _exitPresets = {
+  xTrend: {type:'cond', id:newId(), left:{kind:'close'}, op:'<', right:{kind:'sma',n:200}},
+  xRsiOB: {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'>', right:70},
+  xRsiExtreme: {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'>', right:80},
+};
+for (const k of Object.keys(_exitPresets)) {
+  document.getElementById(k).addEventListener('click', (e)=>{e.preventDefault(); exitModel.children.push(_exitPresets[k]); renderExitTree();});
+}
+
+// Factors
+document.getElementById('addFactor').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow(null);});
+document.getElementById('addPresetDist').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: 1.0, value: {kind:'dist_sma', n:200}});});
+document.getElementById('addPresetDist50').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: 1.0, value: {kind:'dist_sma', n:50}});});
+document.getElementById('addPresetVol').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: -0.25, value: {kind:'ann_vol', n:20}});});
+document.getElementById('addPresetBreak').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: 0.05, value: {kind:'breakout', n:20}});});
+document.getElementById('addPresetRsiOS').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: 0.2, value: {left:{kind:'rsi',n:14}, op:'<', right:30}});});
+document.getElementById('addPresetRsiOB').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: -0.2, value: {left:{kind:'rsi',n:14}, op:'>', right:70}});});
+document.getElementById('addPresetSlope').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: 0.1, value: {left:{kind:'sma_slope',n:50,lookback:5}, op:'>', right:0}});});
+document.getElementById('addPresetCross').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: 0.1, value: {left:{kind:'cross_above',fast:50,slow:200}, op:'==', right:1}});});
+document.getElementById('syncFactorsToJson').addEventListener('click', (e)=>{e.preventDefault(); syncFactorsToJson();});
+document.getElementById('syncFactorsFromJson').addEventListener('click', (e)=>{e.preventDefault(); syncFactorsFromJson();});
+</script>
+</body>
+</html>

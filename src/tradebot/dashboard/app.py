@@ -36,6 +36,11 @@ def create_app(*, config_path: str) -> FastAPI:
         html_path = Path(__file__).with_name("index.html")
         return HTMLResponse(html_path.read_text())
 
+    @app.get("/builder", response_class=HTMLResponse)
+    def builder():
+        html_path = Path(__file__).with_name("builder.html")
+        return HTMLResponse(html_path.read_text())
+
     @app.get("/api/health")
     def health():
         return {"ok": True, "ts": datetime.now(timezone.utc).isoformat()}
@@ -50,6 +55,96 @@ def create_app(*, config_path: str) -> FastAPI:
         from tradebot.strategies.registry import list_strategies
 
         return list_strategies()
+
+    # Strategy Builder API (user strategies)
+    @app.get("/api/strategy/{strategy_id}")
+    def strategy_get(strategy_id: str):
+        from tradebot.strategies.user_store import load_user_strategy
+
+        return load_user_strategy(strategy_id)
+
+    @app.post("/api/strategy/{strategy_id}")
+    async def strategy_save(strategy_id: str, req: Request):
+        # token gate is controlled by DASHBOARD_REQUIRE_TOKEN
+        require_token(req)
+        body = await req.json()
+        from tradebot.strategies.user_store import save_user_strategy
+
+        save_user_strategy(strategy_id, body)
+        return {"ok": True}
+
+    @app.delete("/api/strategy/{strategy_id}")
+    async def strategy_delete(strategy_id: str, req: Request):
+        require_token(req)
+        from tradebot.strategies.user_store import delete_user_strategy
+
+        delete_user_strategy(strategy_id)
+        return {"ok": True}
+
+    @app.post("/api/strategy/{strategy_id}/preview")
+    async def strategy_preview(strategy_id: str, req: Request):
+        body = await req.json()
+        symbol = str(body.get("symbol") or "").strip()
+        if not symbol:
+            raise HTTPException(status_code=400, detail="Missing symbol")
+
+        from tradebot.strategies.user_store import load_user_strategy
+        from tradebot.strategies.rule_engine import EvalContext, eval_rule, eval_score_with_breakdown, eval_indicator
+
+        spec = load_user_strategy(strategy_id)
+        entry = spec.get("entry") or {"all": []}
+        exit_rule = spec.get("exit") or {"any": []}
+        factors = spec.get("score_factors") or []
+
+        env = load_env()
+        clients = make_alpaca_clients(env)
+
+        # fetch recent bars for just this symbol
+        is_crypto = "/" in symbol
+        if is_crypto:
+            bars = fetch_crypto_bars(clients.crypto, [symbol], lookback_days=420)
+            df = bars.get(symbol)
+            ann_factor = 365.0
+        else:
+            bars = fetch_stock_bars(clients.stocks, [symbol], lookback_days=420)
+            df = bars.get(symbol)
+            ann_factor = 252.0
+
+        if df is None or len(df) == 0 or "close" not in df.columns:
+            raise HTTPException(status_code=400, detail="No bars for symbol")
+
+        closes = df["close"].dropna()
+        ctx = EvalContext(closes=closes, ann_factor=ann_factor)
+
+        entry_ok = bool(eval_rule(ctx, entry))
+        exit_ok = bool(eval_rule(ctx, exit_rule))
+        score, breakdown = eval_score_with_breakdown(ctx, factors)
+
+        # Helpful indicator cache for common values
+        indicators = {}
+        for ind in [
+            {"kind": "close"},
+            {"kind": "sma", "n": 50},
+            {"kind": "sma", "n": 200},
+            {"kind": "rsi", "n": 14},
+            {"kind": "ann_vol", "n": 20},
+            {"kind": "highest", "n": 20},
+        ]:
+            try:
+                indicators[f"{ind['kind']}:{ind.get('n','')}"] = eval_indicator(ctx, ind)
+            except Exception:
+                pass
+
+        return {
+            "symbol": symbol,
+            "is_crypto": is_crypto,
+            "entry_ok": entry_ok,
+            "exit_ok": exit_ok,
+            "score": float(score),
+            "breakdown": breakdown,
+            "indicators": indicators,
+            "last_close": float(closes.iloc[-1]) if len(closes) else None,
+        }
 
     @app.post("/api/config")
     async def config_save(req: Request):
@@ -339,6 +434,42 @@ def create_app(*, config_path: str) -> FastAPI:
     def backtest_jobs(limit: int = 20):
         return bt_list_jobs(limit=limit)
 
+    @app.get("/api/backtest/symbol")
+    def backtest_symbol(job_id: str, symbol: str):
+        # Return price series for symbol + SPY, plus realized trades markers for that symbol.
+        res = bt_result(job_id)
+        if not res:
+            return {"ok": False, "error": "missing job"}
+        params = (res.get("params") or {})
+        start = str(params.get("start"))
+        end = str(params.get("end"))
+        symbol = str(symbol).strip().upper()
+
+        from tradebot.dashboard.backtest_symbol import fetch_close_series, to_points
+
+        sym_series = fetch_close_series(symbol, start, end)
+        spy_series = fetch_close_series("SPY", start, end)
+
+        trades = [t for t in (res.get("trades") or []) if str(t.get("symbol") or "").upper() == symbol]
+        # markers by date
+        markers = []
+        for t in trades:
+            if t.get("entry_date"):
+                markers.append({"date": t.get("entry_date"), "type": "buy", "qty": t.get("qty"), "price": t.get("entry_price"), "pnl": None})
+            if t.get("exit_date"):
+                markers.append({"date": t.get("exit_date"), "type": "sell", "qty": t.get("qty"), "price": t.get("exit_price"), "pnl": t.get("pnl"), "reason": t.get("reason")})
+
+        return {
+            "ok": True,
+            "symbol": symbol,
+            "start": start,
+            "end": end,
+            "series": to_points(sym_series),
+            "spy": to_points(spy_series),
+            "trades": trades,
+            "markers": markers,
+        }
+
     @app.post("/api/backtest/clear-cache")
     async def backtest_clear_cache(req: Request):
         require_token(req)
@@ -380,5 +511,13 @@ def create_app(*, config_path: str) -> FastAPI:
             except Exception:
                 continue
         return out
+
+    @app.get("/api/benchmarks")
+    def benchmarks(start: str, end: str):
+        from tradebot.dashboard.benchmarks import get_sp500_series, get_spy_series, normalize
+
+        spy = normalize(get_spy_series(start, end))
+        spx = normalize(get_sp500_series(start, end))
+        return {"SPY": spy, "SP500": spx}
 
     return app

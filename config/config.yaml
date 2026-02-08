@@ -1,5 +1,5 @@
 mode: paper
-strategy_id: regime_filtered_trendvol
+strategy_id: breakout_trend
 dry_run: false
 allocation:
   equities: 0.5

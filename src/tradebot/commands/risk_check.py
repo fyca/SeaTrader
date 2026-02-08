@@ -9,6 +9,7 @@ from tradebot.adapters.bars import fetch_stock_bars, fetch_crypto_bars
 from tradebot.risk.drawdown import update_drawdown_state
 from tradebot.risk.exits import trend_break_exit
 from tradebot.util.config import load_config
+from tradebot.strategies.registry import get_strategy
 from tradebot.util.env import load_env
 from tradebot.util.state import load_state, save_state
 from tradebot.util.artifacts import write_artifact
@@ -47,6 +48,17 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
     if stop_pct is not None:
         stop_pct = float(stop_pct)
 
+    strat = None
+    try:
+        strat = get_strategy(cfg.strategy_id)
+    except Exception:
+        strat = None
+
+    # If user strategy has an exit rule, we'll evaluate it (in addition to stop loss / trend break)
+    user_exit = None
+    if strat is not None and hasattr(strat, "spec"):
+        user_exit = getattr(strat, "spec", {}).get("exit")
+
     if eq_syms:
         eq_bars = fetch_stock_bars(clients.stocks, eq_syms, lookback_days=cfg.signals.lookback_days)
         for sym, df in eq_bars.items():
@@ -56,6 +68,17 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
             if len(closes) == 0:
                 continue
             last_px = float(closes.iloc[-1])
+
+            # user exit rule (if present)
+            if user_exit:
+                try:
+                    from tradebot.strategies.rule_engine import EvalContext, eval_rule
+                    ctx = EvalContext(closes=closes, ann_factor=252.0)
+                    if eval_rule(ctx, user_exit):
+                        exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": "user_exit_rule", "last_close": last_px})
+                        continue
+                except Exception:
+                    pass
 
             # stop-loss check from avg entry
             if stop_pct is not None:
@@ -81,6 +104,17 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
             if len(closes) == 0:
                 continue
             last_px = float(closes.iloc[-1])
+
+            # user exit rule
+            if user_exit:
+                try:
+                    from tradebot.strategies.rule_engine import EvalContext, eval_rule
+                    ctx = EvalContext(closes=closes, ann_factor=365.0)
+                    if eval_rule(ctx, user_exit):
+                        exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": "user_exit_rule", "last_close": last_px})
+                        continue
+                except Exception:
+                    pass
 
             if stop_pct is not None:
                 pos = next((p for p in positions if p.symbol == sym), None)

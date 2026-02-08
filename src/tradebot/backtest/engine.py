@@ -7,8 +7,8 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
-from tradebot.signals.trend_vol import compute_trend_vol_signal
 from tradebot.risk.exits import trend_break_exit
+from tradebot.strategies.registry import get_strategy
 
 
 @dataclass(frozen=True)
@@ -18,10 +18,23 @@ class BacktestParams:
     initial_equity: float = 100000.0
     slippage_bps: float = 10.0
     rebalance: Literal["weekly", "daily"] = "weekly"
+    strategy_id: str = "baseline_trendvol"
     asset_mode: Literal["both", "equities", "crypto"] = "both"
     rebalance_mode: Literal["target_notional", "no_add_to_losers"] = "target_notional"
     liquidation_mode: Literal["liquidate_non_selected", "hold_until_exit"] = "liquidate_non_selected"
     per_asset_stop_loss_pct: float | None = None
+
+    # If cumulative realized P/L for a symbol falls below this USD value,
+    # permanently exclude it from further trading for the rest of the backtest.
+    symbol_pnl_floor_usd: float | None = None
+
+    # If True, immediately liquidate any currently-held position when a symbol hits the P/L floor.
+    # If False, the symbol is excluded from new entries but existing holdings are not force-sold.
+    symbol_pnl_floor_liquidate: bool = True
+
+    # If True, apply the floor to (realized + unrealized) P/L for currently held positions.
+    # If False, floor applies to realized P/L only.
+    symbol_pnl_floor_include_unrealized: bool = True
 
     # Optional portfolio-level drawdown stop (behavior A):
     # - if equity drawdown from peak >= portfolio_dd_stop, liquidate ALL positions to cash
@@ -39,6 +52,8 @@ class BacktestResult:
     metrics: dict
     trades: list[dict]
     open_positions: list[dict]
+    realized_pnl_by_symbol: dict
+    excluded_symbols: list[str]
 
 
 def _date_range(start: str, end: str) -> pd.DatetimeIndex:
@@ -85,6 +100,8 @@ def run_backtest(
     positions_avg_cost: dict[str, float] = {}
     positions_entry_date: dict[str, str] = {}
     trades: list[dict] = []
+    realized_pnl_by_symbol: dict[str, float] = {}
+    excluded: set[str] = set()
 
     peak_equity = equity
     stopped_until_next_rebalance = False
@@ -141,10 +158,108 @@ def run_backtest(
 
     curve: list[dict] = []
 
+    def _record_trade(t: dict) -> None:
+        trades.append(t)
+        sym = str(t.get("symbol") or "").strip()
+        pnl = float(t.get("pnl") or 0.0)
+        if sym:
+            realized_pnl_by_symbol[sym] = float(realized_pnl_by_symbol.get(sym, 0.0) + pnl)
+            floor = params.symbol_pnl_floor_usd
+            if floor is not None and realized_pnl_by_symbol[sym] <= float(floor):
+                excluded.add(sym)
+
+    def _liquidate_excluded(day: pd.Timestamp, *, reason: str) -> None:
+        """If a symbol is excluded, immediately sell any remaining position."""
+        nonlocal cash
+        if not excluded:
+            return
+        for sym in list(positions_qty.keys()):
+            if sym not in excluded:
+                continue
+            p0 = px(sym, day)
+            if p0 is None:
+                continue
+            sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+            q = positions_qty.get(sym, 0.0)
+            cash += q * sell_px
+            avg_cost = positions_avg_cost.get(sym, p0)
+            entry_date = positions_entry_date.get(sym)
+            pnl = (sell_px - avg_cost) * q
+            _record_trade(
+                {
+                    "symbol": sym,
+                    "entry_date": entry_date,
+                    "exit_date": day.strftime("%Y-%m-%d"),
+                    "qty": q,
+                    "entry_price": avg_cost,
+                    "exit_price": sell_px,
+                    "pnl": pnl,
+                    "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                    "reason": reason,
+                }
+            )
+            positions_qty.pop(sym, None)
+            positions_avg_cost.pop(sym, None)
+            positions_entry_date.pop(sym, None)
+
+    def _sma(series: pd.Series, n: int, day: pd.Timestamp) -> float | None:
+        if series is None or len(series) == 0:
+            return None
+        sub = series.loc[:day]
+        if len(sub) < n:
+            return None
+        v = float(sub.tail(n).mean())
+        return v if np.isfinite(v) else None
+
+    def _regime(day: pd.Timestamp) -> dict:
+        """Simple regime flags used for visualization.
+
+        equity_risk_on: SPY close > SMA200
+        crypto_risk_on: BTC/USD close > SMA200
+        """
+        out = {"equity_risk_on": None, "crypto_risk_on": None}
+        spy = closes.get("SPY")
+        btc = closes.get("BTC/USD")
+        spy_px = px("SPY", day) if spy is not None else None
+        btc_px = px("BTC/USD", day) if btc is not None else None
+        spy_ma = _sma(spy, 200, day) if spy is not None else None
+        btc_ma = _sma(btc, 200, day) if btc is not None else None
+        if spy_px is not None and spy_ma is not None:
+            out["equity_risk_on"] = bool(spy_px > spy_ma)
+        if btc_px is not None and btc_ma is not None:
+            out["crypto_risk_on"] = bool(btc_px > btc_ma)
+        return out
+
     for i, day in enumerate(days):
         # Mark-to-market
         equity = portfolio_value(day)
         peak_equity = max(peak_equity, equity)
+
+        # Evaluate symbol P/L floor (optionally include unrealized) and exclude+liquidate
+        floor = params.symbol_pnl_floor_usd
+        if floor is not None:
+            fl = float(floor)
+            # Consider held positions: realized + unrealized (if enabled)
+            if params.symbol_pnl_floor_include_unrealized:
+                for sym, q in list(positions_qty.items()):
+                    p0 = px(sym, day)
+                    if p0 is None:
+                        continue
+                    avg_cost = positions_avg_cost.get(sym)
+                    if avg_cost is None or avg_cost <= 0:
+                        continue
+                    unreal = (p0 - avg_cost) * q
+                    tot = float(realized_pnl_by_symbol.get(sym, 0.0) + unreal)
+                    if tot <= fl:
+                        excluded.add(sym)
+            else:
+                for sym, rpnl in list(realized_pnl_by_symbol.items()):
+                    if float(rpnl) <= fl:
+                        excluded.add(sym)
+
+        # If symbol is excluded already, optionally liquidate at start of day
+        if params.symbol_pnl_floor_liquidate:
+            _liquidate_excluded(day, reason="symbol_pnl_floor_exclude")
 
         # Portfolio DD stop: liquidate to cash until next rebalance
         if params.portfolio_dd_stop is not None and peak_equity > 0:
@@ -163,7 +278,7 @@ def run_backtest(
                     avg_cost = positions_avg_cost.get(sym, p0)
                     entry_date = positions_entry_date.get(sym)
                     pnl = (sell_px - avg_cost) * q
-                    trades.append(
+                    _record_trade(
                         {
                             "symbol": sym,
                             "entry_date": entry_date,
@@ -182,62 +297,105 @@ def run_backtest(
                 stopped_until_next_rebalance = True
                 dd_stop_trigger_day = day
 
+        # Per-asset stop loss (checked daily at close)
+        if params.per_asset_stop_loss_pct is not None and params.per_asset_stop_loss_pct > 0:
+            sl = float(params.per_asset_stop_loss_pct)
+            for sym in list(positions_qty.keys()):
+                p0 = px(sym, day)
+                if p0 is None:
+                    continue
+                avg_cost = positions_avg_cost.get(sym)
+                if avg_cost is None or avg_cost <= 0:
+                    continue
+                if (p0 / avg_cost - 1.0) <= -sl:
+                    # stop out full position at close - slippage
+                    sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+                    q = positions_qty.get(sym, 0.0)
+                    cash += q * sell_px
+                    entry_date = positions_entry_date.get(sym)
+                    pnl = (sell_px - avg_cost) * q
+                    _record_trade(
+                        {
+                            "symbol": sym,
+                            "entry_date": entry_date,
+                            "exit_date": day.strftime("%Y-%m-%d"),
+                            "qty": q,
+                            "entry_price": avg_cost,
+                            "exit_price": sell_px,
+                            "pnl": pnl,
+                            "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                            "reason": "per_asset_stop_loss",
+                        }
+                    )
+                    positions_qty.pop(sym, None)
+                    positions_avg_cost.pop(sym, None)
+                    positions_entry_date.pop(sym, None)
+
         # Rebalance
         if day in rebal_days:
             if stopped_until_next_rebalance:
                 # behavior A: stay in cash UNTIL the next scheduled rebalance.
                 # If we triggered on this same rebalance day, skip this rebalance entirely.
                 if dd_stop_trigger_day is not None and day <= dd_stop_trigger_day:
-                    curve.append({"date": day.strftime("%Y-%m-%d"), "equity": float(equity), "cash": float(cash)})
+                    # Snapshot holdings for hover/inspection
+                    holdings = []
+                    total_unreal = 0.0
+                    for sym, q in positions_qty.items():
+                        p0 = px(sym, day)
+                        if p0 is None:
+                            continue
+                        mv = float(q * p0)
+                        avg_cost = float(positions_avg_cost.get(sym, p0) or p0)
+                        unreal = float((p0 - avg_cost) * q)
+                        total_unreal += unreal
+                        unreal_pct = float(p0 / avg_cost - 1.0) if avg_cost else None
+                        holdings.append({"symbol": sym, "mv": mv, "unreal": unreal, "unreal_pct": unreal_pct})
+                    holdings.sort(key=lambda x: abs(x.get("mv", 0.0)), reverse=True)
+                    holdings = holdings[:15]
+
+                    curve.append({
+                        "date": day.strftime("%Y-%m-%d"),
+                        "equity": float(equity),
+                        "cash": float(cash),
+                        "unrealized_pnl": float(total_unreal),
+                        "holdings": holdings,
+                        "regime": _regime(day),
+                    })
                     if progress_cb and (i % 10 == 0 or i == len(days) - 1):
                         progress_cb(i + 1, len(days))
                     continue
                 stopped_until_next_rebalance = False
                 dd_stop_trigger_day = None
-            # compute candidates based on history up to day
-            eq_ok: list[tuple[str, float]] = []
+            # compute candidates based on history up to day, via selected strategy
+            strat = get_strategy(params.strategy_id)
+
+            # build bars dict slices up to current day (excluding banned symbols)
+            eq_bars_day: dict[str, pd.DataFrame] = {}
             for sym in stock_universe:
+                if sym in excluded:
+                    continue
                 s = closes.get(sym)
                 if s is None or len(s) == 0:
                     continue
                 s2 = s.loc[:day]
                 if len(s2) == 0:
                     continue
-                last = float(s2.iloc[-1])
-                if last < cfg.limits.min_stock_price:
-                    continue
-                sig = compute_trend_vol_signal(
-                    s2,
-                    ma_long=cfg.signals.equity.ma_long,
-                    ma_short=cfg.signals.equity.ma_short,
-                    vol_lookback=cfg.signals.equity.vol_lookback,
-                    max_ann_vol=cfg.signals.equity.max_ann_vol,
-                    ann_factor=252.0,
-                )
-                if sig.ok:
-                    eq_ok.append((sym, float(sig.score)))
+                eq_bars_day[sym] = pd.DataFrame({"close": s2.values}, index=s2.index)
 
-            cr_ok: list[tuple[str, float]] = []
+            cr_bars_day: dict[str, pd.DataFrame] = {}
             for sym in crypto_universe:
+                if sym in excluded:
+                    continue
                 s = closes.get(sym)
                 if s is None or len(s) == 0:
                     continue
                 s2 = s.loc[:day]
                 if len(s2) == 0:
                     continue
-                sig = compute_trend_vol_signal(
-                    s2,
-                    ma_long=cfg.signals.crypto.ma_long,
-                    ma_short=cfg.signals.crypto.ma_short,
-                    vol_lookback=cfg.signals.crypto.vol_lookback,
-                    max_ann_vol=cfg.signals.crypto.max_ann_vol,
-                    ann_factor=365.0,
-                )
-                if sig.ok:
-                    cr_ok.append((sym, float(sig.score)))
+                cr_bars_day[sym] = pd.DataFrame({"close": s2.values}, index=s2.index)
 
-            eq_sel = [s for s, _ in sorted(eq_ok, key=lambda x: x[1], reverse=True)[: cfg.limits.max_equity_positions]]
-            cr_sel = [s for s, _ in sorted(cr_ok, key=lambda x: x[1], reverse=True)[: cfg.limits.max_crypto_positions]]
+            eq_sel, _eq_details = strat.select_equities(bars=eq_bars_day, cfg=cfg)
+            cr_sel, _cr_details = strat.select_crypto(bars=cr_bars_day, cfg=cfg)
 
             # targets (notional)
             equity_now = portfolio_value(day)
@@ -277,7 +435,7 @@ def run_backtest(
                     avg_cost = positions_avg_cost.get(sym, p0)
                     entry_date = positions_entry_date.get(sym)
                     pnl = (sell_px - avg_cost) * q
-                    trades.append(
+                    _record_trade(
                         {
                             "symbol": sym,
                             "entry_date": entry_date,
@@ -346,7 +504,7 @@ def run_backtest(
                     avg_cost = positions_avg_cost.get(sym, p0)
                     entry_date = positions_entry_date.get(sym)
                     pnl = (sell_px - avg_cost) * q_sub
-                    trades.append(
+                    _record_trade(
                         {
                             "symbol": sym,
                             "entry_date": entry_date,
@@ -367,7 +525,34 @@ def run_backtest(
                         positions_avg_cost.pop(sym, None)
                         positions_entry_date.pop(sym, None)
 
-        curve.append({"date": day.strftime("%Y-%m-%d"), "equity": float(equity), "cash": float(cash)})
+            # If any symbol hit the realized P/L floor during this rebalance, optionally liquidate it immediately.
+            if params.symbol_pnl_floor_liquidate:
+                _liquidate_excluded(day, reason="symbol_pnl_floor_exclude")
+
+        # Snapshot holdings for hover/inspection
+        holdings = []
+        total_unreal = 0.0
+        for sym, q in positions_qty.items():
+            p0 = px(sym, day)
+            if p0 is None:
+                continue
+            mv = float(q * p0)
+            avg_cost = float(positions_avg_cost.get(sym, p0) or p0)
+            unreal = float((p0 - avg_cost) * q)
+            total_unreal += unreal
+            unreal_pct = float(p0 / avg_cost - 1.0) if avg_cost else None
+            holdings.append({"symbol": sym, "mv": mv, "unreal": unreal, "unreal_pct": unreal_pct})
+        holdings.sort(key=lambda x: abs(x.get("mv", 0.0)), reverse=True)
+        holdings = holdings[:15]
+
+        curve.append({
+            "date": day.strftime("%Y-%m-%d"),
+            "equity": float(equity),
+            "cash": float(cash),
+            "unrealized_pnl": float(total_unreal),
+            "holdings": holdings,
+            "regime": _regime(day),
+        })
 
         if progress_cb and (i % 10 == 0 or i == len(days) - 1):
             progress_cb(i + 1, len(days))
@@ -436,4 +621,12 @@ def run_backtest(
         )
     open_pos.sort(key=lambda x: abs(x.get("market_value", 0.0)), reverse=True)
 
-    return BacktestResult(params=params.__dict__, equity_curve=curve, metrics=metrics, trades=trades, open_positions=open_pos)
+    return BacktestResult(
+        params=params.__dict__,
+        equity_curve=curve,
+        metrics=metrics,
+        trades=trades,
+        open_positions=open_pos,
+        realized_pnl_by_symbol=realized_pnl_by_symbol,
+        excluded_symbols=sorted(excluded),
+    )
