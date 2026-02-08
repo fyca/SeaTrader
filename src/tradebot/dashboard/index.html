@@ -827,15 +827,40 @@ async function renderBacktest(res) {
 
           if (detail) {
             const extra = excluded.has(r.symbol) ? ' • EXCLUDED' : '';
-            detail.innerHTML = `<div style="margin-bottom:6px;"><b>${data.symbol}</b> vs <b>SPY</b> (${data.start}→${data.end})${extra}</div>`
+            const evs = (data.events || []);
+            let evTable = '';
+            if (evs.length) {
+              const rows = evs.slice().sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
+              evTable = '<div class="tableWrap" style="margin-top:10px; max-height:260px;">'
+                + '<table><thead><tr><th>Date</th><th>Type</th><th>Qty</th><th>Price</th><th>Notional</th><th>P/L</th><th>Reason</th></tr></thead><tbody>'
+                + rows.map(e=>{
+                    const qty = (e.qty!=null) ? Number(e.qty).toFixed(6) : '—';
+                    const px = (e.price!=null) ? ('$' + Number(e.price).toFixed(6)) : '—';
+                    const notional = (e.notional!=null) ? money(e.notional) : '—';
+                    const pnl = (e.pnl!=null) ? money(e.pnl) : '—';
+                    return `<tr class="${(Number(e.pnl||0)>0)?'good':((Number(e.pnl||0)<0)?'exit':'')}"><td>${e.date||''}</td><td>${String(e.type||'').toUpperCase()}</td><td>${qty}</td><td>${px}</td><td>${notional}</td><td>${pnl}</td><td>${e.reason||''}</td></tr>`;
+                }).join('')
+                + '</tbody></table></div>';
+            } else {
+              evTable = '<div class="muted" style="margin-top:10px;">(no events recorded for this job — run a new backtest)</div>';
+            }
+
+            detail.innerHTML = `<div style="margin-bottom:6px;"><b>${data.symbol}</b> (${data.start}→${data.end})${extra}</div>`
               + `<div class="muted" style="margin-bottom:6px;">Realized ${money(r.realized)} • Unrealized(end) ${money(r.unreal)} • Total ${money(r.total)}</div>`
-              + `<div id="btSymPlot" style="height:360px;"></div>`;
+              + `<div id="btSymPlot" style="height:360px;"></div>`
+              + `<div style="margin-top:10px; font-weight:700;">Trade events</div>`
+              + `<div class="muted" style="margin-top:2px;">All buys/sells recorded by the backtest engine (includes adds/trims). Times are per-day (daily bars).</div>`
+              + evTable;
 
             const traces = [
               {x, y, type:'scatter', mode:'lines', name:data.symbol, line:{color:'#111827'}, hovertemplate:'%{x}<br>$%{y:,.2f}<extra></extra>'},
               {x:x2, y:y2, type:'scatter', mode:'lines', name:'SPY', line:{color:'#2563eb', dash:'dot'}, hovertemplate:'%{x}<br>$%{y:,.2f}<extra></extra>'},
-              {x:buyX, y:buyY, type:'scatter', mode:'markers', name:'Buys', marker:{color:'#16a34a', size:10, symbol:'triangle-up'}, hovertemplate:'%{x}<br>BUY<br>$%{y:,.6f}<extra></extra>'},
-              {x:sellX, y:sellY, type:'scatter', mode:'markers', name:'Sells', marker:{color:'#dc2626', size:10, symbol:'triangle-down'}, hovertemplate:'%{x}<br>SELL<br>$%{y:,.6f}<extra></extra>'},
+              {x:buyX, y:buyY, type:'scatter', mode:'markers', name:'Buys', marker:{color:'#16a34a', size:10, symbol:'triangle-up'},
+                customdata: buys.map(m=>[m.qty, m.notional, m.reason]),
+                hovertemplate:'%{x}<br>BUY<br>$%{y:,.6f}<br>qty %{customdata[0]:,.6f}<br>notional $%{customdata[1]:,.2f}<br>%{customdata[2]}<extra></extra>'},
+              {x:sellX, y:sellY, type:'scatter', mode:'markers', name:'Sells', marker:{color:'#dc2626', size:10, symbol:'triangle-down'},
+                customdata: sells.map(m=>[m.qty, m.notional, m.reason, m.pnl]),
+                hovertemplate:'%{x}<br>SELL<br>$%{y:,.6f}<br>qty %{customdata[0]:,.6f}<br>notional $%{customdata[1]:,.2f}<br>pnl $%{customdata[3]:,.2f}<br>%{customdata[2]}<extra></extra>'},
             ];
 
             Plotly.newPlot('btSymPlot', traces, {
