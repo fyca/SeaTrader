@@ -822,15 +822,9 @@ async function renderBacktest(res) {
           const sells = (data.markers||[]).filter(m=>m.type==='sell');
 
           const buyX = buys.map(m=>m.date);
-          const buyY = buys.map(m=>{
-            const i = x.indexOf(m.date);
-            return i>=0 ? y[i] : null;
-          });
+          const buyY = buys.map(m=> (m.price!=null ? Number(m.price) : null));
           const sellX = sells.map(m=>m.date);
-          const sellY = sells.map(m=>{
-            const i = x.indexOf(m.date);
-            return i>=0 ? y[i] : null;
-          });
+          const sellY = sells.map(m=> (m.price!=null ? Number(m.price) : null));
 
           if (detail) {
             const extra = excluded.has(r.symbol) ? ' • EXCLUDED' : '';
@@ -841,8 +835,8 @@ async function renderBacktest(res) {
             const traces = [
               {x, y, type:'scatter', mode:'lines', name:data.symbol, line:{color:'#111827'}, hovertemplate:'%{x}<br>$%{y:,.2f}<extra></extra>'},
               {x:x2, y:y2, type:'scatter', mode:'lines', name:'SPY', line:{color:'#2563eb', dash:'dot'}, hovertemplate:'%{x}<br>$%{y:,.2f}<extra></extra>'},
-              {x:buyX, y:buyY, type:'scatter', mode:'markers', name:'Buys', marker:{color:'#16a34a', size:10, symbol:'triangle-up'}, hovertemplate:'%{x}<br>BUY<br>$%{y:,.2f}<extra></extra>'},
-              {x:sellX, y:sellY, type:'scatter', mode:'markers', name:'Sells', marker:{color:'#dc2626', size:10, symbol:'triangle-down'}, hovertemplate:'%{x}<br>SELL<br>$%{y:,.2f}<extra></extra>'},
+              {x:buyX, y:buyY, type:'scatter', mode:'markers', name:'Buys', marker:{color:'#16a34a', size:10, symbol:'triangle-up'}, hovertemplate:'%{x}<br>BUY<br>$%{y:,.6f}<extra></extra>'},
+              {x:sellX, y:sellY, type:'scatter', mode:'markers', name:'Sells', marker:{color:'#dc2626', size:10, symbol:'triangle-down'}, hovertemplate:'%{x}<br>SELL<br>$%{y:,.6f}<extra></extra>'},
             ];
 
             Plotly.newPlot('btSymPlot', traces, {
