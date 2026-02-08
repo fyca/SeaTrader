@@ -312,6 +312,32 @@
       </div>
       <!-- backtest presets moved to top -->
 
+      <div style="margin-top:10px;">
+        <h2>Daily ledger (by date)</h2>
+        <div class="muted" style="margin-top:4px;">Cash/equity shown are end-of-day marks from the backtest engine. Starting-of-day is prior day end. Click a row to expand the day’s buys/sells.</div>
+        <div class="tableWrap" style="margin-top:6px; max-height:360px;">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Date</th>
+                <th>Cash start</th>
+                <th>Cash end</th>
+                <th>Equity start</th>
+                <th>Equity end</th>
+                <th>Invested start</th>
+                <th>Invested end</th>
+                <th>Buys</th>
+                <th>Sells</th>
+                <th>Net</th>
+                <th>Events</th>
+              </tr>
+            </thead>
+            <tbody id="btLedger"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="muted" style="margin-top:6px;">Note: backtest runs in the background and uses daily prices; it can take a bit.</div>
       <div style="margin-top:10px;">
         <h2>Backtest history</h2>
@@ -884,6 +910,93 @@ async function renderBacktest(res) {
       const tr = document.createElement('tr');
       tr.innerHTML = `<td colspan="5" class="muted">(no trades yet)</td>`;
       symTb.appendChild(tr);
+    }
+  }
+
+  // Daily ledger (curve + events grouped by date)
+  const led = document.getElementById('btLedger');
+  if (led) {
+    led.innerHTML = '';
+    const curve = res.equity_curve || [];
+    const events = res.events || [];
+    const byDate = new Map();
+    for (const e of events) {
+      const d = String(e.date||'');
+      if (!d) continue;
+      const arr = byDate.get(d) || [];
+      arr.push(e);
+      byDate.set(d, arr);
+    }
+
+    // build rows
+    for (let i=0;i<curve.length;i++) {
+      const day = curve[i];
+      const date = day.date;
+      const prev = (i>0) ? curve[i-1] : null;
+      const cashEnd = Number(day.cash||0);
+      const eqEnd = Number(day.equity||0);
+      const cashStart = prev ? Number(prev.cash||0) : cashEnd;
+      const eqStart = prev ? Number(prev.equity||0) : eqEnd;
+      const invStart = eqStart - cashStart;
+      const invEnd = eqEnd - cashEnd;
+
+      const evs = byDate.get(date) || [];
+      let buys=0, sells=0;
+      for (const e of evs) {
+        const n = Number(e.notional||0);
+        if (e.type==='buy') buys += n;
+        if (e.type==='sell') sells += n;
+      }
+      const net = sells - buys;
+
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.innerHTML = `<td style="width:18px;">▸</td>`
+        + `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${date}</td>`
+        + `<td>${money(cashStart)}</td>`
+        + `<td>${money(cashEnd)}</td>`
+        + `<td>${money(eqStart)}</td>`
+        + `<td>${money(eqEnd)}</td>`
+        + `<td>${money(invStart)}</td>`
+        + `<td>${money(invEnd)}</td>`
+        + `<td>${money(buys)}</td>`
+        + `<td>${money(sells)}</td>`
+        + `<td>${money(net)}</td>`
+        + `<td>${evs.length}</td>`;
+
+      const detail = document.createElement('tr');
+      detail.style.display = 'none';
+      const rowsHtml = evs.length ? evs.slice().sort((a,b)=>String(a.type||'').localeCompare(String(b.type||''))).map(e=>{
+        const qty = (e.qty!=null) ? Number(e.qty).toFixed(6) : '—';
+        const px = (e.price!=null) ? ('$' + Number(e.price).toFixed(6)) : '—';
+        const notional = (e.notional!=null) ? money(e.notional) : '—';
+        const pnl = (e.pnl!=null) ? money(e.pnl) : '—';
+        return `<tr><td>${String(e.type||'').toUpperCase()}</td><td>${e.symbol||''}</td><td>${qty}</td><td>${px}</td><td>${notional}</td><td>${pnl}</td><td>${e.reason||''}</td></tr>`;
+      }).join('') : `<tr><td colspan="7" class="muted">(no buys/sells)</td></tr>`;
+
+      detail.innerHTML = `<td colspan="12">
+        <div class="tableWrap" style="max-height:220px; margin:8px 0;">
+          <table>
+            <thead><tr><th>Type</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Notional</th><th>P/L</th><th>Reason</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </td>`;
+
+      tr.addEventListener('click', ()=>{
+        const open = detail.style.display !== 'none';
+        detail.style.display = open ? 'none' : '';
+        tr.querySelector('td').textContent = open ? '▸' : '▾';
+      });
+
+      led.appendChild(tr);
+      led.appendChild(detail);
+    }
+
+    if (led.children.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="12" class="muted">(no data)</td>`;
+      led.appendChild(tr);
     }
   }
 
