@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SeaTrader Strategy Builder</title>
   <link rel="stylesheet" href="/static/themes.css" />
+  <script>
+    (function(){
+      try {
+        var t = localStorage.getItem('ui_theme') || 'classic';
+        document.documentElement.dataset.theme = t;
+      } catch(e) { document.documentElement.dataset.theme = 'classic'; }
+      try {
+        var d = localStorage.getItem('ui_density') || 'comfortable';
+        document.documentElement.dataset.density = d;
+      } catch(e) { document.documentElement.dataset.density = 'comfortable'; }
+    })();
+  </script>
   <style>
     body { margin: 24px; }
     .row { display:flex; gap:10px; flex-wrap: wrap; align-items:flex-end; }
@@ -39,6 +51,13 @@
             <option value="classic">Classic</option>
             <option value="fun">Fun</option>
             <option value="dark">Dark</option>
+          </select>
+        </div>
+        <div class="pill">
+          <span class="muted" style="font-size:12px;">Density</span>
+          <select id="densitySel" style="padding:6px 8px;">
+            <option value="comfortable">Comfortable</option>
+            <option value="compact">Compact</option>
           </select>
         </div>
       </div>
@@ -224,13 +243,30 @@ function applyTheme(t) {
   try { localStorage.setItem('ui_theme', document.documentElement.dataset.theme); } catch(e) {}
 }
 
+function applyDensity(d) {
+  const v = d || 'comfortable';
+  document.documentElement.dataset.density = v;
+  document.body.classList.toggle('density-compact', v === 'compact');
+  try { localStorage.setItem('ui_density', v); } catch(e) {}
+}
+
 function initThemePicker() {
   const sel = document.getElementById('themeSel');
-  const saved = (()=>{ try { return localStorage.getItem('ui_theme'); } catch(e) { return null; } })();
-  applyTheme(saved || 'classic');
+  const dens = document.getElementById('densitySel');
+
+  const savedTheme = (()=>{ try { return localStorage.getItem('ui_theme'); } catch(e) { return null; } })();
+  applyTheme(savedTheme || document.documentElement.dataset.theme || 'classic');
+
+  const savedDens = (()=>{ try { return localStorage.getItem('ui_density'); } catch(e) { return null; } })();
+  applyDensity(savedDens || document.documentElement.dataset.density || 'comfortable');
+
   if (sel) {
     sel.value = document.documentElement.dataset.theme || 'classic';
     sel.addEventListener('change', ()=> applyTheme(sel.value));
+  }
+  if (dens) {
+    dens.value = document.documentElement.dataset.density || 'comfortable';
+    dens.addEventListener('change', ()=> applyDensity(dens.value));
   }
 }
 

@@ -115,6 +115,15 @@ body {
   color: var(--text);
 }
 
+/* Density presets (toggle-able) */
+body.density-compact .container { padding: 12px; }
+body.density-compact .topbarInner { padding: 10px 12px; }
+body.density-compact .card { border-radius: 12px; }
+body.density-compact h2 { margin: 10px 0 8px 0; }
+body.density-compact table { font-size: 12px; }
+body.density-compact th, body.density-compact td { padding: 5px 6px; }
+body.density-compact input, body.density-compact select, body.density-compact textarea, body.density-compact button { padding: 5px 7px; }
+
 a { color: var(--accent); }
 
 a:hover { opacity: .92; }
