@@ -16,12 +16,12 @@ This repo is designed to be:
 
 ### Dashboard
 
-**Classic**
+**Classic (comfortable)**
 
 ![SeaTrader dashboard (classic)](docs/screenshots/dashboard-classic-comfortable.png)
 
 <details>
-<summary>Fun / Dark</summary>
+<summary>Fun / Dark (comfortable)</summary>
 
 **Fun**
 
@@ -33,14 +33,31 @@ This repo is designed to be:
 
 </details>
 
+<details>
+<summary>Compact density</summary>
+
+**Classic (compact)**
+
+![SeaTrader dashboard (classic compact)](docs/screenshots/dashboard-classic-compact.png)
+
+**Fun (compact)**
+
+![SeaTrader dashboard (fun compact)](docs/screenshots/dashboard-fun-compact.png)
+
+**Dark (compact)**
+
+![SeaTrader dashboard (dark compact)](docs/screenshots/dashboard-dark-compact.png)
+
+</details>
+
 ### Strategy Builder
 
-**Classic**
+**Classic (comfortable)**
 
 ![SeaTrader strategy builder (classic)](docs/screenshots/builder-classic-comfortable.png)
 
 <details>
-<summary>Fun / Dark</summary>
+<summary>Fun / Dark (comfortable)</summary>
 
 **Fun**
 
@@ -49,6 +66,23 @@ This repo is designed to be:
 **Dark**
 
 ![SeaTrader strategy builder (dark)](docs/screenshots/builder-dark-comfortable.png)
+
+</details>
+
+<details>
+<summary>Compact density (builder)</summary>
+
+**Classic (compact)**
+
+![SeaTrader builder (classic compact)](docs/screenshots/builder-classic-compact.png)
+
+**Fun (compact)**
+
+![SeaTrader builder (fun compact)](docs/screenshots/builder-fun-compact.png)
+
+**Dark (compact)**
+
+![SeaTrader builder (dark compact)](docs/screenshots/builder-dark-compact.png)
 
 </details>
 

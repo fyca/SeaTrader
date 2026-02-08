@@ -8,7 +8,7 @@ OUT = Path("docs/screenshots")
 OUT.mkdir(parents=True, exist_ok=True)
 
 THEMES = ["classic", "fun", "dark"]
-DENSITIES = ["comfortable"]
+DENSITIES = ["comfortable", "compact"]
 
 PAGES = [
     ("dashboard", "http://127.0.0.1:8008/"),
