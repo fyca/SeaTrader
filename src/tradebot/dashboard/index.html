@@ -118,116 +118,125 @@
     <div class="card col-12">
       <h2>Backtest</h2>
       <div class="muted">These dates are the evaluation window (the backtest will only score performance within this range; it may fetch earlier data as warmup for indicators).</div>
-      <div class="muted">Per-asset stop loss is configured in the main config (live + risk-check), not the backtest panel yet.</div>
-      <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap: wrap; margin-top:8px;">
-        <div>
-          <div class="muted">Evaluation start</div>
-          <input id="btStart" placeholder="YYYY-MM-DD" />
-        </div>
-        <div>
-          <div class="muted">Evaluation end</div>
-          <input id="btEnd" placeholder="YYYY-MM-DD" />
-        </div>
-        <div>
-          <div class="muted">Presets</div>
-          <div style="display:flex; gap:6px;">
-            <button id="btPreset1y" class="secondary">Last 1y</button>
-            <button id="btPreset5y" class="secondary">Last 5y</button>
+
+      <div class="grid" style="margin-top:10px; grid-template-columns: repeat(12, 1fr); gap:12px;">
+        <div class="card col-12" style="padding:12px 14px;">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <h2 style="margin:0;">Run settings</h2>
+            <div class="row" style="align-items:center; gap:8px;">
+              <button id="btPreset1y" class="secondary">Last 1y</button>
+              <button id="btPreset5y" class="secondary">Last 5y</button>
+              <span id="btStatus" class="muted"></span>
+              <button id="btRun" class="primary">Run backtest</button>
+              <button id="btClearCache" class="secondary">Clear cache</button>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap: wrap; margin-top:10px;">
+            <div>
+              <div class="muted">Evaluation start</div>
+              <input id="btStart" placeholder="YYYY-MM-DD" />
+            </div>
+            <div>
+              <div class="muted">Evaluation end</div>
+              <input id="btEnd" placeholder="YYYY-MM-DD" />
+            </div>
+            <div>
+              <div class="muted">Strategy</div>
+              <select id="btStrategy" style="width:260px;"></select>
+            </div>
+            <div>
+              <div class="muted">Execution time</div>
+              <select id="btExecTime" style="width:160px;">
+                <option value="open">Morning (open)</option>
+                <option value="close" selected>Evening (close)</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Assets</div>
+              <select id="btAssets" style="width:160px;">
+                <option value="both" selected>Both</option>
+                <option value="equities">Stocks only</option>
+                <option value="crypto">Crypto only</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Slippage (bps)</div>
+              <input id="btSlip" placeholder="10" value="10" style="width:120px;" />
+            </div>
+            <div>
+              <div class="muted">Single symbol (optional)</div>
+              <input id="btSymbol" placeholder="AAPL or BTC/USD" style="min-width:280px;" />
+            </div>
           </div>
         </div>
-        <div>
-          <div class="muted">Strategy</div>
-          <select id="btStrategy" style="width:260px;"></select>
-        </div>
-        <div>
-          <div class="muted">Execution time</div>
-          <select id="btExecTime" style="width:160px;">
-            <option value="open">Morning (open)</option>
-            <option value="close" selected>Evening (close)</option>
-          </select>
-        </div>
-        <div>
-          <div class="muted">Assets</div>
-          <select id="btAssets" style="width:160px;">
-            <option value="both" selected>Both</option>
-            <option value="equities">Stocks only</option>
-            <option value="crypto">Crypto only</option>
-          </select>
-        </div>
-        <div>
-          <div class="muted">Rebalance frequency</div>
-          <select id="btRebalance" style="width:160px;">
-            <option value="weekly" selected>Weekly</option>
-            <option value="daily">Daily</option>
-          </select>
-        </div>
-        <div>
-          <div class="muted">Rebalance style</div>
-          <select id="btRebalanceMode" style="width:200px;">
-            <option value="target_notional" selected>Target % notional</option>
-            <option value="no_add_to_losers">Don't add to losers</option>
-          </select>
-        </div>
-        <div>
-          <div class="muted">Liquidation</div>
-          <select id="btLiquidation" style="width:220px;">
-            <option value="liquidate_non_selected" selected>Liquidate non-selected</option>
-            <option value="hold_until_exit">Hold until exit signal</option>
-          </select>
-        </div>
-        <div>
-          <div class="muted">Per-asset stop loss</div>
-          <select id="btStopLoss" style="width:180px;">
-            <option value="">None</option>
-            <option value="0.01">1%</option><option value="0.02">2%</option><option value="0.03">3%</option><option value="0.04">4%</option><option value="0.05">5%</option>
-            <option value="0.06">6%</option><option value="0.07">7%</option><option value="0.08">8%</option><option value="0.09">9%</option><option value="0.10">10%</option>
-            <option value="0.11">11%</option><option value="0.12">12%</option><option value="0.13">13%</option><option value="0.14">14%</option><option value="0.15">15%</option>
-            <option value="0.16">16%</option><option value="0.17">17%</option><option value="0.18">18%</option><option value="0.19">19%</option><option value="0.20">20%</option>
-          </select>
-        </div>
-        <div>
-          <div class="muted">Slippage (bps)</div>
-          <input id="btSlip" placeholder="10" value="10" style="width:120px;" />
-        </div>
-        <div>
-          <div class="muted">Exclude if symbol P/L % &lt;=</div>
-          <input id="btSymFloor" placeholder="e.g. -0.005" value="-0.005" style="width:160px;" />
-          <label class="muted" style="display:block; margin-top:4px;">
-            <input id="btSymFloorLiquidate" type="checkbox" checked /> Immediately liquidate when excluded
-          </label>
-          <label class="muted" style="display:block; margin-top:2px;">
-            <input id="btSymFloorInclUnreal" type="checkbox" checked /> Include unrealized P/L (recommended)
-          </label>
-        </div>
-        <div>
-          <div class="muted">Hover holdings list</div>
-          <select id="btHoldMode" style="width:180px;">
-            <option value="top" selected>Top 15 by value</option>
-            <option value="bottom">Bottom 15 by value</option>
-          </select>
-        </div>
-        <div>
-          <div class="muted">Single symbol (optional)</div>
-          <input id="btSymbol" placeholder="AAPL or BTC/USD" style="min-width:280px;" />
-        </div>
-        <div>
-          <div class="muted">Max drawdown stop</div>
-          <select id="btDDPreset" style="width:180px;">
-            <option value="">None</option>
-            <option value="0.20" selected>20%</option>
-            <option value="0.30">30%</option>
-            <option value="0.40">40%</option>
-            <option value="0.50">50%</option>
-          </select>
-        </div>
-        <div>
-          <div class="muted">Custom DD stop</div>
-          <input id="btDD" placeholder="e.g. 0.25" style="width:160px;" />
-        </div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <button id="btRun" class="primary">Run backtest</button>
-          <button id="btClearCache" class="secondary">Clear cache</button>
-          <span id="btStatus" class="muted"></span>
+
+        <div class="card col-12" style="padding:12px 14px;">
+          <h2 style="margin:0 0 10px 0;">Portfolio construction</h2>
+          <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap: wrap;">
+            <div>
+              <div class="muted">Rebalance frequency</div>
+              <select id="btRebalance" style="width:160px;">
+                <option value="weekly" selected>Weekly</option>
+                <option value="daily">Daily</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Rebalance style</div>
+              <select id="btRebalanceMode" style="width:200px;">
+                <option value="target_notional" selected>Target % notional</option>
+                <option value="no_add_to_losers">Don't add to losers</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Liquidation</div>
+              <select id="btLiquidation" style="width:220px;">
+                <option value="liquidate_non_selected" selected>Liquidate non-selected</option>
+                <option value="hold_until_exit">Hold until exit signal</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Per-asset stop loss</div>
+              <select id="btStopLoss" style="width:180px;">
+                <option value="">None</option>
+                <option value="0.01">1%</option><option value="0.02">2%</option><option value="0.03">3%</option><option value="0.04">4%</option><option value="0.05">5%</option>
+                <option value="0.06">6%</option><option value="0.07">7%</option><option value="0.08">8%</option><option value="0.09">9%</option><option value="0.10">10%</option>
+                <option value="0.11">11%</option><option value="0.12">12%</option><option value="0.13">13%</option><option value="0.14">14%</option><option value="0.15">15%</option>
+                <option value="0.16">16%</option><option value="0.17">17%</option><option value="0.18">18%</option><option value="0.19">19%</option><option value="0.20">20%</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Max drawdown stop</div>
+              <select id="btDDPreset" style="width:180px;">
+                <option value="">None</option>
+                <option value="0.20" selected>20%</option>
+                <option value="0.30">30%</option>
+                <option value="0.40">40%</option>
+                <option value="0.50">50%</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Custom DD stop</div>
+              <input id="btDD" placeholder="e.g. 0.25" style="width:160px;" />
+            </div>
+            <div>
+              <div class="muted">Exclude if symbol P/L % &lt;=</div>
+              <input id="btSymFloor" placeholder="e.g. -0.005" value="-0.005" style="width:160px;" />
+              <label class="muted" style="display:block; margin-top:4px;">
+                <input id="btSymFloorLiquidate" type="checkbox" checked /> Immediately liquidate when excluded
+              </label>
+              <label class="muted" style="display:block; margin-top:2px;">
+                <input id="btSymFloorInclUnreal" type="checkbox" checked /> Include unrealized P/L (recommended)
+              </label>
+            </div>
+            <div>
+              <div class="muted">Hover holdings list</div>
+              <select id="btHoldMode" style="width:180px;">
+                <option value="top" selected>Top 15 by value</option>
+                <option value="bottom">Bottom 15 by value</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
       <div id="btMetrics" class="muted" style="margin-top:8px;"></div>
