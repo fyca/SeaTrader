@@ -385,7 +385,10 @@
       </div>
 
       <div style="margin-top:10px;">
-        <h2>Trades (realized)</h2>
+        <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <h2 style="margin:0;">Trades (realized)</h2>
+          <input id="btTradeSearch" placeholder="Search symbol(s): AAPL, BTC/USD" style="min-width:280px;" />
+        </div>
         <div class="tableWrap">
           <table>
             <thead>
@@ -1119,7 +1122,10 @@ async function renderBacktest(res) {
     tb.innerHTML = '';
     const trades = res.trades || [];
     trades.sort((a,b) => String(b.exit_date||'').localeCompare(String(a.exit_date||'')));
-    for (const t of trades.slice(0, 500)) {
+    const qRaw = (document.getElementById('btTradeSearch')?.value || '').trim().toUpperCase();
+    const needles = qRaw ? qRaw.split(/[\s,]+/).filter(Boolean) : [];
+    const filtered = needles.length ? trades.filter(t => needles.some(n => String(t.symbol||'').toUpperCase().includes(n))) : trades;
+    for (const t of filtered.slice(0, 500)) {
       const tr = document.createElement('tr');
       const pnl = Number(t.pnl || 0);
       if (pnl > 0) tr.className = 'good';
@@ -1829,6 +1835,12 @@ document.getElementById('btRun')?.addEventListener('click', (e) => {
   runBacktest().catch(err => {
     document.getElementById('btStatus').textContent = 'error: ' + err;
   });
+});
+
+document.getElementById('btTradeSearch')?.addEventListener('input', () => {
+  if (window.__lastBacktestRes) {
+    renderBacktest(window.__lastBacktestRes).catch(()=>{});
+  }
 });
 
 document.getElementById('btPreset1y')?.addEventListener('click', (e) => {
