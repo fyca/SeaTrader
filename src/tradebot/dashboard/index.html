@@ -24,6 +24,9 @@
     .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
     .card h2 { font-size: 14px; margin: 0 0 8px 0; }
     .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; }
+    .accountBlocks { display:grid; grid-template-columns: repeat(12, 1fr); gap:10px; }
+    .accountBlock { grid-column: span 6; }
+    .accountKvs { grid-template-columns: 130px 1fr 130px 1fr !important; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { padding: 6px 8px; text-align: left; vertical-align: top; }
     .tableWrap { overflow: auto; position: relative; max-height: 360px; border: 1px solid var(--border); border-radius: var(--radius-md); }
@@ -40,6 +43,8 @@
     .col-12 { grid-column: span 12; }
     @media (max-width: 900px) {
       .col-6 { grid-column: span 12; }
+      .accountBlock { grid-column: span 12; }
+      .accountKvs { grid-template-columns: 140px 1fr !important; }
     }
   </style>
 </head>
@@ -1226,13 +1231,11 @@ async function main() {
 
   const accountEl = document.getElementById('account');
   accountEl.innerHTML = '';
-  accountEl.style.display = 'grid';
-  accountEl.style.gridTemplateColumns = 'repeat(auto-fit, minmax(320px, 1fr))';
-  accountEl.style.gap = '10px';
+  accountEl.className = 'accountBlocks';
 
   const mkBlock = (title, rows) => {
     const b = document.createElement('div');
-    b.className = 'subcard';
+    b.className = 'subcard accountBlock';
     b.style.padding = '10px';
     const h = document.createElement('div');
     h.style.fontWeight = '700';
@@ -1240,8 +1243,7 @@ async function main() {
     h.textContent = title;
     b.appendChild(h);
     const g = document.createElement('div');
-    g.className = 'kvs';
-    g.style.gridTemplateColumns = '140px 1fr';
+    g.className = 'kvs accountKvs';
     for (const [k,v] of rows) kv(g, k, v);
     b.appendChild(g);
     accountEl.appendChild(b);
