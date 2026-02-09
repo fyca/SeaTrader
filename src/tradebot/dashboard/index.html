@@ -401,7 +401,10 @@
       <!-- backtest presets moved to top -->
 
       <div style="margin-top:10px;">
-        <h2>Daily ledger (by date)</h2>
+        <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <h2 style="margin:0;">Daily ledger (by date)</h2>
+          <input id="btLedgerSearch" placeholder="Filter days by symbol(s): AAPL, BTC/USD" style="min-width:320px;" />
+        </div>
         <div class="muted" style="margin-top:4px;">Cash/equity shown are end-of-day marks from the backtest engine. Starting-of-day is prior day end. Click a row to expand the day’s buys/sells.</div>
         <div class="tableWrap" style="margin-top:6px; max-height:360px;">
           <table>
@@ -1044,6 +1047,9 @@ async function renderBacktest(res) {
       byDate.set(d, arr);
     }
 
+    const lqRaw = (document.getElementById('btLedgerSearch')?.value || '').trim().toUpperCase();
+    const lNeedles = lqRaw ? lqRaw.split(/[\s,]+/).filter(Boolean) : [];
+
     // build rows
     for (let i=0;i<curve.length;i++) {
       const day = curve[i];
@@ -1057,6 +1063,16 @@ async function renderBacktest(res) {
       const invEnd = eqEnd - cashEnd;
 
       const evs = byDate.get(date) || [];
+      if (lNeedles.length) {
+        const daySyms = new Set(evs.map(e => String(e.symbol||'').toUpperCase()));
+        const hit = lNeedles.some(n => {
+          for (const s of daySyms) {
+            if (s.includes(n)) return true;
+          }
+          return false;
+        });
+        if (!hit) continue;
+      }
       let buys=0, sells=0;
       for (const e of evs) {
         const n = Number(e.notional||0);
@@ -1838,6 +1854,12 @@ document.getElementById('btRun')?.addEventListener('click', (e) => {
 });
 
 document.getElementById('btTradeSearch')?.addEventListener('input', () => {
+  if (window.__lastBacktestRes) {
+    renderBacktest(window.__lastBacktestRes).catch(()=>{});
+  }
+});
+
+document.getElementById('btLedgerSearch')?.addEventListener('input', () => {
   if (window.__lastBacktestRes) {
     renderBacktest(window.__lastBacktestRes).catch(()=>{});
   }
