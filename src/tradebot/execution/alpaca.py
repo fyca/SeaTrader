@@ -33,7 +33,11 @@ def place_notional_market_orders(
             ref = float(ref_price_by_symbol.get(pl.symbol, 0.0) or 0.0)
             if ref > 0:
                 mul = (1 + limit_offset_bps / 10000.0) if pl.side == "buy" else (1 - limit_offset_bps / 10000.0)
-                lim = round(ref * mul, 6)
+                raw_lim = ref * mul
+                # Alpaca min pricing increments:
+                # - >= $1.00 => max 2 decimals
+                # - <  $1.00 => max 4 decimals
+                lim = round(raw_lim, 2 if raw_lim >= 1 else 4)
                 req = LimitOrderRequest(
                     symbol=pl.symbol,
                     notional=round(float(pl.notional_usd), 2),
