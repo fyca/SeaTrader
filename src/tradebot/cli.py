@@ -16,6 +16,7 @@ from tradebot.strategies.registry import get_strategy
 from tradebot.portfolio.targets import build_equal_weight_targets
 from tradebot.execution.plan import OrderPlan, diff_to_orders
 from tradebot.execution.alpaca import place_notional_market_orders
+from alpaca.trading.enums import TimeInForce
 from tradebot.execution.guardrails import check_order_guardrails
 from tradebot.risk.drawdown import update_drawdown_state
 from tradebot.util.state import load_state, save_state
@@ -300,7 +301,56 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         use_limit_orders=bool(cfg.execution.use_limit_orders),
         limit_offset_bps=float(cfg.execution.limit_offset_bps),
         ref_price_by_symbol=ref_px,
+        extended_hours=bool(getattr(cfg.execution, "extended_hours", False)),
     )
+
+    # Optional premarket fallback: if unfilled LIMITs remain by configured open time, resend as market.
+    if bool(cfg.execution.use_limit_orders) and bool(getattr(cfg.execution, "fallback_to_market_at_open", False)):
+        try:
+            from datetime import datetime, timedelta
+            from zoneinfo import ZoneInfo
+            import time as _time
+            from alpaca.trading.enums import OrderSide
+            from alpaca.trading.requests import MarketOrderRequest
+
+            tz = ZoneInfo(getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
+            now = datetime.now(tz)
+            hh, mm = [int(x) for x in str(getattr(cfg.execution, "fallback_time_local", "06:30")).split(":")]
+            target = now.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(seconds=int(getattr(cfg.execution, "fallback_grace_seconds", 20)))
+            if target > now:
+                wait_s = (target - now).total_seconds()
+                print(f"Waiting {int(wait_s)}s for limit->market fallback window at {target.strftime('%H:%M:%S %Z')}...")
+                _time.sleep(wait_s)
+
+            fallback_count = 0
+            for po in placed:
+                if po.order_type != "limit":
+                    continue
+                try:
+                    o = clients.trading.get_order_by_id(po.id)
+                    st = str(getattr(o, "status", "")).upper()
+                    if st in ("FILLED", "CANCELED", "EXPIRED", "REJECTED"):
+                        continue
+                    filled_qty = float(getattr(o, "filled_qty", 0.0) or 0.0)
+                    if filled_qty > 0:
+                        # Partial fill: skip auto-fallback to avoid oversizing on notional orders.
+                        continue
+                    clients.trading.cancel_order_by_id(po.id)
+                    req = MarketOrderRequest(
+                        symbol=po.symbol,
+                        notional=round(float(po.notional_usd), 2),
+                        side=OrderSide.BUY if po.side == "buy" else OrderSide.SELL,
+                        time_in_force=TimeInForce.DAY,
+                    )
+                    clients.trading.submit_order(req)
+                    fallback_count += 1
+                except Exception:
+                    continue
+
+            if fallback_count:
+                print(f"Fallback submitted {fallback_count} market replacement orders.")
+        except Exception as e:
+            print(f"[yellow]Fallback warning[/yellow]: {e}")
 
     write_artifact(
         "last_placed_orders.json",

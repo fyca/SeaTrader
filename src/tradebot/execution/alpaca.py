@@ -24,6 +24,7 @@ def place_notional_market_orders(
     use_limit_orders: bool = False,
     limit_offset_bps: float = 10.0,
     ref_price_by_symbol: dict[str, float] | None = None,
+    extended_hours: bool = False,
 ) -> list[PlacedOrder]:
     """Place notional orders (market by default; optional limit with offset)."""
     out: list[PlacedOrder] = []
@@ -48,6 +49,7 @@ def place_notional_market_orders(
                     type=OrderType.LIMIT,
                     time_in_force=TimeInForce.DAY,
                     limit_price=lim,
+                    extended_hours=(extended_hours and ("/" not in pl.symbol)),
                 )
                 o = trading_client.submit_order(req)
                 out.append(

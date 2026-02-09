@@ -115,6 +115,20 @@
             <select id="weeklyRebalanceDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
           </div>
         </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div>
+            <div class="muted" style="font-size:12px;">Enable pre/after-hours (equities)</div>
+            <select id="extendedHoursSelect"><option value="false">No</option><option value="true">Yes</option></select>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Fallback to market at (PT)</div>
+            <input id="fallbackTimeInput" placeholder="06:30" />
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Fallback mode</div>
+            <select id="fallbackEnableSelect"><option value="false">Off</option><option value="true">On (cancel unfilled limits)</option></select>
+          </div>
+        </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
           <div>
             <div class="muted" style="font-size:12px;">Max orders/run</div>
@@ -1221,6 +1235,12 @@ async function main() {
   if (ulo) ulo.value = String(Boolean(cfg.execution?.use_limit_orders));
   const loi = document.getElementById('limitOffsetInput');
   if (loi) loi.value = String(cfg.execution?.limit_offset_bps ?? 10);
+  const ehe = document.getElementById('extendedHoursSelect');
+  if (ehe) ehe.value = String(Boolean(cfg.execution?.extended_hours));
+  const fbe = document.getElementById('fallbackEnableSelect');
+  if (fbe) fbe.value = String(Boolean(cfg.execution?.fallback_to_market_at_open));
+  const fbt = document.getElementById('fallbackTimeInput');
+  if (fbt) fbt.value = String(cfg.execution?.fallback_time_local ?? '06:30');
   const wrd = document.getElementById('weeklyRebalanceDaySelect');
   if (wrd) wrd.value = String(cfg.scheduling?.weekly_rebalance_day || 'MON');
 
@@ -1645,6 +1665,9 @@ async function saveConfig() {
     body.execution.max_total_notional_usd = parseMaybeNone(document.getElementById('maxTotalInput')?.value, false);
     body.execution.use_limit_orders = String(document.getElementById('useLimitOrdersSelect')?.value || 'false') === 'true';
     body.execution.limit_offset_bps = Number(document.getElementById('limitOffsetInput')?.value || '10');
+    body.execution.extended_hours = String(document.getElementById('extendedHoursSelect')?.value || 'false') === 'true';
+    body.execution.fallback_to_market_at_open = String(document.getElementById('fallbackEnableSelect')?.value || 'false') === 'true';
+    body.execution.fallback_time_local = String(document.getElementById('fallbackTimeInput')?.value || '06:30');
     body.scheduling = body.scheduling || {};
     body.scheduling.weekly_rebalance_day = String(document.getElementById('weeklyRebalanceDaySelect')?.value || 'MON').toUpperCase();
 

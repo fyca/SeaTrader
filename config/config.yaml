@@ -15,6 +15,8 @@ risk:
   max_drawdown_freeze: 0.2
   warn_drawdown: 0.1
   per_asset_stop_loss_pct: 0.05
+  portfolio_dd_stop: 0.2
+  dd_stop_behavior: freeze
 signals:
   timeframe: 1D
   lookback_days: 420
@@ -29,14 +31,14 @@ signals:
     vol_lookback: 20
     max_ann_vol: 2.5
 execution:
-  use_limit_orders: false
+  use_limit_orders: true
   limit_offset_bps: 10
   max_orders_per_run: 25
-  max_single_order_notional_usd: 2500.0
-  max_total_notional_usd: 15000.0
+  max_single_order_notional_usd: null
+  max_total_notional_usd: null
 scheduling:
   weekly_rebalance_day: MON
-  weekly_rebalance_time_local: 06:35
+  weekly_rebalance_time_local: 06:00
   daily_risk_check_time_local: '18:05'
   timezone: America/Los_Angeles
 universe:
@@ -45,3 +47,9 @@ universe:
   - QQQ
   crypto_symbols_allowlist: []
   exclude_leveraged_etfs: true
+rebalance:
+  rebalance_mode: target_notional
+  liquidation_mode: liquidate_non_selected
+  symbol_pnl_floor_pct: -0.01
+  symbol_pnl_floor_liquidate: true
+  symbol_pnl_floor_include_unrealized: true

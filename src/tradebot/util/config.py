@@ -49,6 +49,13 @@ class Signals(BaseModel):
 class Execution(BaseModel):
     use_limit_orders: bool = False
     limit_offset_bps: int = 10
+    # Equities: allow pre/after-hours where broker supports it (typically LIMIT DAY)
+    extended_hours: bool = False
+    # If premarket limit orders remain unfilled by fallback_time_local (+grace), cancel and resend market.
+    fallback_to_market_at_open: bool = False
+    fallback_time_local: str = "06:30"
+    fallback_grace_seconds: int = 20
+
     max_orders_per_run: int | None = 25
     max_single_order_notional_usd: float | None = 2500
     max_total_notional_usd: float | None = 15000
