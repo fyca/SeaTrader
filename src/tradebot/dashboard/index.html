@@ -1208,7 +1208,7 @@ function initThemePicker() {
 async function main() {
   initThemePicker();
 
-  const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies, btPresets] = await Promise.all([
+  const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies, btPresets, latestAction] = await Promise.all([
     getJSON('/api/health'),
     getJSON('/api/config'),
     getJSON('/api/account'),
@@ -1221,7 +1221,8 @@ async function main() {
     getJSON('/api/order-summary'),
     getJSON('/api/backtest/jobs?limit=20'),
     getJSON('/api/strategies'),
-    getJSON('/api/backtest/presets')
+    getJSON('/api/backtest/presets'),
+    getJSON('/api/actions/latest?kind=rebalance').catch(()=>({state:'missing'}))
   ]);
 
   const frozen = artifacts.last_account?.payload?.frozen;
@@ -1288,6 +1289,13 @@ async function main() {
   kv(stateEl, 'Peak equity', money(st.peak_equity));
   kv(stateEl, 'Mode', cfg.mode);
   kv(stateEl, 'Dry run (config)', String(cfg.dry_run));
+  const queued = latestAction && latestAction.wait_until_configured && (latestAction.state==='starting' || latestAction.state==='running');
+  kv(stateEl, 'Run-at-time queued', queued ? 'YES' : 'NO');
+  if (queued) {
+    kv(stateEl, 'Queued for', `${latestAction.wait_until || 'configured time'} (${latestAction.state})`);
+  } else {
+    kv(stateEl, 'Run-at-time', 'Click "Run at configured time" to queue');
+  }
 
   // Strategy dropdown (live)
   const stratSel = document.getElementById('strategySelect');

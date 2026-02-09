@@ -467,7 +467,13 @@ def create_app(*, config_path: str) -> FastAPI:
             raise HTTPException(status_code=400, detail="kind must be rebalance or risk-check")
 
         job_id = str(uuid.uuid4())
-        action_jobs[job_id] = {"state": "starting", "kind": kind, "started_at": datetime.now(timezone.utc).isoformat()}
+        action_jobs[job_id] = {
+            "state": "starting",
+            "kind": kind,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "wait_until_configured": wait_until_configured,
+            "place_orders": place_orders,
+        }
 
         def _run():
             try:
@@ -483,6 +489,7 @@ def create_app(*, config_path: str) -> FastAPI:
                             wait_until = getattr(cfg.execution, "extended_hours_start_time_local", None) or getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
                         else:
                             wait_until = getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
+                    action_jobs[job_id]["wait_until"] = wait_until
                     ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=wait_until, preset=preset)
                     rc = int(cmd_rebalance(ns))
                 else:
@@ -502,6 +509,14 @@ def create_app(*, config_path: str) -> FastAPI:
     @app.get("/api/actions/status")
     def action_status(job_id: str):
         return action_jobs.get(job_id) or {"state": "missing"}
+
+    @app.get("/api/actions/latest")
+    def actions_latest(kind: str = "rebalance"):
+        rows = [dict(job_id=k, **v) for k, v in action_jobs.items() if str(v.get("kind")) == str(kind)]
+        if not rows:
+            return {"state": "missing"}
+        rows.sort(key=lambda x: str(x.get("started_at") or ""), reverse=True)
+        return rows[0]
 
     # Backtest (token-gated)
     @app.post("/api/backtest/start")
