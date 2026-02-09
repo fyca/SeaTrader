@@ -235,6 +235,11 @@ Places orders only if:
 - `DRY_RUN=false` and
 - you pass `--place-orders`
 
+Guardrails are configurable in `execution` and now support `null` (unlimited):
+- `max_orders_per_run`
+- `max_single_order_notional_usd`
+- `max_total_notional_usd`
+
 ```bash
 tradebot rebalance --config config/config.yaml --place-orders
 ```

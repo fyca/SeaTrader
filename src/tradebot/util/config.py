@@ -49,9 +49,9 @@ class Signals(BaseModel):
 class Execution(BaseModel):
     use_limit_orders: bool = False
     limit_offset_bps: int = 10
-    max_orders_per_run: int = 25
-    max_single_order_notional_usd: float = 2500
-    max_total_notional_usd: float = 15000
+    max_orders_per_run: int | None = 25
+    max_single_order_notional_usd: float | None = 2500
+    max_total_notional_usd: float | None = 15000
 
 
 class Scheduling(BaseModel):

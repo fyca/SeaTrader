@@ -100,6 +100,22 @@
           <option value="0.16">16%</option><option value="0.17">17%</option><option value="0.18">18%</option><option value="0.19">19%</option><option value="0.20">20%</option>
         </select>
 
+        <div class="muted" style="margin: 10px 0 6px 0;">Execution guardrails (paper/live)</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+          <div>
+            <div class="muted" style="font-size:12px;">Max orders/run</div>
+            <input id="maxOrdersInput" placeholder="25 or none" />
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Max single order $</div>
+            <input id="maxSingleInput" placeholder="2500 or none" />
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Max total/run $</div>
+            <input id="maxTotalInput" placeholder="15000 or none" />
+          </div>
+        </div>
+
         <div class="muted" style="margin: 10px 0 6px 0;">Config (JSON) — edit and save</div>
         <textarea id="configEditor" style="width:100%; height:160px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px;"></textarea>
         <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
@@ -1161,6 +1177,16 @@ async function main() {
     slSel.value = (v===null || v===undefined) ? '' : String(v);
   }
 
+  // Guardrail inputs
+  const setGuard = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = (v===null || v===undefined) ? 'none' : String(v);
+  };
+  setGuard('maxOrdersInput', cfg.execution?.max_orders_per_run);
+  setGuard('maxSingleInput', cfg.execution?.max_single_order_notional_usd);
+  setGuard('maxTotalInput', cfg.execution?.max_total_notional_usd);
+
   // Config editor
   const editor = document.getElementById('configEditor');
   if (editor && (!editor.value || editor.dataset.loaded !== '1')) {
@@ -1548,6 +1574,18 @@ async function saveConfig() {
     const sl = document.getElementById('stopLossSelect')?.value;
     body.risk = body.risk || {};
     body.risk.per_asset_stop_loss_pct = sl ? Number(sl) : null;
+
+    const parseMaybeNone = (v, isInt=false) => {
+      const s = String(v ?? '').trim().toLowerCase();
+      if (!s || s === 'none' || s === 'null' || s === 'unlimited' || s === '∞') return null;
+      const n = isInt ? parseInt(s, 10) : Number(s);
+      return Number.isFinite(n) ? n : null;
+    };
+    body.execution = body.execution || {};
+    body.execution.max_orders_per_run = parseMaybeNone(document.getElementById('maxOrdersInput')?.value, true);
+    body.execution.max_single_order_notional_usd = parseMaybeNone(document.getElementById('maxSingleInput')?.value, false);
+    body.execution.max_total_notional_usd = parseMaybeNone(document.getElementById('maxTotalInput')?.value, false);
+
     status.textContent = 'saving…';
     const r = await fetch('/api/config' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
       method: 'POST',
