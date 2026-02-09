@@ -35,6 +35,13 @@ def create_app(*, config_path: str) -> FastAPI:
     app = FastAPI(title="tradebot dashboard")
     action_jobs: dict[str, dict] = {}
     schedule_state: dict[str, object] = {
+        "rebalance_weekly_enabled": False,
+        "rebalance_started_at": None,
+        "rebalance_next_run": None,
+        "rebalance_last_run": None,
+        "rebalance_last_state": None,
+        "rebalance_last_error": None,
+
         "risk_daily_enabled": False,
         "risk_daily_started_at": None,
         "risk_next_run": None,
@@ -473,6 +480,61 @@ def create_app(*, config_path: str) -> FastAPI:
             target = target + timedelta(days=1)
         return (target - now).total_seconds(), target.isoformat()
 
+    def _seconds_until_weekly(day_name: str, hhmm: str, tz_name: str) -> tuple[float, str]:
+        from zoneinfo import ZoneInfo
+
+        day_map = {"MON":0, "TUE":1, "WED":2, "THU":3, "FRI":4, "SAT":5, "SUN":6}
+        wd = day_map.get(str(day_name).upper(), 0)
+        tz = ZoneInfo(tz_name)
+        now = datetime.now(tz)
+        hh, mm = [int(x) for x in str(hhmm).split(":")]
+        target = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        delta_days = (wd - now.weekday()) % 7
+        if delta_days == 0 and target <= now:
+            delta_days = 7
+        target = target + timedelta(days=delta_days)
+        return (target - now).total_seconds(), target.isoformat()
+
+    def _ensure_weekly_rebalance_scheduler(preset, place_orders: bool = True):
+        if bool(schedule_state.get("rebalance_weekly_enabled")):
+            return
+
+        schedule_state["rebalance_weekly_enabled"] = True
+        schedule_state["rebalance_started_at"] = datetime.now(timezone.utc).isoformat()
+
+        def _loop():
+            from tradebot.cli import cmd_rebalance
+
+            while bool(schedule_state.get("rebalance_weekly_enabled")):
+                try:
+                    cfg = load_config(config_path, preset_override=preset)
+                    tz_name = str(getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
+                    day_name = str(getattr(cfg.scheduling, "weekly_rebalance_day", "MON"))
+                    if bool(getattr(cfg.execution, "extended_hours", False)):
+                        hhmm = str(getattr(cfg.execution, "extended_hours_start_time_local", None) or getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35"))
+                    else:
+                        hhmm = str(getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35"))
+
+                    sec, when_iso = _seconds_until_weekly(day_name, hhmm, tz_name)
+                    schedule_state["rebalance_next_run"] = when_iso
+                    import time as _time
+                    _time.sleep(max(1.0, sec))
+                    if not bool(schedule_state.get("rebalance_weekly_enabled")):
+                        break
+
+                    rc = int(cmd_rebalance(argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset)))
+                    schedule_state["rebalance_last_run"] = datetime.now(timezone.utc).isoformat()
+                    schedule_state["rebalance_last_state"] = "done" if rc == 0 else f"rc={rc}"
+                    schedule_state["rebalance_last_error"] = None
+                except Exception as e:
+                    schedule_state["rebalance_last_run"] = datetime.now(timezone.utc).isoformat()
+                    schedule_state["rebalance_last_state"] = "error"
+                    schedule_state["rebalance_last_error"] = str(e)
+                    import time as _time
+                    _time.sleep(5)
+
+        threading.Thread(target=_loop, daemon=True).start()
+
     def _ensure_daily_risk_scheduler(preset):
         if bool(schedule_state.get("risk_daily_enabled")):
             return
@@ -537,18 +599,16 @@ def create_app(*, config_path: str) -> FastAPI:
 
                 action_jobs[job_id]["state"] = "running"
                 if kind == "rebalance":
-                    wait_until = None
                     if wait_until_configured:
-                        cfg = load_config(config_path, preset_override=preset)
-                        if bool(getattr(cfg.execution, "extended_hours", False)):
-                            wait_until = getattr(cfg.execution, "extended_hours_start_time_local", None) or getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
-                        else:
-                            wait_until = getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
-                    action_jobs[job_id]["wait_until"] = wait_until
-                    if wait_until_configured and queue_daily_risk_check:
-                        _ensure_daily_risk_scheduler(preset)
-                    ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=wait_until, preset=preset)
-                    rc = int(cmd_rebalance(ns))
+                        # queue persistent weekly scheduler instead of one-shot sleep/run
+                        _ensure_weekly_rebalance_scheduler(preset, place_orders=place_orders)
+                        if queue_daily_risk_check:
+                            _ensure_daily_risk_scheduler(preset)
+                        action_jobs[job_id]["wait_until"] = "configured schedule"
+                        rc = 0
+                    else:
+                        ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset)
+                        rc = int(cmd_rebalance(ns))
                 else:
                     ns = argparse.Namespace(config=config_path, preset=preset)
                     rc = int(cmd_risk_check(ns))
