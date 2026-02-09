@@ -1265,6 +1265,14 @@ async function main() {
     ['Day Δ cash', acct.day_change_cash==null ? '—' : money(acct.day_change_cash)],
   ]);
 
+  mkBlock('Risk / Restrictions', [
+    ['PDT', String(Boolean(acct.pattern_day_trader))],
+    ['Trading blocked', String(Boolean(acct.trading_blocked))],
+    ['Transfers blocked', String(Boolean(acct.transfers_blocked))],
+    ['Account blocked', String(Boolean(acct.account_blocked))],
+    ['Shorting enabled', String(Boolean(acct.shorting_enabled))],
+  ]);
+
   mkBlock('Buying Power & Margin', [
     ['Portfolio value', money(acct.portfolio_value)],
     ['Buying power', money(acct.buying_power)],
@@ -1273,14 +1281,6 @@ async function main() {
     ['Initial margin', money(acct.initial_margin)],
     ['Maintenance margin', money(acct.maintenance_margin)],
     ['SMA', money(acct.sma)],
-  ]);
-
-  mkBlock('Risk / Restrictions', [
-    ['PDT', String(Boolean(acct.pattern_day_trader))],
-    ['Trading blocked', String(Boolean(acct.trading_blocked))],
-    ['Transfers blocked', String(Boolean(acct.transfers_blocked))],
-    ['Account blocked', String(Boolean(acct.account_blocked))],
-    ['Shorting enabled', String(Boolean(acct.shorting_enabled))],
   ]);
 
   const stateEl = document.getElementById('state');
