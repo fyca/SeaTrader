@@ -12,6 +12,9 @@ class PlacedOrder:
     side: str
     notional_usd: float
     id: str
+    order_type: str
+    expected_price: float | None = None
+    limit_price: float | None = None
 
 
 def place_notional_market_orders(
@@ -47,7 +50,17 @@ def place_notional_market_orders(
                     limit_price=lim,
                 )
                 o = trading_client.submit_order(req)
-                out.append(PlacedOrder(symbol=pl.symbol, side=pl.side, notional_usd=float(pl.notional_usd), id=str(getattr(o, "id", ""))))
+                out.append(
+                    PlacedOrder(
+                        symbol=pl.symbol,
+                        side=pl.side,
+                        notional_usd=float(pl.notional_usd),
+                        id=str(getattr(o, "id", "")),
+                        order_type="limit",
+                        expected_price=ref,
+                        limit_price=lim,
+                    )
+                )
                 continue
 
         req = MarketOrderRequest(
@@ -57,5 +70,15 @@ def place_notional_market_orders(
             time_in_force=TimeInForce.DAY,
         )
         o = trading_client.submit_order(req)
-        out.append(PlacedOrder(symbol=pl.symbol, side=pl.side, notional_usd=float(pl.notional_usd), id=str(getattr(o, "id", ""))))
+        out.append(
+            PlacedOrder(
+                symbol=pl.symbol,
+                side=pl.side,
+                notional_usd=float(pl.notional_usd),
+                id=str(getattr(o, "id", "")),
+                order_type="market",
+                expected_price=(ref_price_by_symbol.get(pl.symbol) if pl.symbol in ref_price_by_symbol else None),
+                limit_price=None,
+            )
+        )
     return out

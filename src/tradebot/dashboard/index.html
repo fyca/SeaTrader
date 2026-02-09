@@ -1497,10 +1497,14 @@ async function main() {
   // Recent fills
   const rf = document.getElementById('recentFills');
   rf.innerHTML = '';
+  const placedById = new Map((artifacts.last_placed_orders?.payload?.orders || []).map(o => [String(o.id||''), o]));
   for (const o of (recentFills || [])) {
     const tr = document.createElement('tr');
     const fill = (o.filled_avg_price!==null && o.filled_avg_price!==undefined && o.filled_avg_price !== '') ? Number(o.filled_avg_price) : null;
-    const exp = (o.limit_price!==null && o.limit_price!==undefined && o.limit_price !== '') ? Number(o.limit_price) : null;
+    const placed = placedById.get(String(o.id||'')) || null;
+    const exp = (o.limit_price!==null && o.limit_price!==undefined && o.limit_price !== '')
+      ? Number(o.limit_price)
+      : ((placed && placed.expected_price!=null) ? Number(placed.expected_price) : null);
     const fillTxt = (fill!=null) ? ('$' + fill.toFixed(4)) : '—';
     const expTxt = (exp!=null) ? ('$' + exp.toFixed(4)) : '—';
     let slipTxt = '—';
