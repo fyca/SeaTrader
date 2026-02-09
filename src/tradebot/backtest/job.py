@@ -121,6 +121,23 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             def prog(done, total):
                 _write(status_path, {"state": "running", "progress": done, "total": total})
 
+            intraday_cb = None
+            if getattr(p, "execution_time_mode", "daily") == "intraday":
+                from tradebot.backtest.intraday import IntradayPriceProvider
+
+                prov = IntradayPriceProvider(
+                    stocks_client=clients.stocks,
+                    crypto_client=clients.crypto,
+                    exec_time_local=p.execution_time_local,
+                    tz=p.execution_tz,
+                )
+                # Only apply intraday pricing on rebalance days
+                # (engine calls exec_px in multiple contexts; this keeps it scoped)
+                def intraday_cb(sym, day):
+                    if day not in set([d for d in pd.date_range(pd.to_datetime(p.start), pd.to_datetime(p.end), freq='D') if (p.rebalance=='daily' or d.weekday()==0)]):
+                        return None
+                    return prov.price(sym, day)
+
             res = run_backtest(
                 stock_bars=stock_bars,
                 crypto_bars=crypto_bars,
@@ -129,6 +146,7 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                 cfg=cfg,
                 params=p,
                 progress_cb=prog,
+                intraday_price_cb=intraday_cb,
             )
 
             _write(result_path, {"job_id": job_id, **asdict(res)})

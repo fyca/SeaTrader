@@ -171,11 +171,22 @@
               <select id="btStrategy" style="width:260px;"></select>
             </div>
             <div>
+              <div class="muted">Execution mode</div>
+              <select id="btExecMode" style="width:180px;">
+                <option value="daily" selected>Daily (open/close)</option>
+                <option value="intraday">Intraday (1m bars)</option>
+              </select>
+            </div>
+            <div>
               <div class="muted">Execution time</div>
               <select id="btExecTime" style="width:160px;">
                 <option value="open">Morning (open)</option>
                 <option value="close" selected>Evening (close)</option>
               </select>
+            </div>
+            <div>
+              <div class="muted">Intraday time (PT)</div>
+              <input id="btExecLocal" placeholder="HH:MM" value="15:55" style="width:120px;" />
             </div>
             <div>
               <div class="muted">Assets</div>
@@ -561,7 +572,10 @@ async function runBacktest() {
   const start = document.getElementById('btStart')?.value;
   const end = document.getElementById('btEnd')?.value;
   const strategy_id = (document.getElementById('btStrategy')?.value || 'baseline_trendvol');
+  const execution_time_mode = (document.getElementById('btExecMode')?.value || 'daily');
   const execution_time = (document.getElementById('btExecTime')?.value || 'close');
+  const execution_time_local = (document.getElementById('btExecLocal')?.value || '15:55');
+  const execution_tz = 'America/Los_Angeles';
   const asset_mode = (document.getElementById('btAssets')?.value || 'both');
   const rebalance = (document.getElementById('btRebalance')?.value || 'weekly');
   const rebalance_mode = (document.getElementById('btRebalanceMode')?.value || 'target_notional');
@@ -579,7 +593,7 @@ async function runBacktest() {
   const ddStopRaw = ddCustom || ddPreset;
   const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
   status.textContent = 'starting…';
-  const body = {start, end, slippage_bps, initial_equity: 100000, strategy_id, execution_time, asset_mode, rebalance, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
+  const body = {start, end, slippage_bps, initial_equity: 100000, strategy_id, execution_time_mode, execution_time, execution_time_local, execution_tz, asset_mode, rebalance, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
   const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -1246,7 +1260,10 @@ async function main() {
 
     return {
       strategy_id: (document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
+      execution_time_mode: (document.getElementById('btExecMode')?.value || 'daily'),
       execution_time: (document.getElementById('btExecTime')?.value || 'close'),
+      execution_time_local: (document.getElementById('btExecLocal')?.value || '15:55'),
+      execution_tz: 'America/Los_Angeles',
       asset_mode: (document.getElementById('btAssets')?.value || 'both'),
       rebalance: (document.getElementById('btRebalance')?.value || 'weekly'),
       rebalance_mode: (document.getElementById('btRebalanceMode')?.value || 'target_notional'),
@@ -1264,7 +1281,9 @@ async function main() {
     if (!p) return;
     const setVal = (id, v) => { const el=document.getElementById(id); if(el && v!==undefined && v!==null) el.value=String(v); };
     setVal('btStrategy', p.strategy_id);
+    setVal('btExecMode', p.execution_time_mode);
     setVal('btExecTime', p.execution_time);
+    setVal('btExecLocal', p.execution_time_local);
     setVal('btAssets', p.asset_mode);
     setVal('btRebalance', p.rebalance);
     setVal('btRebalanceMode', p.rebalance_mode);

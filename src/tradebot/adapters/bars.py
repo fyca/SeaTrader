@@ -48,6 +48,23 @@ def fetch_stock_bars_range(
     return out
 
 
+def fetch_stock_bars_range_1m(
+    stocks_client,
+    symbols: list[str],
+    *,
+    start: datetime,
+    end: datetime,
+) -> dict[str, pd.DataFrame]:
+    # IEX feed for equities
+    req = StockBarsRequest(symbol_or_symbols=symbols, timeframe=TimeFrame.Minute, start=start, end=end, feed=DataFeed.IEX)
+    resp = stocks_client.get_stock_bars(req)
+    df = resp.df if hasattr(resp, "df") else resp
+    out: dict[str, pd.DataFrame] = {}
+    for sym in symbols:
+        out[sym] = _to_frame(df, sym)
+    return out
+
+
 def fetch_stock_bars(stocks_client, symbols: list[str], *, lookback_days: int) -> dict[str, pd.DataFrame]:
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=lookback_days)
@@ -76,6 +93,22 @@ def fetch_crypto_bars_range(
     resp = crypto_client.get_crypto_bars(req)
     df = resp.df if hasattr(resp, "df") else resp
 
+    out: dict[str, pd.DataFrame] = {}
+    for sym in symbols:
+        out[sym] = _to_frame(df, sym)
+    return out
+
+
+def fetch_crypto_bars_range_1m(
+    crypto_client,
+    symbols: list[str],
+    *,
+    start: datetime,
+    end: datetime,
+) -> dict[str, pd.DataFrame]:
+    req = CryptoBarsRequest(symbol_or_symbols=symbols, timeframe=TimeFrame.Minute, start=start, end=end)
+    resp = crypto_client.get_crypto_bars(req)
+    df = resp.df if hasattr(resp, "df") else resp
     out: dict[str, pd.DataFrame] = {}
     for sym in symbols:
         out[sym] = _to_frame(df, sym)

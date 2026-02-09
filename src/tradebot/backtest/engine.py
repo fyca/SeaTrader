@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Callable, Literal
 
 import numpy as np
 import pandas as pd
@@ -18,8 +18,15 @@ class BacktestParams:
     initial_equity: float = 100000.0
     slippage_bps: float = 10.0
     rebalance: Literal["weekly", "daily"] = "weekly"
-    # Trade execution time within the day (affects pricing only; chart remains daily)
-    execution_time: Literal["open", "close"] = "close"
+
+    # Execution pricing options
+    # - daily mode: uses daily open/close as before
+    # - intraday mode: fetches minute bars on rebalance days and prices at execution_time_local
+    execution_time_mode: Literal["daily", "intraday"] = "daily"
+    execution_time: Literal["open", "close"] = "close"  # daily mode only
+    execution_time_local: str = "15:55"  # intraday mode only
+    execution_tz: str = "America/Los_Angeles"
+
     strategy_id: str = "baseline_trendvol"
     asset_mode: Literal["both", "equities", "crypto"] = "both"
     rebalance_mode: Literal["target_notional", "no_add_to_losers"] = "target_notional"
@@ -88,6 +95,7 @@ def run_backtest(
     cfg,
     params: BacktestParams,
     progress_cb=None,
+    intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
 ) -> BacktestResult:
     """Simple long-only backtest using daily closes.
 
@@ -173,7 +181,14 @@ def run_backtest(
         return v if np.isfinite(v) and v > 0 else None
 
     def exec_px(sym: str, day: pd.Timestamp) -> float | None:
-        # open if requested; fallback to close
+        # Intraday execution pricing (rebalance only)
+        if params.execution_time_mode == "intraday" and intraday_price_cb is not None:
+            # only used for rebalance days; other code paths still call exec_px but will fall back
+            v = intraday_price_cb(sym, day)
+            if v is not None:
+                return v
+
+        # Daily execution pricing
         if params.execution_time == "open":
             v = px_open(sym, day)
             if v is not None:

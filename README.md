@@ -362,6 +362,8 @@ High-impact next steps:
 - “Explain why entry/exit passed/failed” (per-condition evaluation output)
 
 ### Backtesting
+- Intraday execution time for **rebalance trades** (minute bars) (in progress)
+- Expand intraday execution to stop-loss exits + exclusion liquidations
 - Extend benchmark options and robust comparisons
 - Performance refactor: precompute rolling indicators per symbol to speed large sweeps
 - Better walk-forward testing / cross-validation
