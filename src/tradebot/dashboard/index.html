@@ -1110,10 +1110,19 @@ async function renderBacktest(res) {
       const detail = document.createElement('tr');
       detail.style.display = 'none';
       const rowsHtml = evs.length ? evs.slice().sort((a,b)=>String(a.type||'').localeCompare(String(b.type||''))).map(e=>{
-        const qty = (e.qty!=null) ? Number(e.qty).toFixed(6) : '—';
+        const t = String(e.type||'').toLowerCase();
+        let expPxNum = null;
+        if (e.expected_price!=null) expPxNum = Number(e.expected_price);
+        if ((expPxNum==null || !Number.isFinite(expPxNum)) && e.limit_px!=null) expPxNum = Number(e.limit_px);
+        if ((expPxNum==null || !Number.isFinite(expPxNum)) && String(e.reason||'')==='limit_fill' && e.price!=null) expPxNum = Number(e.price);
+
+        let qtyNum = (e.qty!=null) ? Number(e.qty) : null;
+        if ((qtyNum==null || !Number.isFinite(qtyNum)) && e.notional!=null && expPxNum!=null && expPxNum>0) {
+          qtyNum = Number(e.notional) / expPxNum;
+        }
+
+        const qty = (qtyNum!=null && Number.isFinite(qtyNum)) ? qtyNum.toFixed(6) : '—';
         const px = (e.price!=null) ? ('$' + Number(e.price).toFixed(6)) : '—';
-        let expPxNum = (e.expected_price!=null) ? Number(e.expected_price) : null;
-        if (expPxNum==null && String(e.reason||'')==='limit_fill' && e.price!=null) expPxNum = Number(e.price);
         const expPx = (expPxNum!=null && Number.isFinite(expPxNum)) ? ('$' + expPxNum.toFixed(6)) : '—';
         const notional = (e.notional!=null) ? money(e.notional) : '—';
         const pnl = (e.pnl!=null) ? money(e.pnl) : '—';
