@@ -281,6 +281,7 @@ Dashboard highlights:
 - Backtesting UI (run + history + charts)
 - Strategy dropdown and a button to open the Strategy Builder
 - Action buttons: **Run paper rebalance**, **Run at configured time**, and **Run risk-check** (token-gated if enabled)
+- Extended-hours start time is configurable via `execution.extended_hours_start_time_local` (used by "Run at configured time" when extended-hours is enabled)
 
 ### Dashboard auth token
 Token gating can be enabled/disabled via env/config:

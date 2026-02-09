@@ -115,18 +115,22 @@
             <select id="weeklyRebalanceDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
           </div>
         </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
           <div>
             <div class="muted" style="font-size:12px;">Enable pre/after-hours (equities)</div>
             <select id="extendedHoursSelect"><option value="false">No</option><option value="true">Yes</option></select>
           </div>
           <div>
-            <div class="muted" style="font-size:12px;">Fallback to market at (PT)</div>
-            <input id="fallbackTimeInput" placeholder="06:30" />
+            <div class="muted" style="font-size:12px;">Extended-hours start time (PT)</div>
+            <input id="extendedStartTimeInput" placeholder="06:00" />
           </div>
           <div>
             <div class="muted" style="font-size:12px;">Fallback mode</div>
             <select id="fallbackEnableSelect"><option value="false">Off</option><option value="true">On (cancel unfilled limits)</option></select>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Fallback to market at (PT)</div>
+            <input id="fallbackTimeInput" placeholder="06:30" />
           </div>
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
@@ -1239,6 +1243,8 @@ async function main() {
   if (ehe) ehe.value = String(Boolean(cfg.execution?.extended_hours));
   const fbe = document.getElementById('fallbackEnableSelect');
   if (fbe) fbe.value = String(Boolean(cfg.execution?.fallback_to_market_at_open));
+  const est = document.getElementById('extendedStartTimeInput');
+  if (est) est.value = String(cfg.execution?.extended_hours_start_time_local ?? '06:00');
   const fbt = document.getElementById('fallbackTimeInput');
   if (fbt) fbt.value = String(cfg.execution?.fallback_time_local ?? '06:30');
   const wrd = document.getElementById('weeklyRebalanceDaySelect');
@@ -1666,6 +1672,7 @@ async function saveConfig() {
     body.execution.use_limit_orders = String(document.getElementById('useLimitOrdersSelect')?.value || 'false') === 'true';
     body.execution.limit_offset_bps = Number(document.getElementById('limitOffsetInput')?.value || '10');
     body.execution.extended_hours = String(document.getElementById('extendedHoursSelect')?.value || 'false') === 'true';
+    body.execution.extended_hours_start_time_local = String(document.getElementById('extendedStartTimeInput')?.value || '06:00');
     body.execution.fallback_to_market_at_open = String(document.getElementById('fallbackEnableSelect')?.value || 'false') === 'true';
     body.execution.fallback_time_local = String(document.getElementById('fallbackTimeInput')?.value || '06:30');
     body.scheduling = body.scheduling || {};

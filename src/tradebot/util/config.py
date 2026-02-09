@@ -55,6 +55,8 @@ class Execution(BaseModel):
     fallback_to_market_at_open: bool = False
     fallback_time_local: str = "06:30"
     fallback_grace_seconds: int = 20
+    # Start time for extended-hours rebalance run (PT by default via scheduling.timezone)
+    extended_hours_start_time_local: str = "06:00"
 
     max_orders_per_run: int | None = 25
     max_single_order_notional_usd: float | None = 2500

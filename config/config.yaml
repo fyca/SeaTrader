@@ -33,6 +33,10 @@ signals:
 execution:
   use_limit_orders: true
   limit_offset_bps: 10
+  extended_hours: true
+  fallback_to_market_at_open: false
+  fallback_time_local: 06:30
+  fallback_grace_seconds: 20
   max_orders_per_run: 25
   max_single_order_notional_usd: null
   max_total_notional_usd: null

@@ -441,7 +441,10 @@ def create_app(*, config_path: str) -> FastAPI:
                     wait_until = None
                     if wait_until_configured:
                         cfg = load_config(config_path, preset_override=preset)
-                        wait_until = getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
+                        if bool(getattr(cfg.execution, "extended_hours", False)):
+                            wait_until = getattr(cfg.execution, "extended_hours_start_time_local", None) or getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
+                        else:
+                            wait_until = getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
                     ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=wait_until, preset=preset)
                     rc = int(cmd_rebalance(ns))
                 else:
