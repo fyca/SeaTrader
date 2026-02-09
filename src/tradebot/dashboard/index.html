@@ -1297,16 +1297,26 @@ async function main() {
   kv(stateEl, 'Peak equity', money(st.peak_equity));
   kv(stateEl, 'Mode', cfg.mode);
   kv(stateEl, 'Dry run (config)', String(cfg.dry_run));
-  const queued = Boolean(scheduleStatus?.rebalance_weekly_enabled);
+  const cronReb = Boolean(cronStatus?.rebalance_enabled);
+  const cronRisk = Boolean(cronStatus?.risk_enabled);
+
+  // If cron is enabled, treat queue flags as true and show cron schedule.
+  const queued = cronReb || Boolean(scheduleStatus?.rebalance_weekly_enabled);
   kv(stateEl, 'Run-at-time queued', queued ? 'YES' : 'NO');
-  if (queued) {
+  if (cronReb && cronStatus?.rebalance_schedule) {
+    kv(stateEl, 'Rebalance schedule', `${cronStatus.rebalance_schedule.day} ${cronStatus.rebalance_schedule.hhmm} (cron)`);
+  } else if (queued) {
     kv(stateEl, 'Rebalance next run', scheduleStatus?.rebalance_next_run || '—');
     kv(stateEl, 'Rebalance scheduler', (scheduleStatus?.rebalance_last_state || 'running') + (scheduleStatus?.rebalance_last_error ? (' • ' + scheduleStatus.rebalance_last_error) : ''));
   } else {
     kv(stateEl, 'Run-at-time', 'Click "Run at configured time" to queue');
   }
-  kv(stateEl, 'Daily risk-check queued', scheduleStatus?.risk_daily_enabled ? 'YES' : 'NO');
-  if (scheduleStatus?.risk_daily_enabled) {
+
+  const riskQueued = cronRisk || Boolean(scheduleStatus?.risk_daily_enabled);
+  kv(stateEl, 'Daily risk-check queued', riskQueued ? 'YES' : 'NO');
+  if (cronRisk && cronStatus?.risk_schedule) {
+    kv(stateEl, 'Risk schedule', `${cronStatus.risk_schedule.hhmm} daily (cron)`);
+  } else if (scheduleStatus?.risk_daily_enabled) {
     kv(stateEl, 'Risk next run', scheduleStatus?.risk_next_run || '—');
     kv(stateEl, 'Risk scheduler', (scheduleStatus?.risk_last_state || 'running') + (scheduleStatus?.risk_last_error ? (' • ' + scheduleStatus.risk_last_error) : ''));
   }

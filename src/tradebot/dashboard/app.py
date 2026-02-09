@@ -666,7 +666,31 @@ def create_app(*, config_path: str) -> FastAPI:
         lines = _cron_get_lines()
         reb = [ln for ln in lines if CRON_TAG_REB in ln]
         risk = [ln for ln in lines if CRON_TAG_RISK in ln]
-        return {"ok": True, "enabled": bool(reb or risk), "rebalance": reb, "risk": risk}
+
+        def _sched(line: str):
+            try:
+                p = line.split()
+                if len(p) < 5:
+                    return None
+                mm, hh, _dom, _mon, dow = p[:5]
+                dow_map = {"0":"SUN","1":"MON","2":"TUE","3":"WED","4":"THU","5":"FRI","6":"SAT"}
+                day = dow_map.get(str(dow), str(dow))
+                return {"hhmm": f"{int(hh):02d}:{int(mm):02d}", "day": day}
+            except Exception:
+                return None
+
+        reb_s = _sched(reb[0]) if reb else None
+        risk_s = _sched(risk[0]) if risk else None
+        return {
+            "ok": True,
+            "enabled": bool(reb or risk),
+            "rebalance": reb,
+            "risk": risk,
+            "rebalance_enabled": bool(reb),
+            "risk_enabled": bool(risk),
+            "rebalance_schedule": reb_s,
+            "risk_schedule": risk_s,
+        }
 
     @app.post("/api/scheduler/cron/setup")
     async def cron_setup(req: Request):
