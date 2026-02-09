@@ -5,34 +5,66 @@ from typing import Any
 
 import yaml
 
-PRESETS_PATH = Path("config/backtest_presets.yaml")
+# NOTE: Backtest UI uses unified presets file now (config/presets.yaml).
+# We keep a thin wrapper here for backwards compatibility with existing endpoints.
+from tradebot.util.presets import PRESETS_PATH
 
 
 def load_presets() -> list[dict]:
-    if not PRESETS_PATH.exists():
-        return []
-    data = yaml.safe_load(PRESETS_PATH.read_text()) or {}
-    return list(data.get("presets") or [])
+    from tradebot.util.presets import load_presets as _lp
+
+    # For backtest UI, return legacy shape: {name, params}
+    out = []
+    for p in _lp():
+        out.append({"name": p.get("name"), "params": p.get("backtest") or {}})
+    return out
+
+
+def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
+    """Map backtest params -> live config patch for overlapping knobs."""
+    params = params or {}
+    bot: dict[str, Any] = {}
+
+    if params.get("strategy_id"):
+        bot["strategy_id"] = params.get("strategy_id")
+
+    # stop loss is shared
+    if params.get("per_asset_stop_loss_pct") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["per_asset_stop_loss_pct"] = params.get("per_asset_stop_loss_pct")
+
+    # execution timing mapping (best-effort): sets the time our unattended rebalance should run.
+    # This does NOT change pricing/fills in live; it just schedules when the CLI executes.
+    exec_mode = params.get("execution_time_mode") or "daily"
+    if exec_mode == "intraday":
+        t = params.get("execution_time_local")
+        if t:
+            bot.setdefault("scheduling", {})
+            bot["scheduling"]["weekly_rebalance_time_local"] = str(t)
+            bot["scheduling"]["timezone"] = str(params.get("execution_tz") or "America/Los_Angeles")
+    else:
+        # daily open/close approximation
+        et = params.get("execution_time") or "close"
+        bot.setdefault("scheduling", {})
+        if et == "open":
+            bot["scheduling"]["weekly_rebalance_time_local"] = "06:35"  # ~09:35 ET
+        else:
+            bot["scheduling"]["weekly_rebalance_time_local"] = "12:55"  # ~15:55 ET
+        bot["scheduling"]["timezone"] = "America/Los_Angeles"
+
+    return bot
 
 
 def save_preset(name: str, params: dict[str, Any]) -> None:
-    name = str(name).strip()
-    if not name:
-        raise ValueError("missing preset name")
+    # Backtest UI save: persists as unified preset {bot, backtest}
+    from tradebot.util.presets import save_preset as _sp
 
-    presets = load_presets()
-    # replace if exists
-    out = [p for p in presets if str(p.get("name")) != name]
-    out.append({"name": name, "params": params})
-    # stable sort by name
-    out.sort(key=lambda x: str(x.get("name") or ""))
-
-    PRESETS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PRESETS_PATH.write_text(yaml.safe_dump({"presets": out}, sort_keys=False))
+    bot_patch = _bt_to_bot_patch(params)
+    _sp(name=name, bot=bot_patch, backtest=params)
 
 
 def get_preset(name: str) -> dict | None:
     for p in load_presets():
-        if str(p.get("name")) == name:
+        if str(p.get("name")) == str(name):
             return p
     return None

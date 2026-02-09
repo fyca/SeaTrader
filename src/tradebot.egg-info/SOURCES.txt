@@ -47,4 +47,5 @@ src/tradebot/util/artifacts.py
 src/tradebot/util/config.py
 src/tradebot/util/env.py
 src/tradebot/util/equity_curve.py
+src/tradebot/util/presets.py
 src/tradebot/util/state.py

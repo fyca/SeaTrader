@@ -17,7 +17,7 @@ from tradebot.util.equity_curve import append_equity_point
 
 
 def cmd_risk_check(args: argparse.Namespace) -> int:
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
     env = load_env()
     clients = make_alpaca_clients(env)
 

@@ -62,6 +62,10 @@ class Universe(BaseModel):
 
 
 class BotConfig(BaseModel):
+    # Optional unified preset name. When set, the preset's `bot` patch is merged
+    # on top of this YAML before validation.
+    active_preset: str | None = None
+
     mode: Literal["paper", "live"] = "paper"
     strategy_id: str = "baseline_trendvol"
     dry_run: bool = True
@@ -74,7 +78,32 @@ class BotConfig(BaseModel):
     universe: Universe = Universe()
 
 
-def load_config(path: str | Path) -> BotConfig:
+def _deep_merge(a: dict, b: dict) -> dict:
+    """Return deep merge of a <- b (b wins)."""
+    out = dict(a or {})
+    for k, v in (b or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out.get(k) or {}, v)
+        else:
+            out[k] = v
+    return out
+
+
+def load_config(path: str | Path, *, preset_override: str | None = None) -> BotConfig:
     path = Path(path)
-    data = yaml.safe_load(path.read_text())
+    data = yaml.safe_load(path.read_text()) or {}
+
+    # Apply unified preset patch (if configured)
+    preset_name = preset_override or data.get("active_preset")
+    if preset_name:
+        try:
+            from tradebot.util.presets import get_preset
+
+            p = get_preset(str(preset_name))
+            if p and isinstance(p.get("bot"), dict):
+                data = _deep_merge(data, p.get("bot") or {})
+        except Exception:
+            # preset loading failure should not crash bot; continue with base config
+            pass
+
     return BotConfig.model_validate(data)

@@ -519,26 +519,16 @@ def create_app(*, config_path: str) -> FastAPI:
             return {"ok": False, "error": "unknown preset"}
         params = p.get("params") or {}
 
-        # Apply overlapping params to live config
-        # (Backtest has more knobs than live; we only map safe overlaps.)
+        # Unified preset application: set config.active_preset.
+        # The bot config loader merges preset.bot on top of config/config.yaml.
         from pathlib import Path
         import yaml
 
         cfg_path = Path(config_path)
         cfg = yaml.safe_load(cfg_path.read_text()) or {}
-
-        if params.get("strategy_id"):
-            cfg["strategy_id"] = params.get("strategy_id")
-
-        if params.get("per_asset_stop_loss_pct") is not None:
-            cfg.setdefault("risk", {})
-            cfg["risk"]["per_asset_stop_loss_pct"] = params.get("per_asset_stop_loss_pct")
-
-        # Optional: map backtest portfolio_dd_stop to live freeze threshold if user wants
-        # (not done automatically; different semantics).
-
+        cfg["active_preset"] = name
         cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
-        return {"ok": True}
+        return {"ok": True, "active_preset": name}
 
     @app.post("/api/backtest/clear-cache")
     async def backtest_clear_cache(req: Request):

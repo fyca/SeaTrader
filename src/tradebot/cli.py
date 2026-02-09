@@ -26,7 +26,8 @@ from tradebot.util.equity_curve import append_equity_point
 
 
 def cmd_rebalance(args: argparse.Namespace) -> int:
-    cfg = load_config(args.config)
+    # Optional preset override
+    cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
 
     # Optional unattended scheduling: wait until configured/local time (rebalance only).
     if args.wait_until is not None:
@@ -231,10 +232,12 @@ def main() -> int:
         default=None,
         help="Optional local time HH:MM to sleep until before running (uses config.scheduling.timezone). Useful for unattended open/close runs.",
     )
+    pr.add_argument("--preset", default=None, help="Override config.active_preset for this run")
     pr.set_defaults(func=cmd_rebalance)
 
     pc = sub.add_parser("risk-check", help="Run drawdown/freeze check (no trades)")
     pc.add_argument("--config", default=str(Path("config/config.yaml")), help="Path to config YAML")
+    pc.add_argument("--preset", default=None, help="Override config.active_preset for this run")
     pc.set_defaults(func=cmd_risk_check)
 
     pd = sub.add_parser("dashboard", help="Run local HTML dashboard server")

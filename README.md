@@ -196,6 +196,25 @@ Crypto bars are fetched via Alpaca crypto data.
 
 ---
 
+## Presets (unified backtest + paper/live)
+
+Presets live in:
+- `config/presets.yaml`
+
+A preset contains:
+- `backtest`: parameters for the backtest engine
+- `bot`: a patch that is merged into `config/config.yaml` when `active_preset` is set
+
+To activate a preset for paper/live runs, set:
+- `active_preset: <name>` in `config/config.yaml`
+
+Or override for a single run:
+```bash
+tradebot rebalance --preset default_safe_weekly
+```
+
+---
+
 ## Running the bot (CLI)
 
 ### Rebalance (plan only)
