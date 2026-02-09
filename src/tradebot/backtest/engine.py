@@ -103,6 +103,7 @@ def run_backtest(
     params: BacktestParams,
     progress_cb=None,
     intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
+    intraday_limit_touch_cb: Callable[[str, pd.Timestamp, str, float], bool] | None = None,
 ) -> BacktestResult:
     """Simple long-only backtest using daily closes.
 
@@ -122,6 +123,7 @@ def run_backtest(
     positions_qty: dict[str, float] = {}
     positions_avg_cost: dict[str, float] = {}
     positions_entry_date: dict[str, str] = {}
+    pending_limits: list[dict] = []  # simulated working limit orders
     trades: list[dict] = []
     events: list[dict] = []
     realized_pnl_by_symbol: dict[str, float] = {}
@@ -285,6 +287,106 @@ def run_backtest(
             positions_avg_cost.pop(sym, None)
             positions_entry_date.pop(sym, None)
 
+    def _apply_pending_fill(po: dict, *, day: pd.Timestamp, fill_px: float, reason: str) -> None:
+        nonlocal cash
+        sym = str(po.get("symbol"))
+        side = str(po.get("side"))
+        if side == "buy":
+            notional = float(po.get("notional") or 0.0)
+            q_add = (notional / fill_px) if fill_px > 0 else 0.0
+            if q_add <= 0:
+                return
+            # cap by cash
+            max_q = cash / fill_px if fill_px > 0 else 0.0
+            q_add = min(q_add, max_q)
+            cost = q_add * fill_px
+            if q_add <= 0:
+                return
+            cash -= cost
+            prevQ = positions_qty.get(sym, 0.0)
+            newQ = prevQ + q_add
+            prevCost = positions_avg_cost.get(sym, fill_px)
+            if prevQ <= 0:
+                positions_entry_date[sym] = day.strftime("%Y-%m-%d")
+                positions_avg_cost[sym] = fill_px
+            else:
+                positions_avg_cost[sym] = (prevQ * prevCost + q_add * fill_px) / (prevQ + q_add)
+            positions_qty[sym] = newQ
+            _event({"type":"buy", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "qty":float(q_add), "price":float(fill_px), "notional":float(cost), "new_qty":float(newQ), "reason":reason})
+        else:
+            q_sub = min(float(po.get("qty") or 0.0), positions_qty.get(sym, 0.0))
+            if q_sub <= 0:
+                return
+            proceeds = q_sub * fill_px
+            cash += proceeds
+            p0 = px(sym, day) or fill_px
+            avg_cost = positions_avg_cost.get(sym, p0)
+            entry_date = positions_entry_date.get(sym)
+            pnl = (fill_px - avg_cost) * q_sub
+            rec = {
+                "symbol": sym,
+                "entry_date": entry_date,
+                "exit_date": day.strftime("%Y-%m-%d"),
+                "qty": q_sub,
+                "entry_price": avg_cost,
+                "exit_price": fill_px,
+                "pnl": pnl,
+                "pnl_pct": (fill_px / avg_cost - 1.0) if avg_cost else None,
+                "reason": reason,
+            }
+            _record_trade(rec)
+            newQ = max(0.0, positions_qty.get(sym, 0.0) - q_sub)
+            if newQ <= 1e-12:
+                positions_qty.pop(sym, None)
+                positions_avg_cost.pop(sym, None)
+                positions_entry_date.pop(sym, None)
+                newQ = 0.0
+            else:
+                positions_qty[sym] = newQ
+            _event({"type":"sell", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "qty":float(q_sub), "price":float(fill_px), "notional":float(proceeds), "new_qty":float(newQ), "reason":reason, "pnl":float(pnl)})
+
+    def _limit_touched(sym: str, day: pd.Timestamp, side: str, limit_px: float) -> bool:
+        if intraday_limit_touch_cb is not None:
+            try:
+                return bool(intraday_limit_touch_cb(sym, day, side, limit_px))
+            except Exception:
+                pass
+        lo = px_col(sym, day, "low")
+        hi = px_col(sym, day, "high")
+        if side == "buy":
+            return (lo is not None) and (lo <= limit_px)
+        return (hi is not None) and (hi >= limit_px)
+
+    def _process_pending_limits(day: pd.Timestamp) -> None:
+        if not pending_limits:
+            return
+        for po in list(pending_limits):
+            placed_day = pd.to_datetime(po.get("placed_day"))
+            sym = str(po.get("symbol"))
+            side = str(po.get("side"))
+            limit_px = float(po.get("limit_px") or 0.0)
+
+            # cancel any still-open order at next rebalance boundary
+            if day in rebal_days and day > placed_day:
+                _event({"type":"cancel", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "reason":"limit_cancel_next_rebalance", "side":side})
+                pending_limits.remove(po)
+                continue
+
+            if day < placed_day:
+                continue
+
+            if _limit_touched(sym, day, side, limit_px):
+                _apply_pending_fill(po, day=day, fill_px=limit_px, reason="limit_fill")
+                pending_limits.remove(po)
+                continue
+
+            if bool(po.get("fallback", False)):
+                op = px_open(sym, day) or px(sym, day)
+                if op is not None:
+                    mkt_px = op * (1 + params.slippage_bps / 10000.0) if side == "buy" else op * (1 - params.slippage_bps / 10000.0)
+                    _apply_pending_fill(po, day=day, fill_px=float(mkt_px), reason="limit_fallback_market_open")
+                    pending_limits.remove(po)
+
     def _sma(series: pd.Series, n: int, day: pd.Timestamp) -> float | None:
         if series is None or len(series) == 0:
             return None
@@ -314,6 +416,10 @@ def run_backtest(
         return out
 
     for i, day in enumerate(days):
+        # Process pending simulated limit orders first
+        if params.use_limit_orders:
+            _process_pending_limits(day)
+
         # Mark-to-market
         equity = portfolio_value(day)
         peak_equity = max(peak_equity, equity)
@@ -596,102 +702,113 @@ def run_backtest(
                     base_px = p_exec
                     if params.use_limit_orders:
                         limit_px = base_px * (1 + params.limit_offset_bps / 10000.0)
-                        buy_px = limit_px
-                        if params.limit_fallback_to_market_open:
-                            lo = px_col(sym, day, "low")
-                            op = px_open(sym, day)
-                            # If day's low never reaches limit, assume not filled and fallback to market-at-open (+slippage model)
-                            if (lo is None or lo > limit_px) and op is not None:
-                                buy_px = op * (1 + params.slippage_bps / 10000.0)
+                        desired_notional = max(0.0, float(deltaN))
+                        if desired_notional <= 0:
+                            continue
+                        po = {
+                            "symbol": sym,
+                            "side": "buy",
+                            "placed_day": day.strftime("%Y-%m-%d"),
+                            "limit_px": float(limit_px),
+                            "notional": float(desired_notional),
+                            "fallback": bool(params.limit_fallback_to_market_open),
+                        }
+                        pending_limits.append(po)
+                        _event({"type":"order", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "side":"buy", "limit_px":float(limit_px), "notional":float(desired_notional), "reason":"limit_placed"})
                     else:
                         buy_px = base_px * (1 + params.slippage_bps / 10000.0)
 
-                    # desired add in notional terms at base_px
-                    desired_q = (deltaN / base_px) if base_px else 0.0
-                    if desired_q <= 0:
-                        continue
-                    # spend at buy_px (includes slippage)
-                    q_add = min(desired_q, cash / buy_px) if buy_px else 0.0
-                    cost = q_add * buy_px
-                    if q_add <= 0:
-                        continue
-                    cash -= cost
-                    prevQ = positions_qty.get(sym, 0.0)
-                    newQ = prevQ + q_add
+                        # desired add in notional terms at base_px
+                        desired_q = (deltaN / base_px) if base_px else 0.0
+                        if desired_q <= 0:
+                            continue
+                        # spend at buy_px (includes slippage)
+                        q_add = min(desired_q, cash / buy_px) if buy_px else 0.0
+                        cost = q_add * buy_px
+                        if q_add <= 0:
+                            continue
+                        cash -= cost
+                        prevQ = positions_qty.get(sym, 0.0)
+                        newQ = prevQ + q_add
 
-                    # avg cost update
-                    prevCost = positions_avg_cost.get(sym, buy_px)
-                    if prevQ <= 0:
-                        positions_entry_date[sym] = day.strftime("%Y-%m-%d")
-                        positions_avg_cost[sym] = buy_px
-                    else:
-                        positions_avg_cost[sym] = (prevQ * prevCost + q_add * buy_px) / (prevQ + q_add)
-                    positions_qty[sym] = newQ
+                        # avg cost update
+                        prevCost = positions_avg_cost.get(sym, buy_px)
+                        if prevQ <= 0:
+                            positions_entry_date[sym] = day.strftime("%Y-%m-%d")
+                            positions_avg_cost[sym] = buy_px
+                        else:
+                            positions_avg_cost[sym] = (prevQ * prevCost + q_add * buy_px) / (prevQ + q_add)
+                        positions_qty[sym] = newQ
 
-                    # record buy event
-                    _event({
-                        "type": "buy",
-                        "symbol": sym,
-                        "date": day.strftime("%Y-%m-%d"),
-                        "qty": float(q_add),
-                        "price": float(buy_px),
-                        "notional": float(cost),
-                        "new_qty": float(newQ),
-                        "reason": "rebalance_buy",
-                    })
+                        # record buy event
+                        _event({
+                            "type": "buy",
+                            "symbol": sym,
+                            "date": day.strftime("%Y-%m-%d"),
+                            "qty": float(q_add),
+                            "price": float(buy_px),
+                            "notional": float(cost),
+                            "new_qty": float(newQ),
+                            "reason": "rebalance_buy",
+                        })
 
                 else:
-                    # sell at execution time - slippage
-                    if params.use_limit_orders:
-                        limit_px = p_exec * (1 - params.limit_offset_bps / 10000.0)
-                        sell_px = limit_px
-                        if params.limit_fallback_to_market_open:
-                            hi = px_col(sym, day, "high")
-                            op = px_open(sym, day)
-                            # If day's high never reaches limit, assume not filled and fallback to market-at-open (-slippage model)
-                            if (hi is None or hi < limit_px) and op is not None:
-                                sell_px = op * (1 - params.slippage_bps / 10000.0)
-                    else:
-                        sell_px = p_exec * (1 - params.slippage_bps / 10000.0)
                     sellN = min(curN, abs(deltaN))
                     q_sub = (sellN / p_exec) if p_exec else 0.0
                     q_sub = min(q_sub, positions_qty.get(sym, 0.0))
-                    proceeds = q_sub * sell_px
-                    cash += proceeds
+                    if q_sub <= 0:
+                        continue
 
-                    avg_cost = positions_avg_cost.get(sym, p0)
-                    entry_date = positions_entry_date.get(sym)
-                    pnl = (sell_px - avg_cost) * q_sub
-                    rec = {
-                        "symbol": sym,
-                        "entry_date": entry_date,
-                        "exit_date": day.strftime("%Y-%m-%d"),
-                        "qty": q_sub,
-                        "entry_price": avg_cost,
-                        "exit_price": sell_px,
-                        "pnl": pnl,
-                        "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
-                        "reason": "rebalance_trim" if sym in keep else "rebalance_sell",
-                    }
-                    _record_trade(rec)
-                    _event({
-                        "type": "sell",
-                        "symbol": sym,
-                        "date": day.strftime("%Y-%m-%d"),
-                        "qty": float(q_sub),
-                        "price": float(sell_px),
-                        "notional": float(proceeds),
-                        "new_qty": float(max(0.0, positions_qty.get(sym, 0.0) - q_sub)),
-                        "reason": rec["reason"],
-                        "pnl": float(pnl),
-                    })
+                    if params.use_limit_orders:
+                        limit_px = p_exec * (1 - params.limit_offset_bps / 10000.0)
+                        po = {
+                            "symbol": sym,
+                            "side": "sell",
+                            "placed_day": day.strftime("%Y-%m-%d"),
+                            "limit_px": float(limit_px),
+                            "qty": float(q_sub),
+                            "fallback": bool(params.limit_fallback_to_market_open),
+                        }
+                        pending_limits.append(po)
+                        _event({"type":"order", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "side":"sell", "limit_px":float(limit_px), "qty":float(q_sub), "reason":"limit_placed"})
+                    else:
+                        sell_px = p_exec * (1 - params.slippage_bps / 10000.0)
+                        proceeds = q_sub * sell_px
+                        cash += proceeds
 
-                    newQ = max(0.0, positions_qty.get(sym, 0.0) - q_sub)
-                    positions_qty[sym] = newQ
-                    if newQ <= 1e-12:
-                        positions_qty.pop(sym, None)
-                        positions_avg_cost.pop(sym, None)
-                        positions_entry_date.pop(sym, None)
+                        avg_cost = positions_avg_cost.get(sym, p0)
+                        entry_date = positions_entry_date.get(sym)
+                        pnl = (sell_px - avg_cost) * q_sub
+                        rec = {
+                            "symbol": sym,
+                            "entry_date": entry_date,
+                            "exit_date": day.strftime("%Y-%m-%d"),
+                            "qty": q_sub,
+                            "entry_price": avg_cost,
+                            "exit_price": sell_px,
+                            "pnl": pnl,
+                            "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                            "reason": "rebalance_trim" if sym in keep else "rebalance_sell",
+                        }
+                        _record_trade(rec)
+                        _event({
+                            "type": "sell",
+                            "symbol": sym,
+                            "date": day.strftime("%Y-%m-%d"),
+                            "qty": float(q_sub),
+                            "price": float(sell_px),
+                            "notional": float(proceeds),
+                            "new_qty": float(max(0.0, positions_qty.get(sym, 0.0) - q_sub)),
+                            "reason": rec["reason"],
+                            "pnl": float(pnl),
+                        })
+
+                        newQ = max(0.0, positions_qty.get(sym, 0.0) - q_sub)
+                        positions_qty[sym] = newQ
+                        if newQ <= 1e-12:
+                            positions_qty.pop(sym, None)
+                            positions_avg_cost.pop(sym, None)
+                            positions_entry_date.pop(sym, None)
 
             # If any symbol hit the realized P/L floor during this rebalance, optionally liquidate it immediately.
             if params.symbol_pnl_floor_liquidate:
