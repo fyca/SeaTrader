@@ -423,6 +423,7 @@ def create_app(*, config_path: str) -> FastAPI:
         kind = str(body.get("kind") or "").strip()
         preset = body.get("preset")
         place_orders = bool(body.get("place_orders", True))
+        wait_until_configured = bool(body.get("wait_until_configured", False))
 
         if kind not in ("rebalance", "risk-check"):
             raise HTTPException(status_code=400, detail="kind must be rebalance or risk-check")
@@ -437,7 +438,11 @@ def create_app(*, config_path: str) -> FastAPI:
 
                 action_jobs[job_id]["state"] = "running"
                 if kind == "rebalance":
-                    ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset)
+                    wait_until = None
+                    if wait_until_configured:
+                        cfg = load_config(config_path, preset_override=preset)
+                        wait_until = getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
+                    ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=wait_until, preset=preset)
                     rc = int(cmd_rebalance(ns))
                 else:
                     ns = argparse.Namespace(config=config_path, preset=preset)

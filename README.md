@@ -273,7 +273,7 @@ Dashboard highlights:
 - Run artifacts (last rebalance / last risk-check / last placed orders)
 - Backtesting UI (run + history + charts)
 - Strategy dropdown and a button to open the Strategy Builder
-- Action buttons: **Run paper rebalance** and **Run risk-check** (token-gated if enabled)
+- Action buttons: **Run paper rebalance**, **Run at configured time**, and **Run risk-check** (token-gated if enabled)
 
 ### Dashboard auth token
 Token gating can be enabled/disabled via env/config:

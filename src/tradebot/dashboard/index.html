@@ -109,6 +109,7 @@
         </div>
         <div style="display:flex; gap:8px; margin-top:10px; align-items:center; flex-wrap:wrap;">
           <button id="runPaperRebalanceBtn" class="primary">Run paper rebalance</button>
+          <button id="runScheduledRebalanceBtn" class="secondary">Run at configured time</button>
           <button id="runRiskCheckBtn" class="secondary">Run risk-check</button>
           <span id="runActionStatus" class="muted"></span>
         </div>
@@ -1593,7 +1594,7 @@ document.getElementById('cancelAllBtn')?.addEventListener('click', (e) => {
 
 let actionJobId = null;
 
-async function runDashboardAction(kind) {
+async function runDashboardAction(kind, extraBody={}) {
   const el = document.getElementById('runActionStatus');
   const token = document.getElementById('token')?.value || '';
   try {
@@ -1601,7 +1602,7 @@ async function runDashboardAction(kind) {
     const r = await fetch('/api/actions/run' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({kind, place_orders: kind==='rebalance'})
+      body: JSON.stringify({kind, place_orders: kind==='rebalance', ...extraBody})
     });
     if (!r.ok) throw new Error(await r.text());
     const j = await r.json();
@@ -1639,6 +1640,12 @@ document.getElementById('runPaperRebalanceBtn')?.addEventListener('click', (e) =
   e.preventDefault();
   if (!confirm('Run paper rebalance now and place orders?')) return;
   runDashboardAction('rebalance');
+});
+
+document.getElementById('runScheduledRebalanceBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!confirm('Queue paper rebalance to run at configured scheduling.weekly_rebalance_time_local?')) return;
+  runDashboardAction('rebalance', {wait_until_configured: true});
 });
 
 document.getElementById('runRiskCheckBtn')?.addEventListener('click', (e) => {
