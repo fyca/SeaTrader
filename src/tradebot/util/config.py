@@ -50,7 +50,9 @@ class Execution(BaseModel):
 
 class Scheduling(BaseModel):
     weekly_rebalance_day: str = "MON"
+    weekly_rebalance_time_local: str = "06:35"  # PT by default (near US market open)
     daily_risk_check_time_local: str = "18:05"
+    timezone: str = "America/Los_Angeles"
 
 
 class Universe(BaseModel):

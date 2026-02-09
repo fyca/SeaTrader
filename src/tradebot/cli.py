@@ -27,6 +27,23 @@ from tradebot.util.equity_curve import append_equity_point
 
 def cmd_rebalance(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
+
+    # Optional unattended scheduling: wait until configured/local time (rebalance only).
+    if args.wait_until is not None:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        import time as _time
+
+        tz = ZoneInfo(getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
+        now = datetime.now(tz)
+        hh, mm = [int(x) for x in str(args.wait_until).split(":")]
+        target = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if target > now:
+            secs = (target - now).total_seconds()
+            print(f"Waiting until {target.strftime('%Y-%m-%d %H:%M %Z')} (sleep {int(secs)}s)...")
+            _time.sleep(secs)
+        else:
+            print(f"[yellow]Warning[/yellow]: wait_until {args.wait_until} is in the past (now {now.strftime('%H:%M %Z')}); running immediately")
     env = load_env()
 
     # config can force dry_run; env can also force dry_run
@@ -209,6 +226,11 @@ def main() -> int:
     pr = sub.add_parser("rebalance", help="Run a (dry-run) rebalance")
     pr.add_argument("--config", default=str(Path("config/config.yaml")), help="Path to config YAML")
     pr.add_argument("--place-orders", action="store_true", help="Actually place orders (requires dry_run=false in config and DRY_RUN=false env)")
+    pr.add_argument(
+        "--wait-until",
+        default=None,
+        help="Optional local time HH:MM to sleep until before running (uses config.scheduling.timezone). Useful for unattended open/close runs.",
+    )
     pr.set_defaults(func=cmd_rebalance)
 
     pc = sub.add_parser("risk-check", help="Run drawdown/freeze check (no trades)")

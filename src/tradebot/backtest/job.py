@@ -131,10 +131,20 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     exec_time_local=p.execution_time_local,
                     tz=p.execution_tz,
                 )
-                # Only apply intraday pricing on rebalance days
-                # (engine calls exec_px in multiple contexts; this keeps it scoped)
+
+                # Only apply intraday pricing on rebalance days.
+                # Precompute the rebalance day set once (avoid O(days) work per symbol call).
+                start_d = pd.to_datetime(p.start)
+                end_d = pd.to_datetime(p.end)
+                all_days = pd.date_range(start_d, end_d, freq="D")
+                if p.rebalance == "daily":
+                    reb_days = set(all_days)
+                else:
+                    # weekly rebalance is MON by default in engine
+                    reb_days = set([d for d in all_days if d.weekday() == 0])
+
                 def intraday_cb(sym, day):
-                    if day not in set([d for d in pd.date_range(pd.to_datetime(p.start), pd.to_datetime(p.end), freq='D') if (p.rebalance=='daily' or d.weekday()==0)]):
+                    if day not in reb_days:
                         return None
                     return prov.price(sym, day)
 

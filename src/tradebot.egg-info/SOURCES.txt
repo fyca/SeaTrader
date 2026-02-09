@@ -12,6 +12,7 @@ src/tradebot/adapters/alpaca_client.py
 src/tradebot/adapters/bars.py
 src/tradebot/backtest/cache.py
 src/tradebot/backtest/engine.py
+src/tradebot/backtest/intraday.py
 src/tradebot/backtest/job.py
 src/tradebot/commands/dashboard.py
 src/tradebot/commands/risk_check.py

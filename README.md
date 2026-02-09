@@ -214,6 +214,14 @@ Places orders only if:
 tradebot rebalance --config config/config.yaml --place-orders
 ```
 
+### Rebalance (unattended at a specific time)
+For unattended runs aligned to market open/close, you can optionally sleep until a local time before executing:
+
+```bash
+# Uses config.scheduling.timezone (default: America/Los_Angeles)
+tradebot rebalance --config config/config.yaml --place-orders --wait-until 06:35
+```
+
 ### Daily risk check
 Runs drawdown checks, generates exit signals, and writes artifacts.
 
@@ -362,7 +370,7 @@ High-impact next steps:
 - “Explain why entry/exit passed/failed” (per-condition evaluation output)
 
 ### Backtesting
-- Intraday execution time for **rebalance trades** (minute bars) (in progress)
+- Intraday execution time for **rebalance trades** (minute bars) ✅
 - Expand intraday execution to stop-loss exits + exclusion liquidations
 - Extend benchmark options and robust comparisons
 - Performance refactor: precompute rolling indicators per symbol to speed large sweeps
