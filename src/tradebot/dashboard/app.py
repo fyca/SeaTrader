@@ -4,7 +4,7 @@ import argparse
 import json
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -34,6 +34,14 @@ def _read_json(path: Path):
 def create_app(*, config_path: str) -> FastAPI:
     app = FastAPI(title="tradebot dashboard")
     action_jobs: dict[str, dict] = {}
+    schedule_state: dict[str, object] = {
+        "risk_daily_enabled": False,
+        "risk_daily_started_at": None,
+        "risk_next_run": None,
+        "risk_last_run": None,
+        "risk_last_state": None,
+        "risk_last_error": None,
+    }
 
     # Static assets (themes, icons, etc.)
     static_dir = Path(__file__).with_name("static")
@@ -454,6 +462,52 @@ def create_app(*, config_path: str) -> FastAPI:
         res = clients.trading.cancel_orders()
         return {"ok": True, "result": str(res)}
 
+    def _seconds_until_local_hhmm(hhmm: str, tz_name: str) -> tuple[float, str]:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo(tz_name)
+        now = datetime.now(tz)
+        hh, mm = [int(x) for x in str(hhmm).split(":")]
+        target = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if target <= now:
+            target = target + timedelta(days=1)
+        return (target - now).total_seconds(), target.isoformat()
+
+    def _ensure_daily_risk_scheduler(preset):
+        if bool(schedule_state.get("risk_daily_enabled")):
+            return
+
+        schedule_state["risk_daily_enabled"] = True
+        schedule_state["risk_daily_started_at"] = datetime.now(timezone.utc).isoformat()
+
+        def _loop():
+            from tradebot.commands.risk_check import cmd_risk_check
+
+            while bool(schedule_state.get("risk_daily_enabled")):
+                try:
+                    cfg = load_config(config_path, preset_override=preset)
+                    hhmm = str(getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05"))
+                    tz_name = str(getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
+                    sec, when_iso = _seconds_until_local_hhmm(hhmm, tz_name)
+                    schedule_state["risk_next_run"] = when_iso
+                    import time as _time
+                    _time.sleep(max(1.0, sec))
+                    if not bool(schedule_state.get("risk_daily_enabled")):
+                        break
+                    rc = int(cmd_risk_check(argparse.Namespace(config=config_path, preset=preset)))
+                    schedule_state["risk_last_run"] = datetime.now(timezone.utc).isoformat()
+                    schedule_state["risk_last_state"] = "done" if rc == 0 else f"rc={rc}"
+                    schedule_state["risk_last_error"] = None
+                except Exception as e:
+                    schedule_state["risk_last_run"] = datetime.now(timezone.utc).isoformat()
+                    schedule_state["risk_last_state"] = "error"
+                    schedule_state["risk_last_error"] = str(e)
+                    # wait briefly before retrying schedule calc
+                    import time as _time
+                    _time.sleep(5)
+
+        threading.Thread(target=_loop, daemon=True).start()
+
     @app.post("/api/actions/run")
     async def run_action(req: Request):
         require_token(req)
@@ -462,6 +516,7 @@ def create_app(*, config_path: str) -> FastAPI:
         preset = body.get("preset")
         place_orders = bool(body.get("place_orders", True))
         wait_until_configured = bool(body.get("wait_until_configured", False))
+        queue_daily_risk_check = bool(body.get("queue_daily_risk_check", True))
 
         if kind not in ("rebalance", "risk-check"):
             raise HTTPException(status_code=400, detail="kind must be rebalance or risk-check")
@@ -490,6 +545,8 @@ def create_app(*, config_path: str) -> FastAPI:
                         else:
                             wait_until = getattr(cfg.scheduling, "weekly_rebalance_time_local", None)
                     action_jobs[job_id]["wait_until"] = wait_until
+                    if wait_until_configured and queue_daily_risk_check:
+                        _ensure_daily_risk_scheduler(preset)
                     ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=wait_until, preset=preset)
                     rc = int(cmd_rebalance(ns))
                 else:
@@ -517,6 +574,10 @@ def create_app(*, config_path: str) -> FastAPI:
             return {"state": "missing"}
         rows.sort(key=lambda x: str(x.get("started_at") or ""), reverse=True)
         return rows[0]
+
+    @app.get("/api/actions/schedule-status")
+    def actions_schedule_status():
+        return dict(schedule_state)
 
     # Backtest (token-gated)
     @app.post("/api/backtest/start")
