@@ -711,6 +711,26 @@ async function renderBacktest(res) {
   const met = document.getElementById('btMetrics');
   met.textContent = `Return: ${pct(m.return)} • CAGR: ${pct(m.cagr)} • Max DD: ${pct(m.max_drawdown)} • Obs DD: ${pct(m.max_observed_drawdown)} • Ann vol: ${pct(m.ann_vol)} • Sharpe: ${Number(m.sharpe||0).toFixed(2)} • Trades: ${m.trade_count ?? '—'} • Win rate: ${m.win_rate==null ? '—' : pct(m.win_rate)} • DD-stop events: ${m.dd_stop_event_count ?? 0} • Start: ${money(m.start_equity)} • End: ${money(m.end_equity)}`;
 
+  const evs = (res.events || []);
+  const cPlaced = evs.filter(e => e.type==='order' && e.reason==='limit_placed').length;
+  const cLimitFill = evs.filter(e => (e.reason==='limit_fill')).length;
+  const cFallback = evs.filter(e => (e.reason==='limit_fallback_market_open')).length;
+  const cCanceled = evs.filter(e => (e.type==='cancel' && e.reason==='limit_cancel_next_rebalance')).length;
+  const cBuy = evs.filter(e => e.type==='buy').length;
+  const cSell = evs.filter(e => e.type==='sell').length;
+  const cFilled = cLimitFill + cFallback;
+  const fillRate = cPlaced>0 ? (100*cFilled/cPlaced) : null;
+
+  let life = document.getElementById('btOrderLifecycle');
+  if (!life) {
+    life = document.createElement('div');
+    life.id = 'btOrderLifecycle';
+    life.className = 'muted';
+    life.style.marginTop = '6px';
+    met.insertAdjacentElement('afterend', life);
+  }
+  life.textContent = `Order lifecycle: placed ${cPlaced} • filled ${cFilled} (${fillRate==null?'—':fillRate.toFixed(1)+'%'}) • limit fills ${cLimitFill} • fallback market fills ${cFallback} • canceled(next rebalance) ${cCanceled} • buy events ${cBuy} • sell events ${cSell}`;
+
   const p = res.params || {};
   const bp = document.getElementById('btParams');
   if (bp) {
