@@ -173,12 +173,50 @@ def create_app(*, config_path: str) -> FastAPI:
         env = load_env()
         clients = make_alpaca_clients(env)
         acct = clients.trading.get_account()
+
+        def _f(x, d=0.0):
+            try:
+                return float(x)
+            except Exception:
+                return float(d)
+
+        eq = _f(getattr(acct, "equity", 0.0))
+        cash = _f(getattr(acct, "cash", 0.0))
+        bod_eq = _f(getattr(acct, "last_equity", 0.0))
+        bod_cash = _f(getattr(acct, "last_cash", 0.0))
+
         return {
             "account_number": acct.account_number,
-            "equity": float(acct.equity),
-            "cash": float(acct.cash),
-            "buying_power": float(getattr(acct, "buying_power", 0.0) or 0.0),
             "paper": bool(env.paper),
+
+            # current
+            "equity": eq,
+            "cash": cash,
+            "buying_power": _f(getattr(acct, "buying_power", 0.0)),
+            "portfolio_value": _f(getattr(acct, "portfolio_value", eq)),
+
+            # beginning-of-day (previous close snapshot from broker)
+            "bod_equity": bod_eq,
+            "bod_cash": bod_cash,
+            "day_change_equity": (eq - bod_eq) if bod_eq else None,
+            "day_change_equity_pct": ((eq / bod_eq - 1.0) if bod_eq else None),
+            "day_change_cash": (cash - bod_cash) if bod_cash else None,
+
+            # useful health/margin/account fields
+            "status": str(getattr(acct, "status", "")),
+            "currency": str(getattr(acct, "currency", "USD")),
+            "multiplier": str(getattr(acct, "multiplier", "")),
+            "regt_buying_power": _f(getattr(acct, "regt_buying_power", 0.0)),
+            "daytrading_buying_power": _f(getattr(acct, "daytrading_buying_power", 0.0)),
+            "initial_margin": _f(getattr(acct, "initial_margin", 0.0)),
+            "maintenance_margin": _f(getattr(acct, "maintenance_margin", 0.0)),
+            "sma": _f(getattr(acct, "sma", 0.0)),
+            "pattern_day_trader": bool(getattr(acct, "pattern_day_trader", False)),
+            "trading_blocked": bool(getattr(acct, "trading_blocked", False)),
+            "transfers_blocked": bool(getattr(acct, "transfers_blocked", False)),
+            "account_blocked": bool(getattr(acct, "account_blocked", False)),
+            "shorting_enabled": bool(getattr(acct, "shorting_enabled", False)),
+            "crypto_status": str(getattr(acct, "crypto_status", "")),
         }
 
     @app.get("/api/positions")

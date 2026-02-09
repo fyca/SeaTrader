@@ -1227,9 +1227,32 @@ async function main() {
   const accountEl = document.getElementById('account');
   accountEl.innerHTML = '';
   kv(accountEl, 'Account', acct.account_number);
-  kv(accountEl, 'Equity', money(acct.equity));
-  kv(accountEl, 'Cash', money(acct.cash));
+  kv(accountEl, 'Status', (acct.status || '—') + (acct.paper ? ' (paper)' : ''));
+  kv(accountEl, 'Currency', acct.currency || 'USD');
+
+  kv(accountEl, 'BOD equity', money(acct.bod_equity));
+  kv(accountEl, 'Current equity', money(acct.equity));
+  kv(accountEl, 'Day Δ equity', (acct.day_change_equity==null ? '—' : (money(acct.day_change_equity) + ' (' + pct(acct.day_change_equity_pct) + ')')));
+
+  kv(accountEl, 'BOD cash', money(acct.bod_cash));
+  kv(accountEl, 'Current cash', money(acct.cash));
+  kv(accountEl, 'Day Δ cash', acct.day_change_cash==null ? '—' : money(acct.day_change_cash));
+
+  kv(accountEl, 'Portfolio value', money(acct.portfolio_value));
   kv(accountEl, 'Buying power', money(acct.buying_power));
+  kv(accountEl, 'Reg-T buying power', money(acct.regt_buying_power));
+  kv(accountEl, 'Day-trading BP', money(acct.daytrading_buying_power));
+
+  kv(accountEl, 'Initial margin', money(acct.initial_margin));
+  kv(accountEl, 'Maintenance margin', money(acct.maintenance_margin));
+  kv(accountEl, 'SMA', money(acct.sma));
+
+  kv(accountEl, 'PDT', String(Boolean(acct.pattern_day_trader)));
+  kv(accountEl, 'Trading blocked', String(Boolean(acct.trading_blocked)));
+  kv(accountEl, 'Transfers blocked', String(Boolean(acct.transfers_blocked)));
+  kv(accountEl, 'Account blocked', String(Boolean(acct.account_blocked)));
+  kv(accountEl, 'Shorting enabled', String(Boolean(acct.shorting_enabled)));
+  if (acct.crypto_status) kv(accountEl, 'Crypto status', acct.crypto_status);
 
   const stateEl = document.getElementById('state');
   stateEl.innerHTML = '';
