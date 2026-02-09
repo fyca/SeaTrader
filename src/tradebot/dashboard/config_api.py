@@ -5,13 +5,12 @@ from pathlib import Path
 import yaml
 from fastapi import HTTPException
 
-from tradebot.util.config import BotConfig
+from tradebot.util.config import BotConfig, load_config
 
 
 def load_config_file(path: str) -> BotConfig:
-    p = Path(path)
-    data = yaml.safe_load(p.read_text())
-    return BotConfig.model_validate(data)
+    # Return effective config (base YAML + active preset bot patch)
+    return load_config(path)
 
 
 def save_config_file(path: str, cfg: BotConfig) -> None:

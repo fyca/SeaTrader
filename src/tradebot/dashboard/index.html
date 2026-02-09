@@ -1350,6 +1350,8 @@ async function main() {
         if (!res.ok) throw new Error(res.error||'failed');
         if (presetStatus) presetStatus.textContent = 'applied preset ' + name + ' to live config';
         toast('ok','Applied to config', name);
+        // refresh dashboard/config editor so changes are visible immediately
+        await main();
       } catch (err) {
         if (presetStatus) presetStatus.textContent = 'apply error: ' + (err?.message || err);
       }

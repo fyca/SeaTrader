@@ -1,4 +1,4 @@
-active_preset: null
+active_preset: Breakout-Both-Intra-Morning06:00
 mode: paper
 strategy_id: breakout_trend
 dry_run: false
@@ -36,7 +36,7 @@ execution:
   max_total_notional_usd: 15000.0
 scheduling:
   weekly_rebalance_day: MON
-  weekly_rebalance_time_local: '06:35'
+  weekly_rebalance_time_local: 06:35
   daily_risk_check_time_local: '18:05'
   timezone: America/Los_Angeles
 universe:
