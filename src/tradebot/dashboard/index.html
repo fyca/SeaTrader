@@ -263,6 +263,14 @@
               <input id="btLimitOffset" placeholder="10" value="10" style="width:120px;" />
             </div>
             <div>
+              <div class="muted">Limit fallback</div>
+              <select id="btLimitFallback" style="width:190px;"><option value="false" selected>Off</option><option value="true">Fallback to market @ open</option></select>
+            </div>
+            <div>
+              <div class="muted">Fallback time (PT)</div>
+              <input id="btLimitFallbackTime" placeholder="06:30" value="06:30" style="width:120px;" />
+            </div>
+            <div>
               <div class="muted">Single symbol (optional)</div>
               <input id="btSymbol" placeholder="AAPL or BTC/USD" style="min-width:280px;" />
             </div>
@@ -664,7 +672,9 @@ async function runBacktest() {
   const ddStopRaw = ddCustom || ddPreset;
   const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
   status.textContent = 'starting…';
-  const body = {start, end, slippage_bps, use_limit_orders, limit_offset_bps, initial_equity: 100000, strategy_id, execution_time_mode, execution_time, execution_time_local, execution_tz, asset_mode, rebalance, rebalance_day, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
+  const limit_fallback_to_market_open = String(document.getElementById('btLimitFallback')?.value || 'false') === 'true';
+  const limit_fallback_time_local = (document.getElementById('btLimitFallbackTime')?.value || '06:30');
+  const body = {start, end, slippage_bps, use_limit_orders, limit_offset_bps, limit_fallback_to_market_open, limit_fallback_time_local, initial_equity: 100000, strategy_id, execution_time_mode, execution_time, execution_time_local, execution_tz, asset_mode, rebalance, rebalance_day, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
   const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -1367,6 +1377,8 @@ async function main() {
       slippage_bps: Number(document.getElementById('btSlip')?.value || '10'),
       use_limit_orders: String(document.getElementById('btUseLimit')?.value || 'false') === 'true',
       limit_offset_bps: Number(document.getElementById('btLimitOffset')?.value || '10'),
+      limit_fallback_to_market_open: String(document.getElementById('btLimitFallback')?.value || 'false') === 'true',
+      limit_fallback_time_local: (document.getElementById('btLimitFallbackTime')?.value || '06:30'),
       per_asset_stop_loss_pct,
       portfolio_dd_stop,
       symbol_pnl_floor_pct,
@@ -1390,6 +1402,8 @@ async function main() {
     setVal('btSlip', p.slippage_bps);
     setVal('btUseLimit', String(Boolean(p.use_limit_orders)));
     setVal('btLimitOffset', p.limit_offset_bps);
+    setVal('btLimitFallback', String(Boolean(p.limit_fallback_to_market_open)));
+    setVal('btLimitFallbackTime', p.limit_fallback_time_local);
     setVal('btStopLoss', p.per_asset_stop_loss_pct);
     setVal('btDD', '');
     setVal('btDDPreset', p.portfolio_dd_stop);

@@ -58,6 +58,10 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
         bot["execution"]["use_limit_orders"] = bool(params.get("use_limit_orders"))
     if params.get("limit_offset_bps") is not None:
         bot["execution"]["limit_offset_bps"] = float(params.get("limit_offset_bps"))
+    if params.get("limit_fallback_to_market_open") is not None:
+        bot["execution"]["fallback_to_market_at_open"] = bool(params.get("limit_fallback_to_market_open"))
+    if params.get("limit_fallback_time_local") is not None:
+        bot["execution"]["fallback_time_local"] = str(params.get("limit_fallback_time_local"))
 
     # execution timing mapping (best-effort): sets the time our unattended rebalance should run.
     # This does NOT change pricing/fills in live; it just schedules when the CLI executes.

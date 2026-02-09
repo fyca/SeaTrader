@@ -19,6 +19,9 @@ class BacktestParams:
     slippage_bps: float = 10.0
     use_limit_orders: bool = False
     limit_offset_bps: float = 10.0
+    # Optional parity with live: if limit not fillable by open, convert to market-at-open.
+    limit_fallback_to_market_open: bool = False
+    limit_fallback_time_local: str = "06:30"
     rebalance: Literal["weekly", "daily"] = "weekly"
     rebalance_day: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] = "MON"
 
@@ -183,6 +186,22 @@ def run_backtest(
             return None
         v = float(sub.iloc[-1])
         return v if np.isfinite(v) and v > 0 else None
+
+    def px_col(sym: str, day: pd.Timestamp, col: str) -> float | None:
+        df = stock_bars.get(sym) if sym in stock_bars else crypto_bars.get(sym)
+        if df is None or len(df) == 0 or col not in df.columns:
+            return None
+        try:
+            dfx = df.copy()
+            dfx.index = _naive_utc_index(dfx.index)
+            dfx = dfx.sort_index()
+            sub = dfx[col].astype(float).loc[:day]
+            if len(sub) == 0:
+                return None
+            v = float(sub.iloc[-1])
+            return v if np.isfinite(v) and v > 0 else None
+        except Exception:
+            return None
 
     def exec_px(sym: str, day: pd.Timestamp) -> float | None:
         # Intraday execution pricing (rebalance only)
@@ -575,8 +594,17 @@ def run_backtest(
 
                     # buy at execution time + slippage
                     base_px = p_exec
-                    adj_bps = params.limit_offset_bps if params.use_limit_orders else params.slippage_bps
-                    buy_px = base_px * (1 + adj_bps / 10000.0)
+                    if params.use_limit_orders:
+                        limit_px = base_px * (1 + params.limit_offset_bps / 10000.0)
+                        buy_px = limit_px
+                        if params.limit_fallback_to_market_open:
+                            lo = px_col(sym, day, "low")
+                            op = px_open(sym, day)
+                            # If day's low never reaches limit, assume not filled and fallback to market-at-open (+slippage model)
+                            if (lo is None or lo > limit_px) and op is not None:
+                                buy_px = op * (1 + params.slippage_bps / 10000.0)
+                    else:
+                        buy_px = base_px * (1 + params.slippage_bps / 10000.0)
 
                     # desired add in notional terms at base_px
                     desired_q = (deltaN / base_px) if base_px else 0.0
@@ -614,8 +642,17 @@ def run_backtest(
 
                 else:
                     # sell at execution time - slippage
-                    adj_bps = params.limit_offset_bps if params.use_limit_orders else params.slippage_bps
-                    sell_px = p_exec * (1 - adj_bps / 10000.0)
+                    if params.use_limit_orders:
+                        limit_px = p_exec * (1 - params.limit_offset_bps / 10000.0)
+                        sell_px = limit_px
+                        if params.limit_fallback_to_market_open:
+                            hi = px_col(sym, day, "high")
+                            op = px_open(sym, day)
+                            # If day's high never reaches limit, assume not filled and fallback to market-at-open (-slippage model)
+                            if (hi is None or hi < limit_px) and op is not None:
+                                sell_px = op * (1 - params.slippage_bps / 10000.0)
+                    else:
+                        sell_px = p_exec * (1 - params.slippage_bps / 10000.0)
                     sellN = min(curN, abs(deltaN))
                     q_sub = (sellN / p_exec) if p_exec else 0.0
                     q_sub = min(q_sub, positions_qty.get(sym, 0.0))
