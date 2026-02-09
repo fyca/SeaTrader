@@ -166,6 +166,12 @@
           <button id="runRiskCheckBtn" class="secondary">Run risk-check</button>
           <span id="runActionStatus" class="muted"></span>
         </div>
+        <div style="display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">
+          <button id="cronSetupBtn" class="secondary">Setup cron</button>
+          <button id="cronRestartBtn" class="secondary">Restart cron</button>
+          <button id="cronStopBtn" class="danger">Stop cron</button>
+          <span id="cronStatusText" class="muted"></span>
+        </div>
       </div>
     </div>
 
@@ -1208,7 +1214,7 @@ function initThemePicker() {
 async function main() {
   initThemePicker();
 
-  const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies, btPresets, latestAction, scheduleStatus] = await Promise.all([
+  const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies, btPresets, latestAction, scheduleStatus, cronStatus] = await Promise.all([
     getJSON('/api/health'),
     getJSON('/api/config'),
     getJSON('/api/account'),
@@ -1223,7 +1229,8 @@ async function main() {
     getJSON('/api/strategies'),
     getJSON('/api/backtest/presets'),
     getJSON('/api/actions/latest?kind=rebalance').catch(()=>({state:'missing'})),
-    getJSON('/api/actions/schedule-status').catch(()=>({risk_daily_enabled:false}))
+    getJSON('/api/actions/schedule-status').catch(()=>({risk_daily_enabled:false})),
+    getJSON('/api/scheduler/cron-status').catch(()=>({enabled:false, rebalance:[], risk:[]}))
   ]);
 
   const frozen = artifacts.last_account?.payload?.frozen;
@@ -1303,6 +1310,7 @@ async function main() {
     kv(stateEl, 'Risk next run', scheduleStatus?.risk_next_run || '—');
     kv(stateEl, 'Risk scheduler', (scheduleStatus?.risk_last_state || 'running') + (scheduleStatus?.risk_last_error ? (' • ' + scheduleStatus.risk_last_error) : ''));
   }
+  kv(stateEl, 'Cron scheduler enabled', cronStatus?.enabled ? 'YES' : 'NO');
 
   // Strategy dropdown (live)
   const stratSel = document.getElementById('strategySelect');
@@ -1912,6 +1920,25 @@ document.getElementById('runRiskCheckBtn')?.addEventListener('click', (e) => {
   e.preventDefault();
   runDashboardAction('risk-check');
 });
+
+async function doCron(action) {
+  const el = document.getElementById('cronStatusText');
+  const token = document.getElementById('token')?.value || '';
+  try {
+    el.textContent = action + '…';
+    const r = await fetch('/api/scheduler/cron/' + action + (token ? ('?token=' + encodeURIComponent(token)) : ''), {method:'POST'});
+    if (!r.ok) throw new Error(await r.text());
+    const st = await getJSON('/api/scheduler/cron-status');
+    el.textContent = st.enabled ? 'cron: enabled' : 'cron: disabled';
+    main().catch(()=>{});
+  } catch (e) {
+    el.textContent = 'error: ' + e;
+  }
+}
+
+document.getElementById('cronSetupBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); doCron('setup'); });
+document.getElementById('cronRestartBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); doCron('restart'); });
+document.getElementById('cronStopBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); if(confirm('Disable SeaTrader cron schedules?')) doCron('stop'); });
 
 document.getElementById('btRun')?.addEventListener('click', (e) => {
   e.preventDefault();

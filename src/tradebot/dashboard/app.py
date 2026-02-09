@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -638,6 +639,67 @@ def create_app(*, config_path: str) -> FastAPI:
     @app.get("/api/actions/schedule-status")
     def actions_schedule_status():
         return dict(schedule_state)
+
+    CRON_TAG_REB = "# SEATRADER_REBALANCE"
+    CRON_TAG_RISK = "# SEATRADER_RISK"
+
+    def _cron_get_lines() -> list[str]:
+        try:
+            out = subprocess.check_output(["crontab", "-l"], text=True, stderr=subprocess.STDOUT)
+            return out.splitlines()
+        except subprocess.CalledProcessError as e:
+            txt = str(getattr(e, "output", "") or "")
+            if "no crontab for" in txt.lower():
+                return []
+            raise
+
+    def _cron_write_lines(lines: list[str]) -> None:
+        payload = "\n".join(lines).rstrip() + "\n"
+        subprocess.run(["crontab", "-"], input=payload, text=True, check=True)
+
+    def _dow_num(day: str) -> str:
+        m = {"SUN":"0", "MON":"1", "TUE":"2", "WED":"3", "THU":"4", "FRI":"5", "SAT":"6"}
+        return m.get(str(day).upper(), "1")
+
+    @app.get("/api/scheduler/cron-status")
+    def cron_status():
+        lines = _cron_get_lines()
+        reb = [ln for ln in lines if CRON_TAG_REB in ln]
+        risk = [ln for ln in lines if CRON_TAG_RISK in ln]
+        return {"ok": True, "enabled": bool(reb or risk), "rebalance": reb, "risk": risk}
+
+    @app.post("/api/scheduler/cron/setup")
+    async def cron_setup(req: Request):
+        require_token(req)
+        cfg = load_config(config_path)
+        lines = [ln for ln in _cron_get_lines() if (CRON_TAG_REB not in ln and CRON_TAG_RISK not in ln)]
+
+        hh_r, mm_r = [int(x) for x in str(getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35")).split(":")]
+        dow = _dow_num(str(getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+        hh_k, mm_k = [int(x) for x in str(getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")).split(":")]
+
+        repo = Path(config_path).resolve().parent.parent
+        cmd_base = f"cd {repo} && source .venv/bin/activate"
+        reb_cmd = f"{cmd_base} && tradebot rebalance --config {config_path} --place-orders"
+        risk_cmd = f"{cmd_base} && tradebot risk-check --config {config_path}"
+
+        lines.append(f"{mm_r} {hh_r} * * {dow} /bin/bash -lc '{reb_cmd}' {CRON_TAG_REB}")
+        lines.append(f"{mm_k} {hh_k} * * * /bin/bash -lc '{risk_cmd}' {CRON_TAG_RISK}")
+        _cron_write_lines(lines)
+        return {"ok": True}
+
+    @app.post("/api/scheduler/cron/stop")
+    async def cron_stop(req: Request):
+        require_token(req)
+        lines = [ln for ln in _cron_get_lines() if (CRON_TAG_REB not in ln and CRON_TAG_RISK not in ln)]
+        _cron_write_lines(lines)
+        return {"ok": True}
+
+    @app.post("/api/scheduler/cron/restart")
+    async def cron_restart(req: Request):
+        require_token(req)
+        await cron_stop(req)
+        return await cron_setup(req)
 
     # Backtest (token-gated)
     @app.post("/api/backtest/start")
