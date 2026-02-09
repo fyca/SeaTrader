@@ -180,9 +180,10 @@
             <div class="row" style="align-items:center; gap:8px;">
               <button id="btPreset1y" class="secondary">Last 1y</button>
               <button id="btPreset5y" class="secondary">Last 5y</button>
-              <span id="btStatus" class="muted"></span>
+              <input id="btSymbol" placeholder="Single symbol (optional)" style="min-width:260px;" />
               <button id="btRun" class="primary">Run backtest</button>
               <button id="btClearCache" class="secondary">Clear cache</button>
+              <span id="btStatus" class="muted"></span>
             </div>
           </div>
 
@@ -270,10 +271,7 @@
               <div class="muted">Fallback time (PT)</div>
               <input id="btLimitFallbackTime" placeholder="06:30" value="06:30" style="width:120px;" />
             </div>
-            <div>
-              <div class="muted">Single symbol (optional)</div>
-              <input id="btSymbol" placeholder="AAPL or BTC/USD" style="min-width:280px;" />
-            </div>
+            <!-- single symbol moved to header actions row -->
           </div>
         </div>
 
