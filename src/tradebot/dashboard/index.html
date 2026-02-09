@@ -500,7 +500,7 @@
           <div class="tableWrap">
             <table>
               <thead>
-                <tr><th>Symbol</th><th>Side</th><th>Filled Qty</th><th>Avg Price</th><th>Filled At</th></tr>
+                <tr><th>Symbol</th><th>Side</th><th>Filled Qty</th><th>Expected Px</th><th>Filled Avg Px</th><th>Slippage vs Expected</th><th>Filled At</th></tr>
               </thead>
               <tbody id="recentFills"></tbody>
             </table>
@@ -1499,8 +1499,19 @@ async function main() {
   rf.innerHTML = '';
   for (const o of (recentFills || [])) {
     const tr = document.createElement('tr');
-    const px = (o.filled_avg_price!==null && o.filled_avg_price!==undefined && o.filled_avg_price !== '') ? ('$' + Number(o.filled_avg_price).toFixed(2)) : '—';
-    tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${o.filled_qty || '—'}</td><td>${px}</td><td>${o.filled_at || ''}</td>`;
+    const fill = (o.filled_avg_price!==null && o.filled_avg_price!==undefined && o.filled_avg_price !== '') ? Number(o.filled_avg_price) : null;
+    const exp = (o.limit_price!==null && o.limit_price!==undefined && o.limit_price !== '') ? Number(o.limit_price) : null;
+    const fillTxt = (fill!=null) ? ('$' + fill.toFixed(4)) : '—';
+    const expTxt = (exp!=null) ? ('$' + exp.toFixed(4)) : '—';
+    let slipTxt = '—';
+    if (fill!=null && exp!=null && exp>0) {
+      const bps = (fill - exp) / exp * 10000;
+      const side = String(o.side||'').toUpperCase();
+      // positive means worse for buys, better for sells
+      const signed = (side === 'SELL') ? (-bps) : bps;
+      slipTxt = `${signed>=0?'+':''}${signed.toFixed(1)} bps`;
+    }
+    tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${o.filled_qty || '—'}</td><td>${expTxt}</td><td>${fillTxt}</td><td>${slipTxt}</td><td>${o.filled_at || ''}</td>`;
     rf.appendChild(tr);
   }
 
