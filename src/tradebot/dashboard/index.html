@@ -107,6 +107,11 @@
           <button id="saveBtn" class="primary">Save</button>
           <span id="saveStatus" class="muted"></span>
         </div>
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center; flex-wrap:wrap;">
+          <button id="runPaperRebalanceBtn" class="primary">Run paper rebalance</button>
+          <button id="runRiskCheckBtn" class="secondary">Run risk-check</button>
+          <span id="runActionStatus" class="muted"></span>
+        </div>
       </div>
     </div>
 
@@ -136,7 +141,7 @@
             <div class="sectionHeader">
               <div>
                 <div style="font-weight:700;">Presets</div>
-                <div class="muted" style="font-size:12px; margin-top:2px;">Save/load full backtest settings. Stored in <code>config/backtest_presets.yaml</code>.</div>
+                <div class="muted" style="font-size:12px; margin-top:2px;">Save/load full backtest settings. Stored in <code>config/presets.yaml</code> (unified).</div>
               </div>
               <span id="btPresetStatus" class="muted" style="font-size:12px;"></span>
             </div>
@@ -1586,6 +1591,61 @@ document.getElementById('cancelAllBtn')?.addEventListener('click', (e) => {
   }
 });
 
+let actionJobId = null;
+
+async function runDashboardAction(kind) {
+  const el = document.getElementById('runActionStatus');
+  const token = document.getElementById('token')?.value || '';
+  try {
+    el.textContent = 'starting ' + kind + '…';
+    const r = await fetch('/api/actions/run' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({kind, place_orders: kind==='rebalance'})
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const j = await r.json();
+    actionJobId = j.job_id;
+    el.textContent = kind + ' started: ' + actionJobId.slice(0,8);
+  } catch (e) {
+    el.textContent = 'error: ' + e;
+  }
+}
+
+async function pollActionJob() {
+  if (!actionJobId) return;
+  const el = document.getElementById('runActionStatus');
+  try {
+    const st = await getJSON('/api/actions/status?job_id=' + encodeURIComponent(actionJobId));
+    if (st.state === 'running' || st.state === 'starting') {
+      el.textContent = `${st.kind||'action'} ${st.state}…`;
+      return;
+    }
+    if (st.state === 'done') {
+      el.textContent = `${st.kind||'action'} done`;
+      actionJobId = null;
+      main().catch(()=>{});
+      return;
+    }
+    if (st.state === 'error') {
+      el.textContent = `${st.kind||'action'} error: ${st.error||'unknown'}`;
+      actionJobId = null;
+      return;
+    }
+  } catch {}
+}
+
+document.getElementById('runPaperRebalanceBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!confirm('Run paper rebalance now and place orders?')) return;
+  runDashboardAction('rebalance');
+});
+
+document.getElementById('runRiskCheckBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  runDashboardAction('risk-check');
+});
+
 document.getElementById('btRun')?.addEventListener('click', (e) => {
   e.preventDefault();
   runBacktest().catch(err => {
@@ -1621,6 +1681,7 @@ document.getElementById('btClearCache')?.addEventListener('click', async (e) => 
 setInterval(() => {
   main().catch(() => {});
   pollBacktest().catch(() => {});
+  pollActionJob().catch(() => {});
 }, 10_000);
 </script>
 </body>

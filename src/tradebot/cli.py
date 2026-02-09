@@ -14,7 +14,7 @@ from tradebot.universe.equities import list_tradable_equities
 from tradebot.universe.crypto import list_tradable_crypto
 from tradebot.strategies.registry import get_strategy
 from tradebot.portfolio.targets import build_equal_weight_targets
-from tradebot.execution.plan import diff_to_orders
+from tradebot.execution.plan import OrderPlan, diff_to_orders
 from tradebot.execution.alpaca import place_notional_market_orders
 from tradebot.execution.guardrails import check_order_guardrails
 from tradebot.risk.drawdown import update_drawdown_state
@@ -61,11 +61,12 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
 
     # Drawdown / freeze state
     state = load_state()
-    dd_state = update_drawdown_state(prior_peak_equity=state.peak_equity, current_equity=equity, freeze_at=cfg.risk.max_drawdown_freeze)
+    dd_trigger = cfg.risk.portfolio_dd_stop if cfg.risk.portfolio_dd_stop is not None else cfg.risk.max_drawdown_freeze
+    dd_state = update_drawdown_state(prior_peak_equity=state.peak_equity, current_equity=equity, freeze_at=dd_trigger)
     state.peak_equity = dd_state.peak_equity
     save_state(state)
     if dd_state.frozen:
-        print(f"[red]FROZEN[/red]: drawdown={dd_state.drawdown:.1%} (>= {cfg.risk.max_drawdown_freeze:.0%}) -> no new entries")
+        print(f"[red]DD STOP[/red]: drawdown={dd_state.drawdown:.1%} (>= {dd_trigger:.0%}) behavior={cfg.risk.dd_stop_behavior}")
     elif dd_state.drawdown >= cfg.risk.warn_drawdown:
         print(f"[yellow]Warning[/yellow]: drawdown={dd_state.drawdown:.1%}")
 
@@ -129,6 +130,26 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     if cr_sel:
         print("Crypto:", ", ".join(cr_sel))
 
+    # Apply symbol exclusion floor (parity with backtest, unrealized-based in live).
+    excluded = set([str(s).upper() for s in (state.excluded_symbols or [])])
+    floor = cfg.rebalance.symbol_pnl_floor_pct
+    if floor is not None:
+        for p in clients.trading.get_all_positions():
+            sym = str(getattr(p, "symbol", "") or "").upper()
+            if not sym:
+                continue
+            plpc = float(getattr(p, "unrealized_plpc", 0.0) or 0.0) if cfg.rebalance.symbol_pnl_floor_include_unrealized else 0.0
+            if plpc <= float(floor):
+                excluded.add(sym)
+
+    if excluded:
+        eq_sel = [s for s in eq_sel if str(s).upper() not in excluded]
+        cr_sel = [s for s in cr_sel if str(s).upper() not in excluded]
+
+    # Persist exclusions across runs
+    state.excluded_symbols = sorted(excluded)
+    save_state(state)
+
     # 4) Targets
     equity_budget = equity * cfg.allocation.equities
     crypto_budget = equity * cfg.allocation.crypto
@@ -144,14 +165,57 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     # 5) Current positions (notional)
     current_positions = clients.trading.get_all_positions()
     current_map: dict[str, float] = {}
+    avg_entry_map: dict[str, float] = {}
+    cur_price_map: dict[str, float] = {}
     for p in current_positions:
         sym = getattr(p, "symbol", "")
         mv = float(getattr(p, "market_value", 0.0) or 0.0)
         if sym:
             current_map[sym] = mv
+            try:
+                avg_entry_map[sym] = float(getattr(p, "avg_entry_price", 0.0) or 0.0)
+            except Exception:
+                pass
+            try:
+                cur_price_map[sym] = float(getattr(p, "current_price", 0.0) or 0.0)
+            except Exception:
+                pass
+
+    # liquidation_mode parity
+    if cfg.rebalance.liquidation_mode == "hold_until_exit":
+        for sym, cur in current_map.items():
+            if sym not in target_map:
+                target_map[sym] = float(cur)
+                class_map.setdefault(sym, "crypto" if "/" in sym else "equity")
+
+    # immediate liquidation for excluded symbols
+    if cfg.rebalance.symbol_pnl_floor_liquidate and excluded:
+        for sym in excluded:
+            if sym in current_map:
+                target_map[sym] = 0.0
+                class_map.setdefault(sym, "crypto" if "/" in sym else "equity")
 
     # 6) Plan orders
     plans = diff_to_orders(current_notional=current_map, targets=target_map, asset_class_by_symbol=class_map)
+
+    # rebalance_mode parity: no_add_to_losers
+    if cfg.rebalance.rebalance_mode == "no_add_to_losers":
+        keep: list = []
+        for pl in plans:
+            if pl.side != "buy":
+                keep.append(pl)
+                continue
+            try:
+                cur_mv = float(current_map.get(pl.symbol, 0.0) or 0.0)
+                avg = float(avg_entry_map.get(pl.symbol, 0.0) or 0.0)
+                px = float(cur_price_map.get(pl.symbol, 0.0) or 0.0)
+                # if position exists and current price below avg entry, skip add
+                if cur_mv > 0 and avg > 0 and px > 0 and px < avg:
+                    continue
+            except Exception:
+                pass
+            keep.append(pl)
+        plans = keep
 
     print("\nOrder plan (notional USD):")
     if not plans:
@@ -183,9 +247,26 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     )
 
     if dd_state.frozen:
-        # Allow sells (exits), block buys
-        plans = [p for p in plans if p.side == "sell"]
-        print("\nFrozen mode: filtered order plan to SELLS only.")
+        if cfg.risk.dd_stop_behavior == "liquidate_to_cash":
+            # Override plan: liquidate everything.
+            plans = []
+            for sym, cur in sorted(current_map.items()):
+                if cur <= 0:
+                    continue
+                plans.append(
+                    OrderPlan(
+                        symbol=sym,
+                        side="sell",
+                        notional_usd=float(cur),
+                        asset_class=("crypto" if "/" in sym else "equity"),
+                        reason="dd_stop_liquidate",
+                    )
+                )
+            print("\nDD stop mode: liquidate_to_cash (all positions set to SELL).")
+        else:
+            # freeze: allow sells, block buys
+            plans = [p for p in plans if p.side == "sell"]
+            print("\nDD stop mode: freeze (filtered order plan to SELLS only).")
 
     if dry_run or not args.place_orders:
         print("\nNo orders placed (dry-run or --place-orders not set).")

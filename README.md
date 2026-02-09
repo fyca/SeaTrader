@@ -220,6 +220,12 @@ tradebot rebalance --preset default_safe_weekly
 ### Rebalance (plan only)
 Computes a rebalance plan and prints it; does not place orders.
 
+Live/paper rebalance behavior now supports parity knobs with backtests (via unified presets/config):
+- `rebalance.rebalance_mode` (`target_notional` / `no_add_to_losers`)
+- `rebalance.liquidation_mode` (`liquidate_non_selected` / `hold_until_exit`)
+- `rebalance.symbol_pnl_floor_pct` (+ include_unrealized + immediate liquidation toggle)
+- `risk.portfolio_dd_stop` + `risk.dd_stop_behavior` (`freeze` / `liquidate_to_cash`)
+
 ```bash
 tradebot rebalance --config config/config.yaml
 ```
@@ -267,6 +273,7 @@ Dashboard highlights:
 - Run artifacts (last rebalance / last risk-check / last placed orders)
 - Backtesting UI (run + history + charts)
 - Strategy dropdown and a button to open the Strategy Builder
+- Action buttons: **Run paper rebalance** and **Run risk-check** (token-gated if enabled)
 
 ### Dashboard auth token
 Token gating can be enabled/disabled via env/config:

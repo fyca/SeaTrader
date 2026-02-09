@@ -28,10 +28,26 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
     if params.get("strategy_id"):
         bot["strategy_id"] = params.get("strategy_id")
 
-    # stop loss is shared
+    # risk knobs shared/parity
     if params.get("per_asset_stop_loss_pct") is not None:
         bot.setdefault("risk", {})
         bot["risk"]["per_asset_stop_loss_pct"] = params.get("per_asset_stop_loss_pct")
+    if params.get("portfolio_dd_stop") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["portfolio_dd_stop"] = params.get("portfolio_dd_stop")
+
+    # rebalance behavior parity
+    bot.setdefault("rebalance", {})
+    if params.get("rebalance_mode"):
+        bot["rebalance"]["rebalance_mode"] = params.get("rebalance_mode")
+    if params.get("liquidation_mode"):
+        bot["rebalance"]["liquidation_mode"] = params.get("liquidation_mode")
+    if params.get("symbol_pnl_floor_pct") is not None:
+        bot["rebalance"]["symbol_pnl_floor_pct"] = params.get("symbol_pnl_floor_pct")
+    if params.get("symbol_pnl_floor_liquidate") is not None:
+        bot["rebalance"]["symbol_pnl_floor_liquidate"] = bool(params.get("symbol_pnl_floor_liquidate"))
+    if params.get("symbol_pnl_floor_include_unrealized") is not None:
+        bot["rebalance"]["symbol_pnl_floor_include_unrealized"] = bool(params.get("symbol_pnl_floor_include_unrealized"))
 
     # execution timing mapping (best-effort): sets the time our unattended rebalance should run.
     # This does NOT change pricing/fills in live; it just schedules when the CLI executes.

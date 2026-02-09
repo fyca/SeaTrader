@@ -25,7 +25,8 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
     equity = float(acct.equity)
 
     state = load_state()
-    dd_state = update_drawdown_state(prior_peak_equity=state.peak_equity, current_equity=equity, freeze_at=cfg.risk.max_drawdown_freeze)
+    dd_trigger = cfg.risk.portfolio_dd_stop if cfg.risk.portfolio_dd_stop is not None else cfg.risk.max_drawdown_freeze
+    dd_state = update_drawdown_state(prior_peak_equity=state.peak_equity, current_equity=equity, freeze_at=dd_trigger)
     state.peak_equity = dd_state.peak_equity
     save_state(state)
 

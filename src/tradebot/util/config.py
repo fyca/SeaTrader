@@ -24,6 +24,12 @@ class Risk(BaseModel):
     max_drawdown_freeze: float = 0.20
     warn_drawdown: float = 0.10
     per_asset_stop_loss_pct: float | None = None
+    # Optional parity knob with backtest portfolio_dd_stop.
+    # If set, this overrides max_drawdown_freeze as the trigger in live/paper.
+    portfolio_dd_stop: float | None = None
+    # freeze (default): block buys, allow sells
+    # liquidate_to_cash: liquidate all holdings when threshold hit
+    dd_stop_behavior: Literal["freeze", "liquidate_to_cash"] = "freeze"
 
 
 class SignalParams(BaseModel):
@@ -61,6 +67,15 @@ class Universe(BaseModel):
     exclude_leveraged_etfs: bool = True
 
 
+class RebalanceBehavior(BaseModel):
+    # parity with backtest knobs
+    rebalance_mode: Literal["target_notional", "no_add_to_losers"] = "target_notional"
+    liquidation_mode: Literal["liquidate_non_selected", "hold_until_exit"] = "liquidate_non_selected"
+    symbol_pnl_floor_pct: float | None = None
+    symbol_pnl_floor_liquidate: bool = True
+    symbol_pnl_floor_include_unrealized: bool = True
+
+
 class BotConfig(BaseModel):
     # Optional unified preset name. When set, the preset's `bot` patch is merged
     # on top of this YAML before validation.
@@ -76,6 +91,7 @@ class BotConfig(BaseModel):
     execution: Execution = Execution()
     scheduling: Scheduling = Scheduling()
     universe: Universe = Universe()
+    rebalance: RebalanceBehavior = RebalanceBehavior()
 
 
 def _deep_merge(a: dict, b: dict) -> dict:

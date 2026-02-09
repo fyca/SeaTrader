@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import json
+import threading
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,7 +15,6 @@ from tradebot.dashboard.auth import check_token
 from tradebot.dashboard.actions import require_token
 from tradebot.dashboard.config_api import load_config_file, save_config_file, validate_config_payload
 from tradebot.backtest.job import start_backtest, get_status as bt_status, get_result as bt_result, list_jobs as bt_list_jobs, get_latest_job_id
-from pathlib import Path
 from tradebot.util.config import load_config
 from tradebot.util.env import load_env
 from tradebot.adapters.alpaca_client import make_alpaca_clients
@@ -31,6 +33,7 @@ def _read_json(path: Path):
 
 def create_app(*, config_path: str) -> FastAPI:
     app = FastAPI(title="tradebot dashboard")
+    action_jobs: dict[str, dict] = {}
 
     # Static assets (themes, icons, etc.)
     static_dir = Path(__file__).with_name("static")
@@ -412,6 +415,47 @@ def create_app(*, config_path: str) -> FastAPI:
         clients = make_alpaca_clients(env)
         res = clients.trading.cancel_orders()
         return {"ok": True, "result": str(res)}
+
+    @app.post("/api/actions/run")
+    async def run_action(req: Request):
+        require_token(req)
+        body = await req.json()
+        kind = str(body.get("kind") or "").strip()
+        preset = body.get("preset")
+        place_orders = bool(body.get("place_orders", True))
+
+        if kind not in ("rebalance", "risk-check"):
+            raise HTTPException(status_code=400, detail="kind must be rebalance or risk-check")
+
+        job_id = str(uuid.uuid4())
+        action_jobs[job_id] = {"state": "starting", "kind": kind, "started_at": datetime.now(timezone.utc).isoformat()}
+
+        def _run():
+            try:
+                from tradebot.cli import cmd_rebalance
+                from tradebot.commands.risk_check import cmd_risk_check
+
+                action_jobs[job_id]["state"] = "running"
+                if kind == "rebalance":
+                    ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset)
+                    rc = int(cmd_rebalance(ns))
+                else:
+                    ns = argparse.Namespace(config=config_path, preset=preset)
+                    rc = int(cmd_risk_check(ns))
+                action_jobs[job_id]["state"] = "done"
+                action_jobs[job_id]["rc"] = rc
+                action_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+            except Exception as e:
+                action_jobs[job_id]["state"] = "error"
+                action_jobs[job_id]["error"] = str(e)
+                action_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True, "job_id": job_id}
+
+    @app.get("/api/actions/status")
+    def action_status(job_id: str):
+        return action_jobs.get(job_id) or {"state": "missing"}
 
     # Backtest (token-gated)
     @app.post("/api/backtest/start")
