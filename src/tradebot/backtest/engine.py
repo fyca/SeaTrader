@@ -312,7 +312,7 @@ def run_backtest(
             else:
                 positions_avg_cost[sym] = (prevQ * prevCost + q_add * fill_px) / (prevQ + q_add)
             positions_qty[sym] = newQ
-            _event({"type":"buy", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "qty":float(q_add), "price":float(fill_px), "notional":float(cost), "new_qty":float(newQ), "reason":reason})
+            _event({"type":"buy", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "qty":float(q_add), "price":float(fill_px), "expected_price": float(po.get("limit_px")) if po.get("limit_px") is not None else None, "notional":float(cost), "new_qty":float(newQ), "reason":reason})
         else:
             q_sub = min(float(po.get("qty") or 0.0), positions_qty.get(sym, 0.0))
             if q_sub <= 0:
@@ -343,7 +343,7 @@ def run_backtest(
                 newQ = 0.0
             else:
                 positions_qty[sym] = newQ
-            _event({"type":"sell", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "qty":float(q_sub), "price":float(fill_px), "notional":float(proceeds), "new_qty":float(newQ), "reason":reason, "pnl":float(pnl)})
+            _event({"type":"sell", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "qty":float(q_sub), "price":float(fill_px), "expected_price": float(po.get("limit_px")) if po.get("limit_px") is not None else None, "notional":float(proceeds), "new_qty":float(newQ), "reason":reason, "pnl":float(pnl)})
 
     def _limit_touched(sym: str, day: pd.Timestamp, side: str, limit_px: float) -> bool:
         if intraday_limit_touch_cb is not None:

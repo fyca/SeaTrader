@@ -1112,15 +1112,18 @@ async function renderBacktest(res) {
       const rowsHtml = evs.length ? evs.slice().sort((a,b)=>String(a.type||'').localeCompare(String(b.type||''))).map(e=>{
         const qty = (e.qty!=null) ? Number(e.qty).toFixed(6) : '—';
         const px = (e.price!=null) ? ('$' + Number(e.price).toFixed(6)) : '—';
+        let expPxNum = (e.expected_price!=null) ? Number(e.expected_price) : null;
+        if (expPxNum==null && String(e.reason||'')==='limit_fill' && e.price!=null) expPxNum = Number(e.price);
+        const expPx = (expPxNum!=null && Number.isFinite(expPxNum)) ? ('$' + expPxNum.toFixed(6)) : '—';
         const notional = (e.notional!=null) ? money(e.notional) : '—';
         const pnl = (e.pnl!=null) ? money(e.pnl) : '—';
-        return `<tr><td>${String(e.type||'').toUpperCase()}</td><td>${e.symbol||''}</td><td>${qty}</td><td>${px}</td><td>${notional}</td><td>${pnl}</td><td>${e.reason||''}</td></tr>`;
-      }).join('') : `<tr><td colspan="7" class="muted">(no buys/sells)</td></tr>`;
+        return `<tr><td>${String(e.type||'').toUpperCase()}</td><td>${e.symbol||''}</td><td>${qty}</td><td>${expPx}</td><td>${px}</td><td>${notional}</td><td>${pnl}</td><td>${e.reason||''}</td></tr>`;
+      }).join('') : `<tr><td colspan="8" class="muted">(no buys/sells)</td></tr>`;
 
       detail.innerHTML = `<td colspan="12">
         <div class="tableWrap" style="max-height:220px; margin:8px 0;">
           <table>
-            <thead><tr><th>Type</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Notional</th><th>P/L</th><th>Reason</th></tr></thead>
+            <thead><tr><th>Type</th><th>Symbol</th><th>Qty</th><th>Expected Px</th><th>Fill Px</th><th>Notional</th><th>P/L</th><th>Reason</th></tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
         </div>
