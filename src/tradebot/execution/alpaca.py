@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderType
+from alpaca.trading.requests import LimitOrderRequest, MarketOrderRequest
 
 
 @dataclass(frozen=True)
@@ -14,14 +14,42 @@ class PlacedOrder:
     id: str
 
 
-def place_notional_market_orders(trading_client, plans) -> list[PlacedOrder]:
-    """Place notional market orders (paper/live depending on client)."""
+def place_notional_market_orders(
+    trading_client,
+    plans,
+    *,
+    use_limit_orders: bool = False,
+    limit_offset_bps: float = 10.0,
+    ref_price_by_symbol: dict[str, float] | None = None,
+) -> list[PlacedOrder]:
+    """Place notional orders (market by default; optional limit with offset)."""
     out: list[PlacedOrder] = []
+    ref_price_by_symbol = ref_price_by_symbol or {}
+
     for pl in plans:
+        side = OrderSide.BUY if pl.side == "buy" else OrderSide.SELL
+
+        if use_limit_orders:
+            ref = float(ref_price_by_symbol.get(pl.symbol, 0.0) or 0.0)
+            if ref > 0:
+                mul = (1 + limit_offset_bps / 10000.0) if pl.side == "buy" else (1 - limit_offset_bps / 10000.0)
+                lim = round(ref * mul, 6)
+                req = LimitOrderRequest(
+                    symbol=pl.symbol,
+                    notional=round(float(pl.notional_usd), 2),
+                    side=side,
+                    type=OrderType.LIMIT,
+                    time_in_force=TimeInForce.DAY,
+                    limit_price=lim,
+                )
+                o = trading_client.submit_order(req)
+                out.append(PlacedOrder(symbol=pl.symbol, side=pl.side, notional_usd=float(pl.notional_usd), id=str(getattr(o, "id", ""))))
+                continue
+
         req = MarketOrderRequest(
             symbol=pl.symbol,
             notional=round(float(pl.notional_usd), 2),
-            side=OrderSide.BUY if pl.side == "buy" else OrderSide.SELL,
+            side=side,
             time_in_force=TimeInForce.DAY,
         )
         o = trading_client.submit_order(req)

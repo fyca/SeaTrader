@@ -221,6 +221,8 @@ tradebot rebalance --preset default_safe_weekly
 Computes a rebalance plan and prints it; does not place orders.
 
 Live/paper rebalance behavior now supports parity knobs with backtests (via unified presets/config):
+- `execution.use_limit_orders` + `execution.limit_offset_bps`
+- `scheduling.weekly_rebalance_day`
 - `rebalance.rebalance_mode` (`target_notional` / `no_add_to_losers`)
 - `rebalance.liquidation_mode` (`liquidate_non_selected` / `hold_until_exit`)
 - `rebalance.symbol_pnl_floor_pct` (+ include_unrealized + immediate liquidation toggle)

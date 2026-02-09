@@ -140,8 +140,9 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                 if p.rebalance == "daily":
                     reb_days = set(all_days)
                 else:
-                    # weekly rebalance is MON by default in engine
-                    reb_days = set([d for d in all_days if d.weekday() == 0])
+                    day_map = {"MON":0, "TUE":1, "WED":2, "THU":3, "FRI":4, "SAT":5, "SUN":6}
+                    wd = day_map.get(str(getattr(p, "rebalance_day", "MON")).upper(), 0)
+                    reb_days = set([d for d in all_days if d.weekday() == wd])
 
                 def intraday_cb(sym, day):
                     if day not in reb_days:

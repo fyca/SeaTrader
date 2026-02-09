@@ -40,6 +40,9 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
     bot.setdefault("rebalance", {})
     if params.get("rebalance_mode"):
         bot["rebalance"]["rebalance_mode"] = params.get("rebalance_mode")
+    if params.get("rebalance_day"):
+        bot.setdefault("scheduling", {})
+        bot["scheduling"]["weekly_rebalance_day"] = str(params.get("rebalance_day")).upper()
     if params.get("liquidation_mode"):
         bot["rebalance"]["liquidation_mode"] = params.get("liquidation_mode")
     if params.get("symbol_pnl_floor_pct") is not None:
@@ -48,6 +51,13 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
         bot["rebalance"]["symbol_pnl_floor_liquidate"] = bool(params.get("symbol_pnl_floor_liquidate"))
     if params.get("symbol_pnl_floor_include_unrealized") is not None:
         bot["rebalance"]["symbol_pnl_floor_include_unrealized"] = bool(params.get("symbol_pnl_floor_include_unrealized"))
+
+    # execution mode mapping for live
+    bot.setdefault("execution", {})
+    if params.get("use_limit_orders") is not None:
+        bot["execution"]["use_limit_orders"] = bool(params.get("use_limit_orders"))
+    if params.get("limit_offset_bps") is not None:
+        bot["execution"]["limit_offset_bps"] = float(params.get("limit_offset_bps"))
 
     # execution timing mapping (best-effort): sets the time our unattended rebalance should run.
     # This does NOT change pricing/fills in live; it just schedules when the CLI executes.

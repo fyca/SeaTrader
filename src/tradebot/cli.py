@@ -285,7 +285,22 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     if not gr.ok:
         raise RuntimeError(f"Guardrail blocked order placement: {gr.reason}")
 
-    placed = place_notional_market_orders(clients.trading, plans)
+    # Reference prices for optional limit orders
+    ref_px: dict[str, float] = {}
+    for sym, df in {**eq_bars, **cr_bars}.items():
+        try:
+            if df is not None and len(df) and "close" in df.columns:
+                ref_px[sym] = float(df["close"].dropna().iloc[-1])
+        except Exception:
+            pass
+
+    placed = place_notional_market_orders(
+        clients.trading,
+        plans,
+        use_limit_orders=bool(cfg.execution.use_limit_orders),
+        limit_offset_bps=float(cfg.execution.limit_offset_bps),
+        ref_price_by_symbol=ref_px,
+    )
 
     write_artifact(
         "last_placed_orders.json",

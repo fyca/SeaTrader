@@ -100,7 +100,21 @@
           <option value="0.16">16%</option><option value="0.17">17%</option><option value="0.18">18%</option><option value="0.19">19%</option><option value="0.20">20%</option>
         </select>
 
-        <div class="muted" style="margin: 10px 0 6px 0;">Execution guardrails (paper/live)</div>
+        <div class="muted" style="margin: 10px 0 6px 0;">Execution options (paper/live)</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div>
+            <div class="muted" style="font-size:12px;">Use limit orders</div>
+            <select id="useLimitOrdersSelect"><option value="false">No (market)</option><option value="true">Yes (limit)</option></select>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Limit offset (bps)</div>
+            <input id="limitOffsetInput" placeholder="10" />
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Weekly rebalance day</div>
+            <select id="weeklyRebalanceDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
+          </div>
+        </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
           <div>
             <div class="muted" style="font-size:12px;">Max orders/run</div>
@@ -223,6 +237,14 @@
               <input id="btSlip" placeholder="10" value="10" style="width:120px;" />
             </div>
             <div>
+              <div class="muted">Use limit orders</div>
+              <select id="btUseLimit" style="width:150px;"><option value="false" selected>No (market)</option><option value="true">Yes (limit)</option></select>
+            </div>
+            <div>
+              <div class="muted">Limit offset (bps)</div>
+              <input id="btLimitOffset" placeholder="10" value="10" style="width:120px;" />
+            </div>
+            <div>
               <div class="muted">Single symbol (optional)</div>
               <input id="btSymbol" placeholder="AAPL or BTC/USD" style="min-width:280px;" />
             </div>
@@ -237,6 +259,12 @@
               <select id="btRebalance" style="width:160px;">
                 <option value="weekly" selected>Weekly</option>
                 <option value="daily">Daily</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Weekly day</div>
+              <select id="btRebalanceDay" style="width:120px;">
+                <option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option>
               </select>
             </div>
             <div>
@@ -600,9 +628,12 @@ async function runBacktest() {
   const execution_tz = 'America/Los_Angeles';
   const asset_mode = (document.getElementById('btAssets')?.value || 'both');
   const rebalance = (document.getElementById('btRebalance')?.value || 'weekly');
+  const rebalance_day = (document.getElementById('btRebalanceDay')?.value || 'MON');
   const rebalance_mode = (document.getElementById('btRebalanceMode')?.value || 'target_notional');
   const liquidation_mode = (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected');
   const slippage_bps = Number(document.getElementById('btSlip')?.value || '10');
+  const use_limit_orders = String(document.getElementById('btUseLimit')?.value || 'false') === 'true';
+  const limit_offset_bps = Number(document.getElementById('btLimitOffset')?.value || '10');
   const symbol = (document.getElementById('btSymbol')?.value || '').trim();
   const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
   const symFloorRaw = (document.getElementById('btSymFloor')?.value || '').trim();
@@ -615,7 +646,7 @@ async function runBacktest() {
   const ddStopRaw = ddCustom || ddPreset;
   const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
   status.textContent = 'starting…';
-  const body = {start, end, slippage_bps, initial_equity: 100000, strategy_id, execution_time_mode, execution_time, execution_time_local, execution_tz, asset_mode, rebalance, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
+  const body = {start, end, slippage_bps, use_limit_orders, limit_offset_bps, initial_equity: 100000, strategy_id, execution_time_mode, execution_time, execution_time_local, execution_tz, asset_mode, rebalance, rebalance_day, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
   const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -1186,6 +1217,12 @@ async function main() {
   setGuard('maxOrdersInput', cfg.execution?.max_orders_per_run);
   setGuard('maxSingleInput', cfg.execution?.max_single_order_notional_usd);
   setGuard('maxTotalInput', cfg.execution?.max_total_notional_usd);
+  const ulo = document.getElementById('useLimitOrdersSelect');
+  if (ulo) ulo.value = String(Boolean(cfg.execution?.use_limit_orders));
+  const loi = document.getElementById('limitOffsetInput');
+  if (loi) loi.value = String(cfg.execution?.limit_offset_bps ?? 10);
+  const wrd = document.getElementById('weeklyRebalanceDaySelect');
+  if (wrd) wrd.value = String(cfg.scheduling?.weekly_rebalance_day || 'MON');
 
   // Config editor
   const editor = document.getElementById('configEditor');
@@ -1298,9 +1335,12 @@ async function main() {
       execution_tz: 'America/Los_Angeles',
       asset_mode: (document.getElementById('btAssets')?.value || 'both'),
       rebalance: (document.getElementById('btRebalance')?.value || 'weekly'),
+      rebalance_day: (document.getElementById('btRebalanceDay')?.value || 'MON'),
       rebalance_mode: (document.getElementById('btRebalanceMode')?.value || 'target_notional'),
       liquidation_mode: (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected'),
       slippage_bps: Number(document.getElementById('btSlip')?.value || '10'),
+      use_limit_orders: String(document.getElementById('btUseLimit')?.value || 'false') === 'true',
+      limit_offset_bps: Number(document.getElementById('btLimitOffset')?.value || '10'),
       per_asset_stop_loss_pct,
       portfolio_dd_stop,
       symbol_pnl_floor_pct,
@@ -1318,9 +1358,12 @@ async function main() {
     setVal('btExecLocal', p.execution_time_local);
     setVal('btAssets', p.asset_mode);
     setVal('btRebalance', p.rebalance);
+    setVal('btRebalanceDay', p.rebalance_day);
     setVal('btRebalanceMode', p.rebalance_mode);
     setVal('btLiquidation', p.liquidation_mode);
     setVal('btSlip', p.slippage_bps);
+    setVal('btUseLimit', String(Boolean(p.use_limit_orders)));
+    setVal('btLimitOffset', p.limit_offset_bps);
     setVal('btStopLoss', p.per_asset_stop_loss_pct);
     setVal('btDD', '');
     setVal('btDDPreset', p.portfolio_dd_stop);
@@ -1585,6 +1628,10 @@ async function saveConfig() {
     body.execution.max_orders_per_run = parseMaybeNone(document.getElementById('maxOrdersInput')?.value, true);
     body.execution.max_single_order_notional_usd = parseMaybeNone(document.getElementById('maxSingleInput')?.value, false);
     body.execution.max_total_notional_usd = parseMaybeNone(document.getElementById('maxTotalInput')?.value, false);
+    body.execution.use_limit_orders = String(document.getElementById('useLimitOrdersSelect')?.value || 'false') === 'true';
+    body.execution.limit_offset_bps = Number(document.getElementById('limitOffsetInput')?.value || '10');
+    body.scheduling = body.scheduling || {};
+    body.scheduling.weekly_rebalance_day = String(document.getElementById('weeklyRebalanceDaySelect')?.value || 'MON').toUpperCase();
 
     status.textContent = 'saving…';
     const r = await fetch('/api/config' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {

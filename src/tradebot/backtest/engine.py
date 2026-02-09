@@ -17,7 +17,10 @@ class BacktestParams:
     end: str    # YYYY-MM-DD
     initial_equity: float = 100000.0
     slippage_bps: float = 10.0
+    use_limit_orders: bool = False
+    limit_offset_bps: float = 10.0
     rebalance: Literal["weekly", "daily"] = "weekly"
+    rebalance_day: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] = "MON"
 
     # Execution pricing options
     # - daily mode: uses daily open/close as before
@@ -79,11 +82,12 @@ def _date_range(start: str, end: str) -> pd.DatetimeIndex:
     return idx
 
 
-def _rebalance_days(days: pd.DatetimeIndex, mode: str) -> set[pd.Timestamp]:
+def _rebalance_days(days: pd.DatetimeIndex, mode: str, weekly_day: str = "MON") -> set[pd.Timestamp]:
     if mode == "daily":
         return set(days)
-    # weekly: Mondays
-    return set([d for d in days if d.weekday() == 0])
+    day_map = {"MON":0, "TUE":1, "WED":2, "THU":3, "FRI":4, "SAT":5, "SUN":6}
+    wd = day_map.get(str(weekly_day).upper(), 0)
+    return set([d for d in days if d.weekday() == wd])
 
 
 def run_backtest(
@@ -108,7 +112,7 @@ def run_backtest(
     start = pd.to_datetime(params.start)
     end = pd.to_datetime(params.end)
     days = _date_range(params.start, params.end)
-    rebal_days = _rebalance_days(days, params.rebalance)
+    rebal_days = _rebalance_days(days, params.rebalance, params.rebalance_day)
 
     equity = float(params.initial_equity)
     cash = equity
@@ -571,7 +575,8 @@ def run_backtest(
 
                     # buy at execution time + slippage
                     base_px = p_exec
-                    buy_px = base_px * (1 + params.slippage_bps / 10000.0)
+                    adj_bps = params.limit_offset_bps if params.use_limit_orders else params.slippage_bps
+                    buy_px = base_px * (1 + adj_bps / 10000.0)
 
                     # desired add in notional terms at base_px
                     desired_q = (deltaN / base_px) if base_px else 0.0
@@ -609,7 +614,8 @@ def run_backtest(
 
                 else:
                     # sell at execution time - slippage
-                    sell_px = p_exec * (1 - params.slippage_bps / 10000.0)
+                    adj_bps = params.limit_offset_bps if params.use_limit_orders else params.slippage_bps
+                    sell_px = p_exec * (1 - adj_bps / 10000.0)
                     sellN = min(curN, abs(deltaN))
                     q_sub = (sellN / p_exec) if p_exec else 0.0
                     q_sub = min(q_sub, positions_qty.get(sym, 0.0))
