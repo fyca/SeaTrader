@@ -24,6 +24,7 @@
     .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
     .card h2 { font-size: 14px; margin: 0 0 8px 0; }
     .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; }
+    #account.kvs { grid-template-columns: 150px 1fr 150px 1fr; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { padding: 6px 8px; text-align: left; vertical-align: top; }
     .tableWrap { overflow: auto; position: relative; max-height: 360px; border: 1px solid var(--border); border-radius: var(--radius-md); }
@@ -40,6 +41,7 @@
     .col-12 { grid-column: span 12; }
     @media (max-width: 900px) {
       .col-6 { grid-column: span 12; }
+      #account.kvs { grid-template-columns: 160px 1fr; }
     }
   </style>
 </head>
