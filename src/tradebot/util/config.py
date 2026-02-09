@@ -126,7 +126,8 @@ def load_config(path: str | Path, *, preset_override: str | None = None) -> BotC
 
             p = get_preset(str(preset_name))
             if p and isinstance(p.get("bot"), dict):
-                data = _deep_merge(data, p.get("bot") or {})
+                # Preset provides defaults; explicit config.yaml values win.
+                data = _deep_merge(p.get("bot") or {}, data)
         except Exception:
             # preset loading failure should not crash bot; continue with base config
             pass
