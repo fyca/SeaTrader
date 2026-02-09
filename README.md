@@ -104,7 +104,8 @@ Build a safe, unattended swing/long-term trading bot that:
 - Daily risk-check with drawdown tracking and exit signals
 - Dashboard with monitoring + backtesting UI + Strategy Builder
 - Strategy registry supports built-ins + user-defined strategies
-- Backtest engine supports stocks/crypto, slippage model, portfolio DD stop behavior A, per-asset stop loss, and many toggles
+- Unified preset system (`config/presets.yaml`) for backtest + live/paper parity
+- Backtest engine supports stocks/crypto, slippage + limit-order simulation, intraday execution, order lifecycle events, and many toggles
 
 ---
 
@@ -275,13 +276,14 @@ Default URL:
 - http://127.0.0.1:8008
 
 Dashboard highlights:
-- Account overview, positions, open orders, fills
-- Exposure view including **pending orders** and estimated quantities
+- Account section grouped into meaningful blocks (identity, cash/equity, risk/restrictions, buying power/margin)
+- Open orders, recent fills, exposure view (pending notional/qty)
 - Run artifacts (last rebalance / last risk-check / last placed orders)
-- Backtesting UI (run + history + charts)
-- Strategy dropdown and a button to open the Strategy Builder
-- Action buttons: **Run paper rebalance**, **Run at configured time**, and **Run risk-check** (token-gated if enabled)
-- Extended-hours start time is configurable via `execution.extended_hours_start_time_local` (used by "Run at configured time" when extended-hours is enabled)
+- Backtesting UI with presets, execution modes, limit/fallback modeling, daily ledger, and drilldowns
+- Search filters for realized trades and daily ledger symbols
+- Action buttons: **Run paper rebalance**, **Run at configured time**, and **Run risk-check**
+- Scheduler controls: **Setup cron / Restart cron / Stop cron** + cron detection/status
+- Bot-state flags for queued rebalance and queued daily risk-check, with schedule visibility
 
 ### Dashboard auth token
 Token gating can be enabled/disabled via env/config:
@@ -338,16 +340,21 @@ Backtests run in the background via the dashboard or programmatically.
 ### Features
 - Stocks + crypto support
 - Slippage model (bps)
-- Weekly or daily rebalance
+- Weekly or daily rebalance (+ weekly rebalance day selector)
+- Limit order simulation (with optional fallback to market-at-open)
+- Pending limit lifecycle simulation:
+  - place limit
+  - fill when touched (minute bars when intraday data available)
+  - optional fallback market fill
+  - cancel unfilled at next rebalance boundary
+- Order lifecycle summary in results (placed / filled / fallback / canceled)
 - Liquidation modes:
   - liquidate non-selected
   - hold until exit
 - Per-asset stop loss (daily check)
-- Portfolio drawdown stop (behavior A: liquidate-to-cash, resume next rebalance)
+- Portfolio drawdown stop
 - Strategy selection in the backtest UI
-- Benchmarks overlay (S&P 500 index line; SPY comparison line can be toggled/removed)
-- Interactive charts (Plotly): hover, zoom, range slider, unified x-hover
-- Portfolio RSI plotted under the equity curve
+- Interactive charts + symbol drilldowns + event markers
 - Optional exclusion rule: stop trading a symbol if its P/L falls below a floor
   - optionally includes unrealized P/L
   - optionally liquidates immediately when excluded
@@ -435,3 +442,28 @@ tradebot rebalance --config config/config.yaml --place-orders
 # daily risk check
 tradebot risk-check --config config/config.yaml
 ```
+
+---
+
+## Changelog
+
+### 2026-02-09
+- Added unified preset behavior improvements (config values override preset defaults)
+- Added dashboard execution controls for limit/market behavior, extended-hours, fallback options, and guardrail `none=unlimited`
+- Added dashboard action controls (run rebalance/risk-check now, run at configured time)
+- Added cron scheduler controls in dashboard (setup/restart/stop) with detection/status flags
+- Added bot-state scheduling indicators for rebalance + daily risk-check
+- Added richer account card (BOD/current equity & cash, deltas, grouped sections)
+- Added recent fills comparison: expected price vs filled price + slippage bps (limit + market)
+- Added backtest enhancements:
+  - weekly rebalance day option
+  - limit orders + fallback options
+  - pending limit lifecycle simulation with cancel at next rebalance
+  - order lifecycle summary
+  - search filters for realized trades and daily ledger
+
+### 2026-02-08
+- Added themes/density polish, improved dashboard layout, and screenshot automation
+- Added backtest presets and apply-to-config flow
+- Added symbol drilldown improvements and detailed event markers
+- Added daily ledger section and expanded backtest transparency
