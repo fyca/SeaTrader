@@ -24,7 +24,6 @@
     .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
     .card h2 { font-size: 14px; margin: 0 0 8px 0; }
     .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; }
-    #account.kvs { grid-template-columns: 150px 1fr 150px 1fr; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { padding: 6px 8px; text-align: left; vertical-align: top; }
     .tableWrap { overflow: auto; position: relative; max-height: 360px; border: 1px solid var(--border); border-radius: var(--radius-md); }
@@ -41,7 +40,6 @@
     .col-12 { grid-column: span 12; }
     @media (max-width: 900px) {
       .col-6 { grid-column: span 12; }
-      #account.kvs { grid-template-columns: 160px 1fr; }
     }
   </style>
 </head>
@@ -1228,33 +1226,60 @@ async function main() {
 
   const accountEl = document.getElementById('account');
   accountEl.innerHTML = '';
-  kv(accountEl, 'Account', acct.account_number);
-  kv(accountEl, 'Status', (acct.status || '—') + (acct.paper ? ' (paper)' : ''));
-  kv(accountEl, 'Currency', acct.currency || 'USD');
+  accountEl.style.display = 'grid';
+  accountEl.style.gridTemplateColumns = 'repeat(auto-fit, minmax(320px, 1fr))';
+  accountEl.style.gap = '10px';
 
-  kv(accountEl, 'BOD equity', money(acct.bod_equity));
-  kv(accountEl, 'Current equity', money(acct.equity));
-  kv(accountEl, 'Day Δ equity', (acct.day_change_equity==null ? '—' : (money(acct.day_change_equity) + ' (' + pct(acct.day_change_equity_pct) + ')')));
+  const mkBlock = (title, rows) => {
+    const b = document.createElement('div');
+    b.className = 'subcard';
+    b.style.padding = '10px';
+    const h = document.createElement('div');
+    h.style.fontWeight = '700';
+    h.style.marginBottom = '6px';
+    h.textContent = title;
+    b.appendChild(h);
+    const g = document.createElement('div');
+    g.className = 'kvs';
+    g.style.gridTemplateColumns = '140px 1fr';
+    for (const [k,v] of rows) kv(g, k, v);
+    b.appendChild(g);
+    accountEl.appendChild(b);
+  };
 
-  kv(accountEl, 'BOD cash', money(acct.bod_cash));
-  kv(accountEl, 'Current cash', money(acct.cash));
-  kv(accountEl, 'Day Δ cash', acct.day_change_cash==null ? '—' : money(acct.day_change_cash));
+  mkBlock('Identity', [
+    ['Account', acct.account_number],
+    ['Status', (acct.status || '—') + (acct.paper ? ' (paper)' : '')],
+    ['Currency', acct.currency || 'USD'],
+    ['Crypto status', acct.crypto_status || '—'],
+  ]);
 
-  kv(accountEl, 'Portfolio value', money(acct.portfolio_value));
-  kv(accountEl, 'Buying power', money(acct.buying_power));
-  kv(accountEl, 'Reg-T buying power', money(acct.regt_buying_power));
-  kv(accountEl, 'Day-trading BP', money(acct.daytrading_buying_power));
+  mkBlock('Cash & Equity (Today)', [
+    ['BOD equity', money(acct.bod_equity)],
+    ['Current equity', money(acct.equity)],
+    ['Day Δ equity', (acct.day_change_equity==null ? '—' : (money(acct.day_change_equity) + ' (' + pct(acct.day_change_equity_pct) + ')'))],
+    ['BOD cash', money(acct.bod_cash)],
+    ['Current cash', money(acct.cash)],
+    ['Day Δ cash', acct.day_change_cash==null ? '—' : money(acct.day_change_cash)],
+  ]);
 
-  kv(accountEl, 'Initial margin', money(acct.initial_margin));
-  kv(accountEl, 'Maintenance margin', money(acct.maintenance_margin));
-  kv(accountEl, 'SMA', money(acct.sma));
+  mkBlock('Buying Power & Margin', [
+    ['Portfolio value', money(acct.portfolio_value)],
+    ['Buying power', money(acct.buying_power)],
+    ['Reg-T buying power', money(acct.regt_buying_power)],
+    ['Day-trading BP', money(acct.daytrading_buying_power)],
+    ['Initial margin', money(acct.initial_margin)],
+    ['Maintenance margin', money(acct.maintenance_margin)],
+    ['SMA', money(acct.sma)],
+  ]);
 
-  kv(accountEl, 'PDT', String(Boolean(acct.pattern_day_trader)));
-  kv(accountEl, 'Trading blocked', String(Boolean(acct.trading_blocked)));
-  kv(accountEl, 'Transfers blocked', String(Boolean(acct.transfers_blocked)));
-  kv(accountEl, 'Account blocked', String(Boolean(acct.account_blocked)));
-  kv(accountEl, 'Shorting enabled', String(Boolean(acct.shorting_enabled)));
-  if (acct.crypto_status) kv(accountEl, 'Crypto status', acct.crypto_status);
+  mkBlock('Risk / Restrictions', [
+    ['PDT', String(Boolean(acct.pattern_day_trader))],
+    ['Trading blocked', String(Boolean(acct.trading_blocked))],
+    ['Transfers blocked', String(Boolean(acct.transfers_blocked))],
+    ['Account blocked', String(Boolean(acct.account_blocked))],
+    ['Shorting enabled', String(Boolean(acct.shorting_enabled))],
+  ]);
 
   const stateEl = document.getElementById('state');
   stateEl.innerHTML = '';
