@@ -123,6 +123,7 @@ def start_backtest(*, config_path: str, params: dict) -> str:
 
             intraday_cb = None
             intraday_limit_touch_cb = None
+            risk_intraday_cb = None
             if getattr(p, "execution_time_mode", "daily") == "intraday":
                 from tradebot.backtest.intraday import IntradayPriceProvider
 
@@ -130,6 +131,12 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     stocks_client=clients.stocks,
                     crypto_client=clients.crypto,
                     exec_time_local=p.execution_time_local,
+                    tz=p.execution_tz,
+                )
+                risk_prov = IntradayPriceProvider(
+                    stocks_client=clients.stocks,
+                    crypto_client=clients.crypto,
+                    exec_time_local=getattr(p, "risk_check_time_local", "12:30"),
                     tz=p.execution_tz,
                 )
 
@@ -153,6 +160,9 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                 def intraday_limit_touch_cb(sym, day, side, limit_px):
                     return prov.limit_touched(sym, day, side, float(limit_px))
 
+                def risk_intraday_cb(sym, day):
+                    return risk_prov.price(sym, day)
+
             res = run_backtest(
                 stock_bars=stock_bars,
                 crypto_bars=crypto_bars,
@@ -163,6 +173,7 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                 progress_cb=prog,
                 intraday_price_cb=intraday_cb,
                 intraday_limit_touch_cb=intraday_limit_touch_cb,
+                risk_intraday_price_cb=risk_intraday_cb,
             )
 
             _write(result_path, {"job_id": job_id, **asdict(res)})

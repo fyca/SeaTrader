@@ -219,6 +219,7 @@
               <div style="flex:1;"></div>
               <button id="btPresetLoad" class="secondary">Load → UI</button>
               <button id="btPresetSave" class="secondary">Save UI → preset</button>
+              <button id="btPresetUpdate" class="secondary">Update selected preset</button>
               <button id="btPresetApply" class="primary">Apply to config</button>
             </div>
           </div>
@@ -253,6 +254,10 @@
             <div>
               <div class="muted">Intraday time (PT)</div>
               <input id="btExecLocal" placeholder="HH:MM" value="15:55" style="width:120px;" />
+            </div>
+            <div>
+              <div class="muted">Risk-check time (PT)</div>
+              <input id="btRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" />
             </div>
             <div>
               <div class="muted">Assets</div>
@@ -666,6 +671,7 @@ async function runBacktest() {
   const execution_time_mode = (document.getElementById('btExecMode')?.value || 'daily');
   const execution_time = (document.getElementById('btExecTime')?.value || 'close');
   const execution_time_local = (document.getElementById('btExecLocal')?.value || '15:55');
+  const risk_check_time_local = (document.getElementById('btRiskTime')?.value || '12:30');
   const execution_tz = 'America/Los_Angeles';
   const asset_mode = (document.getElementById('btAssets')?.value || 'both');
   const rebalance = (document.getElementById('btRebalance')?.value || 'weekly');
@@ -689,7 +695,7 @@ async function runBacktest() {
   status.textContent = 'starting…';
   const limit_fallback_to_market_open = String(document.getElementById('btLimitFallback')?.value || 'false') === 'true';
   const limit_fallback_time_local = (document.getElementById('btLimitFallbackTime')?.value || '06:30');
-  const body = {start, end, slippage_bps, use_limit_orders, limit_offset_bps, limit_fallback_to_market_open, limit_fallback_time_local, initial_equity: 100000, strategy_id, execution_time_mode, execution_time, execution_time_local, execution_tz, asset_mode, rebalance, rebalance_day, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
+  const body = {start, end, slippage_bps, use_limit_orders, limit_offset_bps, limit_fallback_to_market_open, limit_fallback_time_local, initial_equity: 100000, strategy_id, execution_time_mode, execution_time, execution_time_local, risk_check_time_local, execution_tz, asset_mode, rebalance, rebalance_day, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
   const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -1505,6 +1511,7 @@ async function main() {
       execution_time_mode: (document.getElementById('btExecMode')?.value || 'daily'),
       execution_time: (document.getElementById('btExecTime')?.value || 'close'),
       execution_time_local: (document.getElementById('btExecLocal')?.value || '15:55'),
+      risk_check_time_local: (document.getElementById('btRiskTime')?.value || '12:30'),
       execution_tz: 'America/Los_Angeles',
       asset_mode: (document.getElementById('btAssets')?.value || 'both'),
       rebalance: (document.getElementById('btRebalance')?.value || 'weekly'),
@@ -1531,6 +1538,7 @@ async function main() {
     setVal('btExecMode', p.execution_time_mode);
     setVal('btExecTime', p.execution_time);
     setVal('btExecLocal', p.execution_time_local);
+    setVal('btRiskTime', p.risk_check_time_local);
     setVal('btAssets', p.asset_mode);
     setVal('btRebalance', p.rebalance);
     setVal('btRebalanceDay', p.rebalance_day);
@@ -1579,6 +1587,25 @@ async function main() {
       } catch (err) {
         if (presetStatus) presetStatus.textContent = 'save error: ' + (err?.message || err);
         toast('err','Preset save error', String(err?.message || err));
+      }
+    });
+  }
+
+  const btnUpdate = document.getElementById('btPresetUpdate');
+  if (btnUpdate && !btnUpdate.dataset.wired) {
+    btnUpdate.dataset.wired = '1';
+    btnUpdate.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const name = presetSel?.value;
+      if (!name) { if(presetStatus) presetStatus.textContent='select a preset'; return; }
+      if (presetStatus) presetStatus.textContent = 'updating…';
+      try {
+        await postJSON('/api/backtest/presets/save', {name, params: collectBTParams()});
+        if (presetStatus) presetStatus.textContent = 'updated preset ' + name;
+        toast('ok','Preset updated', name);
+      } catch (err) {
+        if (presetStatus) presetStatus.textContent = 'update error: ' + (err?.message || err);
+        toast('err','Preset update error', String(err?.message || err));
       }
     });
   }

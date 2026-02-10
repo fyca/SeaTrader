@@ -32,6 +32,8 @@ class BacktestParams:
     execution_time: Literal["open", "close"] = "close"  # daily mode only
     execution_time_local: str = "15:55"  # intraday mode only
     execution_tz: str = "America/Los_Angeles"
+    # Exit/risk check time (intraday mode): used for stop/exclusion/dd exits
+    risk_check_time_local: str = "12:30"
 
     strategy_id: str = "baseline_trendvol"
     asset_mode: Literal["both", "equities", "crypto"] = "both"
@@ -104,6 +106,7 @@ def run_backtest(
     progress_cb=None,
     intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
     intraday_limit_touch_cb: Callable[[str, pd.Timestamp, str, float], bool] | None = None,
+    risk_intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
 ) -> BacktestResult:
     """Simple long-only backtest using daily closes.
 
@@ -208,7 +211,6 @@ def run_backtest(
     def exec_px(sym: str, day: pd.Timestamp) -> float | None:
         # Intraday execution pricing (rebalance only)
         if params.execution_time_mode == "intraday" and intraday_price_cb is not None:
-            # only used for rebalance days; other code paths still call exec_px but will fall back
             v = intraday_price_cb(sym, day)
             if v is not None:
                 return v
@@ -218,6 +220,15 @@ def run_backtest(
             v = px_open(sym, day)
             if v is not None:
                 return v
+        return px(sym, day)
+
+    def risk_px(sym: str, day: pd.Timestamp) -> float | None:
+        # Intraday execution pricing for risk exits
+        if params.execution_time_mode == "intraday" and risk_intraday_price_cb is not None:
+            v = risk_intraday_price_cb(sym, day)
+            if v is not None:
+                return v
+        # default to close for daily risk checks
         return px(sym, day)
 
     def portfolio_value(day: pd.Timestamp) -> float:
@@ -253,7 +264,7 @@ def run_backtest(
             p0 = px(sym, day)
             if p0 is None:
                 continue
-            base_px = exec_px(sym, day) or p0
+            base_px = risk_px(sym, day) or p0
             sell_px = base_px * (1 - params.slippage_bps / 10000.0)
             q = positions_qty.get(sym, 0.0)
             cash += q * sell_px
@@ -456,12 +467,12 @@ def run_backtest(
             max_observed_dd = max(max_observed_dd, float(dd))
             if (not stopped_until_next_rebalance) and dd >= params.portfolio_dd_stop:
                 dd_stop_events += 1
-                # liquidate everything at execution time - slippage
+                # liquidate everything at risk-check time - slippage
                 for sym in list(positions_qty.keys()):
                     p0 = px(sym, day)
                     if p0 is None:
                         continue
-                    base_px = exec_px(sym, day) or p0
+                    base_px = risk_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     q = positions_qty.get(sym, 0.0)
                     cash += q * sell_px
@@ -508,8 +519,8 @@ def run_backtest(
                 if avg_cost is None or avg_cost <= 0:
                     continue
                 if (p0 / avg_cost - 1.0) <= -sl:
-                    # stop out full position at execution time - slippage
-                    base_px = exec_px(sym, day) or p0
+                    # stop out full position at risk-check time - slippage
+                    base_px = risk_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     q = positions_qty.get(sym, 0.0)
                     cash += q * sell_px
