@@ -832,13 +832,30 @@ def create_app(*, config_path: str) -> FastAPI:
         params = p.get("params") or {}
 
         # Unified preset application: set config.active_preset.
-        # The bot config loader merges preset.bot on top of config/config.yaml.
+        # Also write mapped overlap fields directly into config so values are visible immediately
+        # even when preset bot patch is stale.
         from pathlib import Path
         import yaml
+        from tradebot.dashboard.presets import _bt_to_bot_patch
+
+        def _deep_merge(a: dict, b: dict) -> dict:
+            out = dict(a or {})
+            for k, v in (b or {}).items():
+                if isinstance(v, dict) and isinstance(out.get(k), dict):
+                    out[k] = _deep_merge(out.get(k) or {}, v)
+                else:
+                    out[k] = v
+            return out
 
         cfg_path = Path(config_path)
         cfg = yaml.safe_load(cfg_path.read_text()) or {}
         cfg["active_preset"] = name
+
+        # derive bot patch from backtest params on apply
+        bt = (p.get("params") or {})
+        derived = _bt_to_bot_patch(bt)
+        cfg = _deep_merge(cfg, derived)
+
         cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
         return {"ok": True, "active_preset": name}
 

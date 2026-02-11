@@ -63,6 +63,11 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
     if params.get("limit_fallback_time_local") is not None:
         bot["execution"]["fallback_time_local"] = str(params.get("limit_fallback_time_local"))
 
+    # map backtest risk-check intraday time to live daily risk-check schedule time
+    if params.get("risk_check_time_local"):
+        bot.setdefault("scheduling", {})
+        bot["scheduling"]["daily_risk_check_time_local"] = str(params.get("risk_check_time_local"))
+
     # execution timing mapping (best-effort): sets the time our unattended rebalance should run.
     # This does NOT change pricing/fills in live; it just schedules when the CLI executes.
     exec_mode = params.get("execution_time_mode") or "daily"
