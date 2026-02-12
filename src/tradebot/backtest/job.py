@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import uuid
 from dataclasses import asdict
 from pathlib import Path
@@ -27,6 +28,19 @@ LATEST_PATH = BASE / "latest_job_id.txt"
 def _write(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, indent=2, sort_keys=True, default=str))
+
+
+def _read_json_safe(path: Path, retries: int = 5, delay_s: float = 0.05) -> dict | None:
+    """Best-effort JSON reader resilient to transient partial writes."""
+    for _ in range(max(1, retries)):
+        try:
+            txt = path.read_text()
+            if not txt.strip():
+                raise ValueError("empty json")
+            return json.loads(txt)
+        except Exception:
+            time.sleep(delay_s)
+    return None
 
 
 def start_backtest(*, config_path: str, params: dict) -> str:
@@ -205,14 +219,15 @@ def get_status(job_id: str) -> dict:
     p = BASE / job_id / "status.json"
     if not p.exists():
         return {"state": "missing"}
-    return json.loads(p.read_text())
+    st = _read_json_safe(p)
+    return st or {"state": "reading"}
 
 
 def get_result(job_id: str) -> dict | None:
     p = BASE / job_id / "result.json"
     if not p.exists():
         return None
-    return json.loads(p.read_text())
+    return _read_json_safe(p)
 
 
 def list_jobs(limit: int = 20) -> list[dict]:
@@ -224,14 +239,18 @@ def list_jobs(limit: int = 20) -> list[dict]:
         status_p = d / "status.json"
         if not status_p.exists():
             continue
-        st = json.loads(status_p.read_text())
+        st = _read_json_safe(status_p)
+        if not st:
+            continue
         item: dict = {"job_id": d.name, **st}
 
         # Attach lightweight result summary for easier scanning
         res_p = d / "result.json"
         if res_p.exists():
             try:
-                res = json.loads(res_p.read_text())
+                res = _read_json_safe(res_p)
+                if not res:
+                    raise ValueError("result not readable yet")
                 m = (res or {}).get("metrics") or {}
                 p = (res or {}).get("params") or {}
                 item["result_metrics"] = {
