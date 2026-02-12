@@ -129,52 +129,26 @@
           </div>
         </div>
         <div class="muted" style="margin: 10px 0 6px 0;">Per-asset order settings (live/paper)</div>
-        <div class="assetSplit" style="margin-bottom:6px;">
-          <div class="pill" style="justify-content:center;"><b>Stocks controls</b></div>
-          <div class="pill" style="justify-content:center;"><b>Crypto controls</b></div>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
-          <div>
-            <div class="muted" style="font-size:12px;">Stocks premarket/extended-hours</div>
-            <select id="extendedHoursSelect"><option value="false">Off</option><option value="true">On</option></select>
+        <div class="assetSplit" style="margin-bottom:8px;">
+          <div class="subcard" style="padding:10px;">
+            <div style="font-weight:700; margin-bottom:8px;">Stocks controls</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+              <div><div class="muted" style="font-size:12px;">Premarket/extended-hours</div><select id="extendedHoursSelect"><option value="false">Off</option><option value="true">On</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Order type</div><select id="eqOrderTypeSelect"><option value="market">Market</option><option value="limit">Limit</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Limit offset (bps)</div><input id="eqLimitOffsetInput" placeholder="10" /></div>
+              <div><div class="muted" style="font-size:12px;">Limit fallback</div><select id="eqFallbackEnableSelect"><option value="false">Off</option><option value="true">On</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Market buy time (PT)</div><input id="extendedStartTimeInput" placeholder="06:00" /></div>
+              <div><div class="muted" style="font-size:12px;">Fallback time (PT)</div><input id="eqFallbackTimeInput" placeholder="06:30" /></div>
+            </div>
           </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Stocks premarket trade time (PT)</div>
-            <input id="extendedStartTimeInput" placeholder="06:00" />
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Stocks order type</div>
-            <select id="eqOrderTypeSelect"><option value="market">Market</option><option value="limit">Limit</option></select>
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Stocks limit offset (bps)</div>
-            <input id="eqLimitOffsetInput" placeholder="10" />
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Crypto order type</div>
-            <select id="crOrderTypeSelect"><option value="market">Market</option><option value="limit">Limit</option></select>
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Crypto limit offset (bps)</div>
-            <input id="crLimitOffsetInput" placeholder="10" />
-          </div>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
-          <div>
-            <div class="muted" style="font-size:12px;">Stocks fallback</div>
-            <select id="eqFallbackEnableSelect"><option value="false">Off</option><option value="true">On</option></select>
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Stocks fallback time (PT)</div>
-            <input id="eqFallbackTimeInput" placeholder="06:30" />
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Crypto fallback</div>
-            <select id="crFallbackEnableSelect"><option value="false">Off</option><option value="true">On</option></select>
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Crypto fallback time (PT)</div>
-            <input id="crFallbackTimeInput" placeholder="06:30" />
+          <div class="subcard" style="padding:10px;">
+            <div style="font-weight:700; margin-bottom:8px;">Crypto controls</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+              <div><div class="muted" style="font-size:12px;">Order type</div><select id="crOrderTypeSelect"><option value="market">Market</option><option value="limit">Limit</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Limit offset (bps)</div><input id="crLimitOffsetInput" placeholder="10" /></div>
+              <div><div class="muted" style="font-size:12px;">Limit fallback</div><select id="crFallbackEnableSelect"><option value="false">Off</option><option value="true">On</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Market buy time (PT)</div><input id="crFallbackTimeInput" placeholder="06:30" /></div>
+            </div>
           </div>
         </div>
 
