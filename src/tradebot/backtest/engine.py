@@ -259,12 +259,12 @@ def run_backtest(
         ot = (params.order_type_crypto if is_crypto else params.order_type_equities)
         if ot in ("market", "limit"):
             return ot == "limit"
-        return bool(params.use_limit_orders)
+        return False
 
     def _limit_off_bps_for(sym: str) -> float:
         is_crypto = "/" in sym
         v = params.limit_offset_bps_crypto if is_crypto else params.limit_offset_bps_equities
-        return float(v if v is not None else params.limit_offset_bps)
+        return float(v if v is not None else 10.0)
 
     def portfolio_value(day: pd.Timestamp) -> float:
         total = cash

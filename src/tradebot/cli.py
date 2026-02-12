@@ -323,14 +323,13 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     for pl in plans:
         is_crypto = "/" in str(pl.symbol)
         ex = cfg.execution.crypto if is_crypto else cfg.execution.equities
-        # backward compatible: if no per-asset override, derive from global bool
-        ord_type = str(getattr(ex, "order_type", "")).lower() if ex else ""
+        ord_type = str(getattr(ex, "order_type", "market")).lower() if ex else "market"
         if ord_type not in ("market", "limit"):
-            ord_type = "limit" if bool(cfg.execution.use_limit_orders) else "market"
+            ord_type = "market"
         sym_order_type[pl.symbol] = ord_type
-        sym_limit_offset[pl.symbol] = float(getattr(ex, "limit_offset_bps", cfg.execution.limit_offset_bps) or cfg.execution.limit_offset_bps)
-        sym_fallback_enabled[pl.symbol] = bool(getattr(ex, "fallback_to_market_at_open", getattr(cfg.execution, "fallback_to_market_at_open", False)))
-        sym_fallback_time[pl.symbol] = str(getattr(ex, "fallback_time_local", getattr(cfg.execution, "fallback_time_local", "06:30")))
+        sym_limit_offset[pl.symbol] = float(getattr(ex, "limit_offset_bps", 10.0) or 10.0)
+        sym_fallback_enabled[pl.symbol] = bool(getattr(ex, "fallback_to_market_at_open", False))
+        sym_fallback_time[pl.symbol] = str(getattr(ex, "fallback_time_local", "06:30"))
 
     placed = place_notional_market_orders(
         clients.trading,
