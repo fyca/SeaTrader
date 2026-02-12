@@ -901,6 +901,62 @@ def create_app(*, config_path: str) -> FastAPI:
             return {"ok": False, "error": f"telegram send failed: {r.status_code} {r.text[:300]}"}
         return {"ok": True}
 
+    @app.post("/api/backtest/iterations/save")
+    async def backtest_iterations_save(req: Request):
+        require_token(req)
+        body = await req.json()
+        from datetime import datetime, timezone
+        import uuid
+
+        base = Path("data/backtests/iterations")
+        base.mkdir(parents=True, exist_ok=True)
+
+        created_at = datetime.now(timezone.utc).isoformat()
+        axis = str((body or {}).get("axis") or "iteration")
+        asset_mode = str((body or {}).get("asset_mode") or "both")
+        report_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{asset_mode}_{axis}_{uuid.uuid4().hex[:8]}"
+        payload = {
+            "id": report_id,
+            "created_at": created_at,
+            **(body or {}),
+        }
+        (base / f"{report_id}.json").write_text(json.dumps(payload, indent=2))
+        return {"ok": True, "id": report_id}
+
+    @app.get("/api/backtest/iterations/list")
+    def backtest_iterations_list(limit: int = 50):
+        base = Path("data/backtests/iterations")
+        if not base.exists():
+            return {"reports": []}
+        files = sorted(base.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[: max(1, min(int(limit), 200))]
+        out = []
+        for p in files:
+            try:
+                o = json.loads(p.read_text())
+                out.append({
+                    "id": o.get("id") or p.stem,
+                    "created_at": o.get("created_at"),
+                    "axis": o.get("axis"),
+                    "asset_mode": o.get("asset_mode"),
+                    "count": len(o.get("rows") or []),
+                    "best": o.get("best"),
+                })
+            except Exception:
+                continue
+        return {"reports": out}
+
+    @app.get("/api/backtest/iterations/get")
+    def backtest_iterations_get(id: str):
+        base = Path("data/backtests/iterations")
+        p = base / f"{id}.json"
+        if not p.exists():
+            return {"ok": False, "error": "missing report"}
+        try:
+            o = json.loads(p.read_text())
+        except Exception:
+            return {"ok": False, "error": "failed to read report"}
+        return {"ok": True, "report": o}
+
     @app.get("/api/artifacts")
     def artifacts():
         base = Path("data")

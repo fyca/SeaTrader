@@ -381,9 +381,9 @@
           <option value="return">Best Return (max)</option>
           <option value="max_drawdown_min">Best Max DD (min)</option>
         </select>
-        <button id="btIterApplyBest" class="secondary">Apply best to run settings</button>
-        <button id="btIterApplyBestConfig" class="secondary">Apply best to config schedule</button>
         <button id="btIterExportCsv" class="secondary">Export iteration CSV</button>
+        <select id="btIterReportSel" style="min-width:280px;"></select>
+        <button id="btIterReportLoad" class="secondary">Load saved report</button>
       </div>
       <div id="btChart" class="muted" style="margin-top:8px;">(no results yet)</div>
       <div style="margin-top:10px;">
@@ -778,46 +778,59 @@ function pickBestIteration(rows, metricKey) {
   return done.reduce((a,b) => (Number(b.metrics.sharpe ?? -1e9) > Number(a.metrics.sharpe ?? -1e9) ? b : a));
 }
 
-function applyBestIterationToUI() {
-  const metric = document.getElementById('btIterBestMetric')?.value || 'sharpe';
-  const best = pickBestIteration(window.__btIterRows || [], metric);
-  const status = document.getElementById('btStatus');
-  if (!best) {
-    if (status) status.textContent = 'no completed iteration rows to apply';
-    return;
-  }
-  if ((window.__btIterAxis || 'execution_time_local') === 'execution_time_local') {
-    const el = document.getElementById('btExecLocal');
-    if (el) el.value = best.iter_value;
-    if (status) status.textContent = `applied best buy time to run settings: ${best.iter_value}`;
-  } else {
-    const el = document.getElementById('btRiskTime');
-    if (el) el.value = best.iter_value;
-    if (status) status.textContent = `applied best risk-check time to run settings: ${best.iter_value}`;
+async function refreshIterationReportsList(selectedId='') {
+  const sel = document.getElementById('btIterReportSel');
+  if (!sel) return;
+  try {
+    const j = await getJSON('/api/backtest/iterations/list?limit=50');
+    sel.innerHTML = '';
+    for (const it of (j.reports || [])) {
+      const opt = document.createElement('option');
+      opt.value = it.id;
+      opt.textContent = `${it.created_at || ''} • ${it.asset_mode || '—'} • ${it.axis || '—'} • ${it.count || 0} rows`;
+      sel.appendChild(opt);
+    }
+    if (selectedId) sel.value = selectedId;
+  } catch (e) {
+    // ignore silently
   }
 }
 
-async function applyBestIterationToConfig() {
-  const metric = document.getElementById('btIterBestMetric')?.value || 'sharpe';
-  const best = pickBestIteration(window.__btIterRows || [], metric);
-  const status = document.getElementById('btStatus');
-  if (!best) {
-    if (status) status.textContent = 'no completed iteration rows to apply to config';
-    return;
-  }
+async function saveIterationReport(rows, axis) {
   const token = document.getElementById('token')?.value || '';
-  const cfg = await getJSON('/api/config');
-  cfg.scheduling = cfg.scheduling || {};
-  if ((window.__btIterAxis || 'execution_time_local') === 'execution_time_local') {
-    cfg.scheduling.weekly_rebalance_time_local = best.iter_value;
-  } else {
-    cfg.scheduling.daily_risk_check_time_local = best.iter_value;
-  }
-  const r = await fetch('/api/config' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
-    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(cfg)
+  const body = collectBacktestRequestBody();
+  const metric = document.getElementById('btIterBestMetric')?.value || 'sharpe';
+  const best = pickBestIteration(rows, metric);
+  const report = {
+    axis,
+    metric,
+    best: best ? {iter_value: best.iter_value, ret: best.ret, dd: best.dd, sh: best.sh, job_id: best.job_id} : null,
+    asset_mode: body.asset_mode,
+    start: body.start,
+    end: body.end,
+    settings: body,
+    rows,
+  };
+  const r = await fetch('/api/backtest/iterations/save' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(report)
   });
   if (!r.ok) throw new Error(await r.text());
-  if (status) status.textContent = `applied best to config schedule: ${best.iter_value}`;
+  const j = await r.json();
+  await refreshIterationReportsList(j.id || '');
+  return j;
+}
+
+async function loadIterationReportById(id) {
+  if (!id) return;
+  const j = await getJSON('/api/backtest/iterations/get?id=' + encodeURIComponent(id));
+  const rep = j.report || {};
+  const rows = rep.rows || [];
+  const axis = rep.axis || 'execution_time_local';
+  renderIterationSummary(rows, axis);
+  const mSel = document.getElementById('btIterBestMetric');
+  if (mSel && rep.metric) mSel.value = rep.metric;
+  const status = document.getElementById('btStatus');
+  if (status) status.textContent = `loaded report ${id} (${rows.length} rows)`;
 }
 
 function exportIterationCsv() {
@@ -909,15 +922,22 @@ async function runBacktestIteration() {
   }
 
   const doneCount = rows.filter(r => r.state === 'done').length;
-  status.textContent = `iteration complete: ${doneCount}/${times.length} done`;
+  let reportId = '';
+  try {
+    const saved = await saveIterationReport(rows, axis);
+    reportId = saved.id || '';
+  } catch (e) {
+    // leave as-is; user still has in-page summary/csv
+  }
+  status.textContent = `iteration complete: ${doneCount}/${times.length} done${reportId ? ' • report ' + reportId : ''}`;
 
   if (document.getElementById('btIterNotifyTg')?.checked) {
     const metric = document.getElementById('btIterBestMetric')?.value || 'sharpe';
     const best = pickBestIteration(rows, metric);
     const axisLabel = axis === 'execution_time_local' ? 'buy time' : 'risk-check time';
     const note = best
-      ? `SeaTrader iteration complete (${doneCount}/${times.length}). Best ${axisLabel}: ${best.iter_value} | return ${best.ret} | maxDD ${best.dd} | sharpe ${best.sh}.`
-      : `SeaTrader iteration complete (${doneCount}/${times.length}).`;
+      ? `SeaTrader iteration complete (${doneCount}/${times.length}). Best ${axisLabel}: ${best.iter_value} | return ${best.ret} | maxDD ${best.dd} | sharpe ${best.sh}.${reportId ? ' Report: ' + reportId + '.' : ''}`
+      : `SeaTrader iteration complete (${doneCount}/${times.length}).${reportId ? ' Report: ' + reportId + '.' : ''}`;
     try {
       await postJSON('/api/backtest/notify-telegram', {text: note});
       status.textContent += ' • telegram sent';
@@ -2039,6 +2059,7 @@ async function main() {
 }
 
 setDefaultBacktestDates();
+refreshIterationReportsList().catch(()=>{});
 
 main().catch(err => {
   document.getElementById('subtitle').textContent = 'error: ' + err;
@@ -2226,23 +2247,20 @@ document.getElementById('btRunIter')?.addEventListener('click', async (e) => {
   }
 });
 
-document.getElementById('btIterApplyBest')?.addEventListener('click', (e) => {
-  e.preventDefault();
-  applyBestIterationToUI();
-});
-
-document.getElementById('btIterApplyBestConfig')?.addEventListener('click', async (e) => {
-  e.preventDefault();
-  try {
-    await applyBestIterationToConfig();
-  } catch (err) {
-    document.getElementById('btStatus').textContent = 'apply-best-config error: ' + (err?.message || err);
-  }
-});
-
 document.getElementById('btIterExportCsv')?.addEventListener('click', (e) => {
   e.preventDefault();
   exportIterationCsv();
+});
+
+document.getElementById('btIterReportLoad')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('btIterReportSel')?.value || '';
+  if (!id) return;
+  try {
+    await loadIterationReportById(id);
+  } catch (err) {
+    document.getElementById('btStatus').textContent = 'load report error: ' + (err?.message || err);
+  }
 });
 
 document.getElementById('btTradeSearch')?.addEventListener('input', () => {
