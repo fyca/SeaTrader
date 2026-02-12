@@ -63,10 +63,44 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
     if params.get("limit_fallback_time_local") is not None:
         bot["execution"]["fallback_time_local"] = str(params.get("limit_fallback_time_local"))
 
+    # per-asset execution overrides
+    bot["execution"].setdefault("equities", {})
+    bot["execution"].setdefault("crypto", {})
+    if params.get("order_type_equities"):
+        bot["execution"]["equities"]["order_type"] = str(params.get("order_type_equities"))
+    if params.get("order_type_crypto"):
+        bot["execution"]["crypto"]["order_type"] = str(params.get("order_type_crypto"))
+    if params.get("limit_offset_bps_equities") is not None:
+        bot["execution"]["equities"]["limit_offset_bps"] = float(params.get("limit_offset_bps_equities"))
+    if params.get("limit_offset_bps_crypto") is not None:
+        bot["execution"]["crypto"]["limit_offset_bps"] = float(params.get("limit_offset_bps_crypto"))
+
     # map backtest risk-check intraday time to live daily risk-check schedule time
     if params.get("risk_check_time_local"):
         bot.setdefault("scheduling", {})
         bot["scheduling"]["daily_risk_check_time_local"] = str(params.get("risk_check_time_local"))
+
+    # per-asset schedule overrides
+    bot.setdefault("scheduling", {})
+    bot["scheduling"].setdefault("equities", {})
+    bot["scheduling"].setdefault("crypto", {})
+
+    if params.get("rebalance_frequency_equities"):
+        bot["scheduling"]["equities"]["rebalance_frequency"] = str(params.get("rebalance_frequency_equities"))
+    if params.get("rebalance_day_equities"):
+        bot["scheduling"]["equities"]["rebalance_day"] = str(params.get("rebalance_day_equities")).upper()
+    if params.get("rebalance_frequency_crypto"):
+        bot["scheduling"]["crypto"]["rebalance_frequency"] = str(params.get("rebalance_frequency_crypto"))
+    if params.get("rebalance_day_crypto"):
+        bot["scheduling"]["crypto"]["rebalance_day"] = str(params.get("rebalance_day_crypto")).upper()
+    if params.get("risk_check_frequency_equities"):
+        bot["scheduling"]["equities"]["risk_check_frequency"] = str(params.get("risk_check_frequency_equities"))
+    if params.get("risk_check_day_equities"):
+        bot["scheduling"]["equities"]["risk_check_day"] = str(params.get("risk_check_day_equities")).upper()
+    if params.get("risk_check_frequency_crypto"):
+        bot["scheduling"]["crypto"]["risk_check_frequency"] = str(params.get("risk_check_frequency_crypto"))
+    if params.get("risk_check_day_crypto"):
+        bot["scheduling"]["crypto"]["risk_check_day"] = str(params.get("risk_check_day_crypto")).upper()
 
     # execution timing mapping (best-effort): sets the time our unattended rebalance should run.
     # This does NOT change pricing/fills in live; it just schedules when the CLI executes.

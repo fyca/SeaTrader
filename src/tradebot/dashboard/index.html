@@ -263,8 +263,24 @@
               <input id="btExecLocal" placeholder="HH:MM" value="15:55" style="width:120px;" />
             </div>
             <div>
-              <div class="muted">Risk-check time (PT)</div>
-              <input id="btRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" />
+              <div class="muted">Risk-check time (PT, global fallback)</div>
+              <input id="btRiskTime" placeholder="HH:MM" value="12:30" style="width:170px;" />
+            </div>
+            <div>
+              <div class="muted">Stocks risk freq</div>
+              <select id="btEqRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select>
+            </div>
+            <div>
+              <div class="muted">Stocks risk day</div>
+              <select id="btEqRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
+            </div>
+            <div>
+              <div class="muted">Crypto risk freq</div>
+              <select id="btCrRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select>
+            </div>
+            <div>
+              <div class="muted">Crypto risk day</div>
+              <select id="btCrRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
             </div>
             <div>
               <div class="muted">Assets</div>
@@ -275,16 +291,48 @@
               </select>
             </div>
             <div>
+              <div class="muted">Stocks rebalance freq</div>
+              <select id="btEqRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select>
+            </div>
+            <div>
+              <div class="muted">Stocks rebalance day</div>
+              <select id="btEqRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
+            </div>
+            <div>
+              <div class="muted">Crypto rebalance freq</div>
+              <select id="btCrRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select>
+            </div>
+            <div>
+              <div class="muted">Crypto rebalance day</div>
+              <select id="btCrRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
+            </div>
+            <div>
               <div class="muted">Slippage (bps)</div>
               <input id="btSlip" placeholder="10" value="10" style="width:120px;" />
             </div>
             <div>
-              <div class="muted">Use limit orders</div>
-              <select id="btUseLimit" style="width:150px;"><option value="false" selected>No (market)</option><option value="true">Yes (limit)</option></select>
+              <div class="muted">Use limit orders (global fallback)</div>
+              <select id="btUseLimit" style="width:190px;"><option value="false" selected>No (market)</option><option value="true">Yes (limit)</option></select>
             </div>
             <div>
-              <div class="muted">Limit offset (bps)</div>
-              <input id="btLimitOffset" placeholder="10" value="10" style="width:120px;" />
+              <div class="muted">Limit offset (bps, global fallback)</div>
+              <input id="btLimitOffset" placeholder="10" value="10" style="width:170px;" />
+            </div>
+            <div>
+              <div class="muted">Stocks order type</div>
+              <select id="btEqOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select>
+            </div>
+            <div>
+              <div class="muted">Stocks offset bps</div>
+              <input id="btEqLimitOffset" placeholder="10" value="10" style="width:120px;" />
+            </div>
+            <div>
+              <div class="muted">Crypto order type</div>
+              <select id="btCrOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select>
+            </div>
+            <div>
+              <div class="muted">Crypto offset bps</div>
+              <input id="btCrLimitOffset" placeholder="10" value="10" style="width:120px;" />
             </div>
             <div>
               <div class="muted">Limit fallback</div>
@@ -692,11 +740,23 @@ function collectBacktestRequestBody() {
   const asset_mode = (document.getElementById('btAssets')?.value || 'both');
   const rebalance = (document.getElementById('btRebalance')?.value || 'weekly');
   const rebalance_day = (document.getElementById('btRebalanceDay')?.value || 'MON');
+  const rebalance_frequency_equities = (document.getElementById('btEqRebFreq')?.value || rebalance);
+  const rebalance_day_equities = (document.getElementById('btEqRebDay')?.value || rebalance_day);
+  const rebalance_frequency_crypto = (document.getElementById('btCrRebFreq')?.value || rebalance);
+  const rebalance_day_crypto = (document.getElementById('btCrRebDay')?.value || rebalance_day);
+  const risk_check_frequency_equities = (document.getElementById('btEqRiskFreq')?.value || 'daily');
+  const risk_check_day_equities = (document.getElementById('btEqRiskDay')?.value || rebalance_day);
+  const risk_check_frequency_crypto = (document.getElementById('btCrRiskFreq')?.value || 'daily');
+  const risk_check_day_crypto = (document.getElementById('btCrRiskDay')?.value || rebalance_day);
   const rebalance_mode = (document.getElementById('btRebalanceMode')?.value || 'target_notional');
   const liquidation_mode = (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected');
   const slippage_bps = Number(document.getElementById('btSlip')?.value || '10');
   const use_limit_orders = String(document.getElementById('btUseLimit')?.value || 'false') === 'true';
   const limit_offset_bps = Number(document.getElementById('btLimitOffset')?.value || '10');
+  const order_type_equities = String(document.getElementById('btEqOrderType')?.value || 'market');
+  const order_type_crypto = String(document.getElementById('btCrOrderType')?.value || 'market');
+  const limit_offset_bps_equities = Number(document.getElementById('btEqLimitOffset')?.value || '10');
+  const limit_offset_bps_crypto = Number(document.getElementById('btCrLimitOffset')?.value || '10');
   const symbol = (document.getElementById('btSymbol')?.value || '').trim();
   const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
   const symFloorRaw = (document.getElementById('btSymFloor')?.value || '').trim();
@@ -713,10 +773,16 @@ function collectBacktestRequestBody() {
 
   return {
     start, end, slippage_bps, use_limit_orders, limit_offset_bps,
+    order_type_equities, order_type_crypto, limit_offset_bps_equities, limit_offset_bps_crypto,
     limit_fallback_to_market_open, limit_fallback_time_local,
     initial_equity: 100000, strategy_id, execution_time_mode, execution_time,
     execution_time_local, risk_check_time_local, execution_tz, asset_mode,
-    rebalance, rebalance_day, rebalance_mode, liquidation_mode,
+    rebalance, rebalance_day,
+    rebalance_frequency_equities, rebalance_day_equities,
+    rebalance_frequency_crypto, rebalance_day_crypto,
+    risk_check_frequency_equities, risk_check_day_equities,
+    risk_check_frequency_crypto, risk_check_day_crypto,
+    rebalance_mode, liquidation_mode,
     universe_mode: symbol ? 'single' : 'full', symbol: symbol || null,
     portfolio_dd_stop, per_asset_stop_loss_pct,
     symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized
@@ -1756,11 +1822,23 @@ async function main() {
       asset_mode: (document.getElementById('btAssets')?.value || 'both'),
       rebalance: (document.getElementById('btRebalance')?.value || 'weekly'),
       rebalance_day: (document.getElementById('btRebalanceDay')?.value || 'MON'),
+      rebalance_frequency_equities: (document.getElementById('btEqRebFreq')?.value || 'weekly'),
+      rebalance_day_equities: (document.getElementById('btEqRebDay')?.value || 'MON'),
+      rebalance_frequency_crypto: (document.getElementById('btCrRebFreq')?.value || 'weekly'),
+      rebalance_day_crypto: (document.getElementById('btCrRebDay')?.value || 'MON'),
+      risk_check_frequency_equities: (document.getElementById('btEqRiskFreq')?.value || 'daily'),
+      risk_check_day_equities: (document.getElementById('btEqRiskDay')?.value || 'MON'),
+      risk_check_frequency_crypto: (document.getElementById('btCrRiskFreq')?.value || 'daily'),
+      risk_check_day_crypto: (document.getElementById('btCrRiskDay')?.value || 'MON'),
       rebalance_mode: (document.getElementById('btRebalanceMode')?.value || 'target_notional'),
       liquidation_mode: (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected'),
       slippage_bps: Number(document.getElementById('btSlip')?.value || '10'),
       use_limit_orders: String(document.getElementById('btUseLimit')?.value || 'false') === 'true',
       limit_offset_bps: Number(document.getElementById('btLimitOffset')?.value || '10'),
+      order_type_equities: (document.getElementById('btEqOrderType')?.value || 'market'),
+      order_type_crypto: (document.getElementById('btCrOrderType')?.value || 'market'),
+      limit_offset_bps_equities: Number(document.getElementById('btEqLimitOffset')?.value || '10'),
+      limit_offset_bps_crypto: Number(document.getElementById('btCrLimitOffset')?.value || '10'),
       limit_fallback_to_market_open: String(document.getElementById('btLimitFallback')?.value || 'false') === 'true',
       limit_fallback_time_local: (document.getElementById('btLimitFallbackTime')?.value || '06:30'),
       per_asset_stop_loss_pct,
@@ -1782,11 +1860,23 @@ async function main() {
     setVal('btAssets', p.asset_mode);
     setVal('btRebalance', p.rebalance);
     setVal('btRebalanceDay', p.rebalance_day);
+    setVal('btEqRebFreq', p.rebalance_frequency_equities);
+    setVal('btEqRebDay', p.rebalance_day_equities);
+    setVal('btCrRebFreq', p.rebalance_frequency_crypto);
+    setVal('btCrRebDay', p.rebalance_day_crypto);
+    setVal('btEqRiskFreq', p.risk_check_frequency_equities);
+    setVal('btEqRiskDay', p.risk_check_day_equities);
+    setVal('btCrRiskFreq', p.risk_check_frequency_crypto);
+    setVal('btCrRiskDay', p.risk_check_day_crypto);
     setVal('btRebalanceMode', p.rebalance_mode);
     setVal('btLiquidation', p.liquidation_mode);
     setVal('btSlip', p.slippage_bps);
     setVal('btUseLimit', String(Boolean(p.use_limit_orders)));
     setVal('btLimitOffset', p.limit_offset_bps);
+    setVal('btEqOrderType', p.order_type_equities);
+    setVal('btCrOrderType', p.order_type_crypto);
+    setVal('btEqLimitOffset', p.limit_offset_bps_equities);
+    setVal('btCrLimitOffset', p.limit_offset_bps_crypto);
     setVal('btLimitFallback', String(Boolean(p.limit_fallback_to_market_open)));
     setVal('btLimitFallbackTime', p.limit_fallback_time_local);
     setVal('btStopLoss', p.per_asset_stop_loss_pct);

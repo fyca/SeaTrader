@@ -19,11 +19,21 @@ class BacktestParams:
     slippage_bps: float = 10.0
     use_limit_orders: bool = False
     limit_offset_bps: float = 10.0
+    # Per-asset execution options (fallback to global use_limit_orders/offset when unset)
+    order_type_equities: Literal["market", "limit"] | None = None
+    order_type_crypto: Literal["market", "limit"] | None = None
+    limit_offset_bps_equities: float | None = None
+    limit_offset_bps_crypto: float | None = None
     # Optional parity with live: if limit not fillable by open, convert to market-at-open.
     limit_fallback_to_market_open: bool = False
     limit_fallback_time_local: str = "06:30"
     rebalance: Literal["weekly", "daily"] = "weekly"
     rebalance_day: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] = "MON"
+    # Per-asset rebalance schedule (fallback to global rebalance/rebalance_day)
+    rebalance_frequency_equities: Literal["weekly", "daily"] | None = None
+    rebalance_day_equities: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] | None = None
+    rebalance_frequency_crypto: Literal["weekly", "daily"] | None = None
+    rebalance_day_crypto: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] | None = None
 
     # Execution pricing options
     # - daily mode: uses daily open/close as before
@@ -34,6 +44,11 @@ class BacktestParams:
     execution_tz: str = "America/Los_Angeles"
     # Exit/risk check time (intraday mode): used for stop/exclusion/dd exits
     risk_check_time_local: str = "12:30"
+    # Per-asset risk schedule (fallback to daily at risk_check_time_local)
+    risk_check_frequency_equities: Literal["weekly", "daily"] | None = None
+    risk_check_day_equities: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] | None = None
+    risk_check_frequency_crypto: Literal["weekly", "daily"] | None = None
+    risk_check_day_crypto: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] | None = None
 
     strategy_id: str = "baseline_trendvol"
     asset_mode: Literal["both", "equities", "crypto"] = "both"
@@ -120,6 +135,10 @@ def run_backtest(
     end = pd.to_datetime(params.end)
     days = _date_range(params.start, params.end)
     rebal_days = _rebalance_days(days, params.rebalance, params.rebalance_day)
+    eq_rebal_days = _rebalance_days(days, params.rebalance_frequency_equities or params.rebalance, params.rebalance_day_equities or params.rebalance_day)
+    cr_rebal_days = _rebalance_days(days, params.rebalance_frequency_crypto or params.rebalance, params.rebalance_day_crypto or params.rebalance_day)
+    eq_risk_days = _rebalance_days(days, params.risk_check_frequency_equities or "daily", params.risk_check_day_equities or params.rebalance_day)
+    cr_risk_days = _rebalance_days(days, params.risk_check_frequency_crypto or "daily", params.risk_check_day_crypto or params.rebalance_day)
 
     equity = float(params.initial_equity)
     cash = equity
@@ -230,6 +249,18 @@ def run_backtest(
                 return v
         # default to close for daily risk checks
         return px(sym, day)
+
+    def _use_limit_for(sym: str) -> bool:
+        is_crypto = "/" in sym
+        ot = (params.order_type_crypto if is_crypto else params.order_type_equities)
+        if ot in ("market", "limit"):
+            return ot == "limit"
+        return bool(params.use_limit_orders)
+
+    def _limit_off_bps_for(sym: str) -> float:
+        is_crypto = "/" in sym
+        v = params.limit_offset_bps_crypto if is_crypto else params.limit_offset_bps_equities
+        return float(v if v is not None else params.limit_offset_bps)
 
     def portfolio_value(day: pd.Timestamp) -> float:
         total = cash
@@ -377,8 +408,10 @@ def run_backtest(
             side = str(po.get("side"))
             limit_px = float(po.get("limit_px") or 0.0)
 
-            # cancel any still-open order at next rebalance boundary
-            if day in rebal_days and day > placed_day:
+            # cancel any still-open order at next rebalance boundary (per asset class)
+            is_crypto = "/" in sym
+            on_rebal_boundary = (day in (cr_rebal_days if is_crypto else eq_rebal_days))
+            if on_rebal_boundary and day > placed_day:
                 _event({"type":"cancel", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "reason":"limit_cancel_next_rebalance", "side":side})
                 pending_limits.remove(po)
                 continue
@@ -428,7 +461,7 @@ def run_backtest(
 
     for i, day in enumerate(days):
         # Process pending simulated limit orders first
-        if params.use_limit_orders:
+        if params.use_limit_orders or params.order_type_equities == "limit" or params.order_type_crypto == "limit":
             _process_pending_limits(day)
 
         # Mark-to-market
@@ -512,6 +545,11 @@ def run_backtest(
         if params.per_asset_stop_loss_pct is not None and params.per_asset_stop_loss_pct > 0:
             sl = float(params.per_asset_stop_loss_pct)
             for sym in list(positions_qty.keys()):
+                is_crypto = "/" in sym
+                if is_crypto and day not in cr_risk_days:
+                    continue
+                if (not is_crypto) and day not in eq_risk_days:
+                    continue
                 p0 = px(sym, day)
                 if p0 is None:
                     continue
@@ -554,7 +592,9 @@ def run_backtest(
                     positions_entry_date.pop(sym, None)
 
         # Rebalance
-        if day in rebal_days:
+        do_eq_rebalance = day in eq_rebal_days
+        do_cr_rebalance = day in cr_rebal_days
+        if do_eq_rebalance or do_cr_rebalance:
             if stopped_until_next_rebalance:
                 # behavior A: stay in cash UNTIL the next scheduled rebalance.
                 # If we triggered on this same rebalance day, skip this rebalance entirely.
@@ -631,6 +671,14 @@ def run_backtest(
                 eq_sel = []
                 eq_budget = 0.0
 
+            # apply per-asset schedule gates
+            if not do_eq_rebalance:
+                eq_sel = []
+                eq_budget = 0.0
+            if not do_cr_rebalance:
+                cr_sel = []
+                cr_budget = 0.0
+
             target_notional: dict[str, float] = {}
             if eq_sel:
                 w = eq_budget / len(eq_sel)
@@ -645,6 +693,11 @@ def run_backtest(
             keep = set(target_notional.keys())
             if params.liquidation_mode == "liquidate_non_selected":
                 for sym in list(positions_qty.keys()):
+                    is_crypto = "/" in sym
+                    if is_crypto and not do_cr_rebalance:
+                        continue
+                    if (not is_crypto) and not do_eq_rebalance:
+                        continue
                     if sym in keep:
                         continue
                     p0 = px(sym, day)
@@ -711,8 +764,8 @@ def run_backtest(
 
                     # buy at execution time + slippage
                     base_px = p_exec
-                    if params.use_limit_orders:
-                        limit_px = base_px * (1 + params.limit_offset_bps / 10000.0)
+                    if _use_limit_for(sym):
+                        limit_px = base_px * (1 + _limit_off_bps_for(sym) / 10000.0)
                         desired_notional = max(0.0, float(deltaN))
                         if desired_notional <= 0:
                             continue
@@ -770,8 +823,8 @@ def run_backtest(
                     if q_sub <= 0:
                         continue
 
-                    if params.use_limit_orders:
-                        limit_px = p_exec * (1 - params.limit_offset_bps / 10000.0)
+                    if _use_limit_for(sym):
+                        limit_px = p_exec * (1 - _limit_off_bps_for(sym) / 10000.0)
                         po = {
                             "symbol": sym,
                             "side": "sell",

@@ -153,4 +153,45 @@ def load_config(path: str | Path, *, preset_override: str | None = None) -> BotC
             # preset loading failure should not crash bot; continue with base config
             pass
 
+    # Backward-compatible derivation: legacy global scheduling/execution -> per-asset blocks
+    sch = data.setdefault("scheduling", {})
+    eqs = sch.setdefault("equities", {})
+    crs = sch.setdefault("crypto", {})
+
+    legacy_reb_day = sch.get("weekly_rebalance_day", "MON")
+    legacy_reb_time = sch.get("weekly_rebalance_time_local", "06:35")
+    legacy_risk_time = sch.get("daily_risk_check_time_local", "18:05")
+
+    eqs.setdefault("rebalance_frequency", "weekly")
+    eqs.setdefault("rebalance_day", legacy_reb_day)
+    eqs.setdefault("rebalance_time_local", legacy_reb_time)
+    eqs.setdefault("risk_check_frequency", "daily")
+    eqs.setdefault("risk_check_day", legacy_reb_day)
+    eqs.setdefault("risk_check_time_local", legacy_risk_time)
+
+    crs.setdefault("rebalance_frequency", "weekly")
+    crs.setdefault("rebalance_day", legacy_reb_day)
+    crs.setdefault("rebalance_time_local", legacy_reb_time)
+    crs.setdefault("risk_check_frequency", "daily")
+    crs.setdefault("risk_check_day", legacy_reb_day)
+    crs.setdefault("risk_check_time_local", legacy_risk_time)
+
+    ex = data.setdefault("execution", {})
+    eqx = ex.setdefault("equities", {})
+    crx = ex.setdefault("crypto", {})
+    legacy_use_limit = bool(ex.get("use_limit_orders", False))
+    legacy_off = float(ex.get("limit_offset_bps", 10.0) or 10.0)
+    legacy_fb = bool(ex.get("fallback_to_market_at_open", False))
+    legacy_fb_time = str(ex.get("fallback_time_local", "06:30"))
+
+    eqx.setdefault("order_type", "limit" if legacy_use_limit else "market")
+    eqx.setdefault("limit_offset_bps", legacy_off)
+    eqx.setdefault("fallback_to_market_at_open", legacy_fb)
+    eqx.setdefault("fallback_time_local", legacy_fb_time)
+
+    crx.setdefault("order_type", "limit" if legacy_use_limit else "market")
+    crx.setdefault("limit_offset_bps", legacy_off)
+    crx.setdefault("fallback_to_market_at_open", legacy_fb)
+    crx.setdefault("fallback_time_local", legacy_fb_time)
+
     return BotConfig.model_validate(data)
