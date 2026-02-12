@@ -179,27 +179,29 @@
         </div>
 
         <div class="muted" style="margin: 10px 0 6px 0;">Per-asset schedules (live/paper)</div>
-        <div class="assetSplit" style="margin-bottom:6px;">
-          <div class="pill" style="justify-content:center;"><b>Stocks schedule</b></div>
-          <div class="pill" style="justify-content:center;"><b>Crypto schedule</b></div>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
-          <div><div class="muted" style="font-size:12px;">Stocks rebalance freq</div><select id="eqRebFreqSelect"><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
-          <div><div class="muted" style="font-size:12px;">Stocks rebalance day</div><select id="eqRebDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
-          <div><div class="muted" style="font-size:12px;">Stocks rebalance time (PT)</div><input id="eqRebTimeInput" placeholder="06:35" /></div>
-          <div><div class="muted" style="font-size:12px;">Stocks risk freq</div><select id="eqRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
-          <div><div class="muted" style="font-size:12px;">Stocks risk day</div><select id="eqRiskDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
-          <div><div class="muted" style="font-size:12px;">Stocks risk time (PT)</div><input id="eqRiskTimeInput" placeholder="18:05" /></div>
-          <div><div class="muted" style="font-size:12px;">Crypto rebalance freq</div><select id="crRebFreqSelect"><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
-          <div><div class="muted" style="font-size:12px;">Crypto rebalance day</div><select id="crRebDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
-          <div><div class="muted" style="font-size:12px;">Crypto rebalance time (PT)</div><input id="crRebTimeInput" placeholder="06:35" /></div>
-          <div><div class="muted" style="font-size:12px;">Crypto risk freq</div><select id="crRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
-          <div><div class="muted" style="font-size:12px;">Crypto risk day</div><select id="crRiskDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
-          <div><div class="muted" style="font-size:12px;">Crypto risk time (PT)</div><input id="crRiskTimeInput" placeholder="18:05" /></div>
+        <div class="assetSplit" style="margin-bottom:8px;">
+          <div class="subcard" style="padding:10px;">
+            <div style="font-weight:700; margin-bottom:8px;">Stocks schedule</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+              <div><div class="muted" style="font-size:12px;">Rebalance freq</div><select id="eqRebFreqSelect"><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Rebalance day</div><select id="eqRebDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Rebalance time (PT)</div><input id="eqRebTimeInput" placeholder="06:35" /></div>
+              <div><div class="muted" style="font-size:12px;">Risk freq</div><select id="eqRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Risk day</div><select id="eqRiskDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Risk time (PT)</div><input id="eqRiskTimeInput" placeholder="18:05" /></div>
+            </div>
+          </div>
+          <div class="subcard" style="padding:10px;">
+            <div style="font-weight:700; margin-bottom:8px;">Crypto schedule</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+              <div><div class="muted" style="font-size:12px;">Rebalance freq</div><select id="crRebFreqSelect"><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Rebalance day</div><select id="crRebDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Rebalance time (PT)</div><input id="crRebTimeInput" placeholder="06:35" /></div>
+              <div><div class="muted" style="font-size:12px;">Risk freq</div><select id="crRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Risk day</div><select id="crRiskDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Risk time (PT)</div><input id="crRiskTimeInput" placeholder="18:05" /></div>
+            </div>
+          </div>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
