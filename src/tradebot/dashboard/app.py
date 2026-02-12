@@ -876,6 +876,31 @@ def create_app(*, config_path: str) -> FastAPI:
                     pass
         return {"ok": True}
 
+    @app.post("/api/backtest/notify-telegram")
+    async def backtest_notify_telegram(req: Request):
+        require_token(req)
+        body = await req.json()
+        text = str((body or {}).get("text") or "").strip()
+        if not text:
+            return {"ok": False, "error": "missing text"}
+
+        import os
+        import requests
+
+        bot_token = os.getenv("SEATRADER_TELEGRAM_BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = os.getenv("SEATRADER_TELEGRAM_CHAT_ID") or os.getenv("TELEGRAM_CHAT_ID")
+        if not bot_token or not chat_id:
+            return {
+                "ok": False,
+                "error": "telegram env not configured; set SEATRADER_TELEGRAM_BOT_TOKEN and SEATRADER_TELEGRAM_CHAT_ID"
+            }
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        r = requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=15)
+        if r.status_code >= 400:
+            return {"ok": False, "error": f"telegram send failed: {r.status_code} {r.text[:300]}"}
+        return {"ok": True}
+
     @app.get("/api/artifacts")
     def artifacts():
         base = Path("data")

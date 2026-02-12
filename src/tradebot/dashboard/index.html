@@ -199,6 +199,7 @@
                 <option value="risk_check_time_local">Iterate risk-check time</option>
               </select>
               <input id="btIterTimes" placeholder="06:30,07:30,08:30" value="06:30,07:30,08:30,09:30,10:30,11:30,12:30" style="min-width:320px;" />
+              <label class="muted" style="display:flex; align-items:center; gap:6px;"><input id="btIterNotifyTg" type="checkbox" /> Telegram notify on completion</label>
               <button id="btClearCache" class="secondary">Clear cache</button>
               <span id="btStatus" class="muted"></span>
             </div>
@@ -374,6 +375,16 @@
       <div id="btMetrics" class="muted" style="margin-top:8px;"></div>
       <div class="muted" id="btParams" style="margin-top:6px;"></div>
       <div id="btIterSummary" class="muted" style="margin-top:8px;"></div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+        <select id="btIterBestMetric" style="min-width:190px;">
+          <option value="sharpe">Best Sharpe (max)</option>
+          <option value="return">Best Return (max)</option>
+          <option value="max_drawdown_min">Best Max DD (min)</option>
+        </select>
+        <button id="btIterApplyBest" class="secondary">Apply best to run settings</button>
+        <button id="btIterApplyBestConfig" class="secondary">Apply best to config schedule</button>
+        <button id="btIterExportCsv" class="secondary">Export iteration CSV</button>
+      </div>
       <div id="btChart" class="muted" style="margin-top:8px;">(no results yet)</div>
       <div style="margin-top:10px;">
         <h2>Open positions at end (unrealized)</h2>
@@ -735,7 +746,12 @@ function parseIterTimes(raw) {
     .filter(Boolean);
 }
 
+window.__btIterRows = [];
+window.__btIterAxis = 'execution_time_local';
+
 function renderIterationSummary(rows, axis) {
+  window.__btIterRows = rows || [];
+  window.__btIterAxis = axis || 'execution_time_local';
   const el = document.getElementById('btIterSummary');
   if (!el) return;
   if (!rows.length) {
@@ -748,6 +764,86 @@ function renderIterationSummary(rows, axis) {
     + rows.map(r => `<tr><td>${r.iter_value}</td><td>${r.state}</td><td>${r.ret ?? '—'}</td><td>${r.dd ?? '—'}</td><td>${r.sh ?? '—'}</td><td style="font-family:ui-monospace,monospace;font-size:11px;">${r.job_id || '—'}</td></tr>`).join('')
     + `</tbody></table></div>`;
   el.innerHTML = head + table;
+}
+
+function pickBestIteration(rows, metricKey) {
+  const done = (rows || []).filter(r => r.state === 'done' && r.metrics);
+  if (!done.length) return null;
+  if (metricKey === 'max_drawdown_min') {
+    return done.reduce((a,b) => (Number(b.metrics.max_drawdown ?? 1e9) < Number(a.metrics.max_drawdown ?? 1e9) ? b : a));
+  }
+  if (metricKey === 'return') {
+    return done.reduce((a,b) => (Number(b.metrics.return ?? -1e9) > Number(a.metrics.return ?? -1e9) ? b : a));
+  }
+  return done.reduce((a,b) => (Number(b.metrics.sharpe ?? -1e9) > Number(a.metrics.sharpe ?? -1e9) ? b : a));
+}
+
+function applyBestIterationToUI() {
+  const metric = document.getElementById('btIterBestMetric')?.value || 'sharpe';
+  const best = pickBestIteration(window.__btIterRows || [], metric);
+  const status = document.getElementById('btStatus');
+  if (!best) {
+    if (status) status.textContent = 'no completed iteration rows to apply';
+    return;
+  }
+  if ((window.__btIterAxis || 'execution_time_local') === 'execution_time_local') {
+    const el = document.getElementById('btExecLocal');
+    if (el) el.value = best.iter_value;
+    if (status) status.textContent = `applied best buy time to run settings: ${best.iter_value}`;
+  } else {
+    const el = document.getElementById('btRiskTime');
+    if (el) el.value = best.iter_value;
+    if (status) status.textContent = `applied best risk-check time to run settings: ${best.iter_value}`;
+  }
+}
+
+async function applyBestIterationToConfig() {
+  const metric = document.getElementById('btIterBestMetric')?.value || 'sharpe';
+  const best = pickBestIteration(window.__btIterRows || [], metric);
+  const status = document.getElementById('btStatus');
+  if (!best) {
+    if (status) status.textContent = 'no completed iteration rows to apply to config';
+    return;
+  }
+  const token = document.getElementById('token')?.value || '';
+  const cfg = await getJSON('/api/config');
+  cfg.scheduling = cfg.scheduling || {};
+  if ((window.__btIterAxis || 'execution_time_local') === 'execution_time_local') {
+    cfg.scheduling.weekly_rebalance_time_local = best.iter_value;
+  } else {
+    cfg.scheduling.daily_risk_check_time_local = best.iter_value;
+  }
+  const r = await fetch('/api/config' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(cfg)
+  });
+  if (!r.ok) throw new Error(await r.text());
+  if (status) status.textContent = `applied best to config schedule: ${best.iter_value}`;
+}
+
+function exportIterationCsv() {
+  const rows = window.__btIterRows || [];
+  if (!rows.length) {
+    const status = document.getElementById('btStatus');
+    if (status) status.textContent = 'no iteration rows to export';
+    return;
+  }
+  const header = ['iter_axis','iter_value','state','job_id','return','max_drawdown','sharpe'];
+  const axis = window.__btIterAxis || 'execution_time_local';
+  const lines = [header.join(',')];
+  for (const r of rows) {
+    const m = r.metrics || {};
+    const vals = [axis, r.iter_value, r.state, r.job_id || '', m.return ?? '', m.max_drawdown ?? '', m.sharpe ?? ''];
+    lines.push(vals.map(v => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+    }).join(','));
+  }
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'backtest_iteration_summary.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 async function waitBacktestJob(jobId, onTick) {
@@ -806,9 +902,28 @@ async function runBacktestIteration() {
       dd: pct(m.max_drawdown),
       sh: Number(m.sharpe||0).toFixed(3),
       job_id: jobId,
+      metrics: { return: m.return, max_drawdown: m.max_drawdown, sharpe: m.sharpe }
     });
     renderIterationSummary(rows, axis);
     status.textContent = `iteration ${i+1}/${times.length} done: ${t}`;
+  }
+
+  const doneCount = rows.filter(r => r.state === 'done').length;
+  status.textContent = `iteration complete: ${doneCount}/${times.length} done`;
+
+  if (document.getElementById('btIterNotifyTg')?.checked) {
+    const metric = document.getElementById('btIterBestMetric')?.value || 'sharpe';
+    const best = pickBestIteration(rows, metric);
+    const axisLabel = axis === 'execution_time_local' ? 'buy time' : 'risk-check time';
+    const note = best
+      ? `SeaTrader iteration complete (${doneCount}/${times.length}). Best ${axisLabel}: ${best.iter_value} | return ${best.ret} | maxDD ${best.dd} | sharpe ${best.sh}.`
+      : `SeaTrader iteration complete (${doneCount}/${times.length}).`;
+    try {
+      await postJSON('/api/backtest/notify-telegram', {text: note});
+      status.textContent += ' • telegram sent';
+    } catch (e) {
+      status.textContent += ' • telegram notify failed';
+    }
   }
 }
 
@@ -2109,6 +2224,25 @@ document.getElementById('btRunIter')?.addEventListener('click', async (e) => {
   } catch (err) {
     document.getElementById('btStatus').textContent = 'iteration error: ' + (err?.message || err);
   }
+});
+
+document.getElementById('btIterApplyBest')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  applyBestIterationToUI();
+});
+
+document.getElementById('btIterApplyBestConfig')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  try {
+    await applyBestIterationToConfig();
+  } catch (err) {
+    document.getElementById('btStatus').textContent = 'apply-best-config error: ' + (err?.message || err);
+  }
+});
+
+document.getElementById('btIterExportCsv')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  exportIterationCsv();
 });
 
 document.getElementById('btTradeSearch')?.addEventListener('input', () => {
