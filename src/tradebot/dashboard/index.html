@@ -313,44 +313,8 @@
               </select>
             </div>
             <div>
-              <div class="muted">Intraday time (PT, global fallback)</div>
+              <div class="muted">Intraday time (PT)</div>
               <input id="btExecLocal" placeholder="HH:MM" value="15:55" style="width:170px;" />
-            </div>
-            <div>
-              <div class="muted">Stocks buy time (PT)</div>
-              <input id="btEqExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" />
-            </div>
-            <div>
-              <div class="muted">Crypto buy time (PT)</div>
-              <input id="btCrExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" />
-            </div>
-            <div>
-              <div class="muted">Risk-check time (PT, global fallback)</div>
-              <input id="btRiskTime" placeholder="HH:MM" value="12:30" style="width:170px;" />
-            </div>
-            <div>
-              <div class="muted">Stocks risk time (PT)</div>
-              <input id="btEqRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" />
-            </div>
-            <div>
-              <div class="muted">Crypto risk time (PT)</div>
-              <input id="btCrRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" />
-            </div>
-            <div>
-              <div class="muted">Stocks risk freq</div>
-              <select id="btEqRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select>
-            </div>
-            <div>
-              <div class="muted">Stocks risk day</div>
-              <select id="btEqRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
-            </div>
-            <div>
-              <div class="muted">Crypto risk freq</div>
-              <select id="btCrRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select>
-            </div>
-            <div>
-              <div class="muted">Crypto risk day</div>
-              <select id="btCrRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
             </div>
             <div>
               <div class="muted">Assets</div>
@@ -361,41 +325,8 @@
               </select>
             </div>
             <div>
-              <div class="muted">Stocks rebalance freq</div>
-              <select id="btEqRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select>
-            </div>
-            <div>
-              <div class="muted">Stocks rebalance day</div>
-              <select id="btEqRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
-            </div>
-            <div>
-              <div class="muted">Crypto rebalance freq</div>
-              <select id="btCrRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select>
-            </div>
-            <div>
-              <div class="muted">Crypto rebalance day</div>
-              <select id="btCrRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
-            </div>
-            <div>
               <div class="muted">Slippage (bps)</div>
               <input id="btSlip" placeholder="10" value="10" style="width:120px;" />
-            </div>
-            <div class="muted" style="font-size:12px;">Global order fallback removed — per-asset order controls below are used.</div>
-            <div>
-              <div class="muted">Stocks order type</div>
-              <select id="btEqOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select>
-            </div>
-            <div>
-              <div class="muted">Stocks offset bps</div>
-              <input id="btEqLimitOffset" placeholder="10" value="10" style="width:120px;" />
-            </div>
-            <div>
-              <div class="muted">Crypto order type</div>
-              <select id="btCrOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select>
-            </div>
-            <div>
-              <div class="muted">Crypto offset bps</div>
-              <input id="btCrLimitOffset" placeholder="10" value="10" style="width:120px;" />
             </div>
             <div>
               <div class="muted">Limit fallback</div>
@@ -405,6 +336,36 @@
               <div class="muted">Fallback time (PT)</div>
               <input id="btLimitFallbackTime" placeholder="06:30" value="06:30" style="width:120px;" />
             </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+            <div class="subcard" style="padding:10px;">
+              <div style="font-weight:700; margin-bottom:8px;">Stocks settings</div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <div><div class="muted">Buy time (PT)</div><input id="btEqExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
+                <div><div class="muted">Risk time (PT)</div><input id="btEqRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" /></div>
+                <div><div class="muted">Rebalance freq</div><select id="btEqRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select></div>
+                <div><div class="muted">Rebalance day</div><select id="btEqRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+                <div><div class="muted">Risk freq</div><select id="btEqRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select></div>
+                <div><div class="muted">Risk day</div><select id="btEqRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+                <div><div class="muted">Order type</div><select id="btEqOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select></div>
+                <div><div class="muted">Offset bps</div><input id="btEqLimitOffset" placeholder="10" value="10" style="width:120px;" /></div>
+              </div>
+            </div>
+            <div class="subcard" style="padding:10px;">
+              <div style="font-weight:700; margin-bottom:8px;">Crypto settings</div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <div><div class="muted">Buy time (PT)</div><input id="btCrExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
+                <div><div class="muted">Risk time (PT)</div><input id="btCrRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" /></div>
+                <div><div class="muted">Rebalance freq</div><select id="btCrRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select></div>
+                <div><div class="muted">Rebalance day</div><select id="btCrRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+                <div><div class="muted">Risk freq</div><select id="btCrRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select></div>
+                <div><div class="muted">Risk day</div><select id="btCrRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+                <div><div class="muted">Order type</div><select id="btCrOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select></div>
+                <div><div class="muted">Offset bps</div><input id="btCrLimitOffset" placeholder="10" value="10" style="width:120px;" /></div>
+              </div>
+            </div>
+          </div>
             <!-- single symbol moved to header actions row -->
           </div>
         </div>
