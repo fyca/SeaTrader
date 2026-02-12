@@ -341,14 +341,7 @@
               <div class="muted">Slippage (bps)</div>
               <input id="btSlip" placeholder="10" value="10" style="width:120px;" />
             </div>
-            <div>
-              <div class="muted">Limit fallback</div>
-              <select id="btLimitFallback" style="width:190px;"><option value="false" selected>Off</option><option value="true">Fallback to market @ open</option></select>
-            </div>
-            <div>
-              <div class="muted">Fallback time (PT)</div>
-              <input id="btLimitFallbackTime" placeholder="06:30" value="06:30" style="width:120px;" />
-            </div>
+            <div class="muted" style="font-size:12px;">Fallback uses each asset's market buy time.</div>
           </div>
 
           <div class="muted" style="margin: 10px 0 6px 0;">Per-asset order settings (backtest)</div>
@@ -358,7 +351,8 @@
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
                 <div><div class="muted">Order type</div><select id="btEqOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select></div>
                 <div><div class="muted">Limit offset (bps)</div><input id="btEqLimitOffset" placeholder="10" value="10" style="width:120px;" /></div>
-                <div><div class="muted">Premarket trade time (PT)</div><input id="btEqExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
+                <div><div class="muted">Limit fallback</div><select id="btEqLimitFallback" style="width:170px;"><option value="false" selected>Off</option><option value="true">Fallback to market buy time</option></select></div>
+                <div><div class="muted">Market buy time (PT)</div><input id="btEqExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
                 <div><div class="muted">Risk time (PT)</div><input id="btEqRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" /></div>
               </div>
             </div>
@@ -367,7 +361,8 @@
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
                 <div><div class="muted">Order type</div><select id="btCrOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select></div>
                 <div><div class="muted">Limit offset (bps)</div><input id="btCrLimitOffset" placeholder="10" value="10" style="width:120px;" /></div>
-                <div><div class="muted">Buy time (PT)</div><input id="btCrExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
+                <div><div class="muted">Limit fallback</div><select id="btCrLimitFallback" style="width:170px;"><option value="false" selected>Off</option><option value="true">Fallback to market buy time</option></select></div>
+                <div><div class="muted">Market buy time (PT)</div><input id="btCrExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
                 <div><div class="muted">Risk time (PT)</div><input id="btCrRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" /></div>
               </div>
             </div>
@@ -823,13 +818,15 @@ function collectBacktestRequestBody() {
   const ddPreset = (document.getElementById('btDDPreset')?.value || '').trim();
   const ddStopRaw = ddCustom || ddPreset;
   const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
-  const limit_fallback_to_market_open = String(document.getElementById('btLimitFallback')?.value || 'false') === 'true';
-  const limit_fallback_time_local = (document.getElementById('btLimitFallbackTime')?.value || '06:30');
+  const limit_fallback_to_market_open_equities = String(document.getElementById('btEqLimitFallback')?.value || 'false') === 'true';
+  const limit_fallback_to_market_open_crypto = String(document.getElementById('btCrLimitFallback')?.value || 'false') === 'true';
 
   return {
     start, end, slippage_bps, use_limit_orders, limit_offset_bps,
     order_type_equities, order_type_crypto, limit_offset_bps_equities, limit_offset_bps_crypto,
-    limit_fallback_to_market_open, limit_fallback_time_local,
+    limit_fallback_to_market_open_equities, limit_fallback_to_market_open_crypto,
+    limit_fallback_to_market_open: (limit_fallback_to_market_open_equities || limit_fallback_to_market_open_crypto),
+    limit_fallback_time_local: execution_time_local_equities,
     initial_equity: 100000, strategy_id, execution_time_mode, execution_time,
     execution_time_local, execution_time_local_equities, execution_time_local_crypto,
     risk_check_time_local, risk_check_time_local_equities, risk_check_time_local_crypto,
@@ -1941,8 +1938,10 @@ async function main() {
       order_type_crypto: (document.getElementById('btCrOrderType')?.value || 'market'),
       limit_offset_bps_equities: Number(document.getElementById('btEqLimitOffset')?.value || '10'),
       limit_offset_bps_crypto: Number(document.getElementById('btCrLimitOffset')?.value || '10'),
-      limit_fallback_to_market_open: String(document.getElementById('btLimitFallback')?.value || 'false') === 'true',
-      limit_fallback_time_local: (document.getElementById('btLimitFallbackTime')?.value || '06:30'),
+      limit_fallback_to_market_open_equities: String(document.getElementById('btEqLimitFallback')?.value || 'false') === 'true',
+      limit_fallback_to_market_open_crypto: String(document.getElementById('btCrLimitFallback')?.value || 'false') === 'true',
+      limit_fallback_to_market_open: (String(document.getElementById('btEqLimitFallback')?.value || 'false') === 'true') || (String(document.getElementById('btCrLimitFallback')?.value || 'false') === 'true'),
+      limit_fallback_time_local: (document.getElementById('btEqExecLocal')?.value || '06:30'),
       per_asset_stop_loss_pct,
       portfolio_dd_stop,
       symbol_pnl_floor_pct,
@@ -1983,8 +1982,8 @@ async function main() {
     setVal('btCrOrderType', p.order_type_crypto);
     setVal('btEqLimitOffset', p.limit_offset_bps_equities);
     setVal('btCrLimitOffset', p.limit_offset_bps_crypto);
-    setVal('btLimitFallback', String(Boolean(p.limit_fallback_to_market_open)));
-    setVal('btLimitFallbackTime', p.limit_fallback_time_local);
+    setVal('btEqLimitFallback', String(Boolean(p.limit_fallback_to_market_open_equities ?? p.limit_fallback_to_market_open)));
+    setVal('btCrLimitFallback', String(Boolean(p.limit_fallback_to_market_open_crypto ?? p.limit_fallback_to_market_open)));
     setVal('btStopLoss', p.per_asset_stop_loss_pct);
     setVal('btDD', '');
     setVal('btDDPreset', p.portfolio_dd_stop);

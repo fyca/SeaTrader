@@ -26,6 +26,8 @@ class BacktestParams:
     limit_offset_bps_crypto: float | None = None
     # Optional parity with live: if limit not fillable by open, convert to market-at-open.
     limit_fallback_to_market_open: bool = False
+    limit_fallback_to_market_open_equities: bool | None = None
+    limit_fallback_to_market_open_crypto: bool | None = None
     limit_fallback_time_local: str = "06:30"
     rebalance: Literal["weekly", "daily"] = "weekly"
     rebalance_day: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] = "MON"
@@ -265,6 +267,13 @@ def run_backtest(
         is_crypto = "/" in sym
         v = params.limit_offset_bps_crypto if is_crypto else params.limit_offset_bps_equities
         return float(v if v is not None else 10.0)
+
+    def _fallback_for(sym: str) -> bool:
+        is_crypto = "/" in sym
+        v = params.limit_fallback_to_market_open_crypto if is_crypto else params.limit_fallback_to_market_open_equities
+        if v is None:
+            return bool(params.limit_fallback_to_market_open)
+        return bool(v)
 
     def portfolio_value(day: pd.Timestamp) -> float:
         total = cash
@@ -779,7 +788,7 @@ def run_backtest(
                             "placed_day": day.strftime("%Y-%m-%d"),
                             "limit_px": float(limit_px),
                             "notional": float(desired_notional),
-                            "fallback": bool(params.limit_fallback_to_market_open),
+                            "fallback": _fallback_for(sym),
                         }
                         pending_limits.append(po)
                         _event({"type":"order", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "side":"buy", "limit_px":float(limit_px), "notional":float(desired_notional), "reason":"limit_placed"})
@@ -835,7 +844,7 @@ def run_backtest(
                             "placed_day": day.strftime("%Y-%m-%d"),
                             "limit_px": float(limit_px),
                             "qty": float(q_sub),
-                            "fallback": bool(params.limit_fallback_to_market_open),
+                            "fallback": _fallback_for(sym),
                         }
                         pending_limits.append(po)
                         _event({"type":"order", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "side":"sell", "limit_px":float(limit_px), "qty":float(q_sub), "reason":"limit_placed"})
