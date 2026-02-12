@@ -193,6 +193,12 @@
               <button id="btPreset5y" class="secondary">Last 5y</button>
               <input id="btSymbol" placeholder="Single symbol (optional)" style="min-width:260px;" />
               <button id="btRun" class="primary">Run backtest</button>
+              <button id="btRunIter" class="secondary">Run iteration (strict)</button>
+              <select id="btIterAxis" style="min-width:170px;">
+                <option value="execution_time_local">Iterate buy time</option>
+                <option value="risk_check_time_local">Iterate risk-check time</option>
+              </select>
+              <input id="btIterTimes" placeholder="06:30,07:30,08:30" value="06:30,07:30,08:30,09:30,10:30,11:30,12:30" style="min-width:320px;" />
               <button id="btClearCache" class="secondary">Clear cache</button>
               <span id="btStatus" class="muted"></span>
             </div>
@@ -367,6 +373,7 @@
       </div>
       <div id="btMetrics" class="muted" style="margin-top:8px;"></div>
       <div class="muted" id="btParams" style="margin-top:6px;"></div>
+      <div id="btIterSummary" class="muted" style="margin-top:8px;"></div>
       <div id="btChart" class="muted" style="margin-top:8px;">(no results yet)</div>
       <div style="margin-top:10px;">
         <h2>Open positions at end (unrealized)</h2>
@@ -662,9 +669,7 @@ function setDefaultBacktestDates() {
   }
 }
 
-async function runBacktest() {
-  const status = document.getElementById('btStatus');
-  const token = document.getElementById('token')?.value || '';
+function collectBacktestRequestBody() {
   const start = document.getElementById('btStart')?.value;
   const end = document.getElementById('btEnd')?.value;
   const strategy_id = (document.getElementById('btStrategy')?.value || 'baseline_trendvol');
@@ -692,10 +697,26 @@ async function runBacktest() {
   const ddPreset = (document.getElementById('btDDPreset')?.value || '').trim();
   const ddStopRaw = ddCustom || ddPreset;
   const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
-  status.textContent = 'starting…';
   const limit_fallback_to_market_open = String(document.getElementById('btLimitFallback')?.value || 'false') === 'true';
   const limit_fallback_time_local = (document.getElementById('btLimitFallbackTime')?.value || '06:30');
-  const body = {start, end, slippage_bps, use_limit_orders, limit_offset_bps, limit_fallback_to_market_open, limit_fallback_time_local, initial_equity: 100000, strategy_id, execution_time_mode, execution_time, execution_time_local, risk_check_time_local, execution_tz, asset_mode, rebalance, rebalance_day, rebalance_mode, liquidation_mode, universe_mode: symbol ? 'single' : 'full', symbol: symbol || null, portfolio_dd_stop, per_asset_stop_loss_pct, symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized};
+
+  return {
+    start, end, slippage_bps, use_limit_orders, limit_offset_bps,
+    limit_fallback_to_market_open, limit_fallback_time_local,
+    initial_equity: 100000, strategy_id, execution_time_mode, execution_time,
+    execution_time_local, risk_check_time_local, execution_tz, asset_mode,
+    rebalance, rebalance_day, rebalance_mode, liquidation_mode,
+    universe_mode: symbol ? 'single' : 'full', symbol: symbol || null,
+    portfolio_dd_stop, per_asset_stop_loss_pct,
+    symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized
+  };
+}
+
+async function runBacktest() {
+  const status = document.getElementById('btStatus');
+  const token = document.getElementById('token')?.value || '';
+  status.textContent = 'starting…';
+  const body = collectBacktestRequestBody();
   const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -705,6 +726,90 @@ async function runBacktest() {
   const j = await r.json();
   btJobId = j.job_id;
   status.textContent = `job ${btJobId} started`;
+}
+
+function parseIterTimes(raw) {
+  return String(raw || '')
+    .split(/[\s,]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function renderIterationSummary(rows, axis) {
+  const el = document.getElementById('btIterSummary');
+  if (!el) return;
+  if (!rows.length) {
+    el.textContent = '';
+    return;
+  }
+  const axisLabel = axis === 'execution_time_local' ? 'Buy time' : 'Risk-check time';
+  const head = `<div style="margin-bottom:6px;"><b>Iteration summary</b> (${axisLabel}) — ${rows.length} complete</div>`;
+  const table = `<div class="tableWrap" style="max-height:260px;"><table><thead><tr><th>${axisLabel}</th><th>State</th><th>Return</th><th>Max DD</th><th>Sharpe</th><th>Job</th></tr></thead><tbody>`
+    + rows.map(r => `<tr><td>${r.iter_value}</td><td>${r.state}</td><td>${r.ret ?? '—'}</td><td>${r.dd ?? '—'}</td><td>${r.sh ?? '—'}</td><td style="font-family:ui-monospace,monospace;font-size:11px;">${r.job_id || '—'}</td></tr>`).join('')
+    + `</tbody></table></div>`;
+  el.innerHTML = head + table;
+}
+
+async function waitBacktestJob(jobId, onTick) {
+  while (true) {
+    const st = await getJSON('/api/backtest/status?job_id=' + encodeURIComponent(jobId));
+    if (onTick) onTick(st);
+    if (st.state === 'done' || st.state === 'error' || st.state === 'missing') return st;
+    await new Promise(res => setTimeout(res, 1200));
+  }
+}
+
+async function runBacktestIteration() {
+  const status = document.getElementById('btStatus');
+  const token = document.getElementById('token')?.value || '';
+  const axis = document.getElementById('btIterAxis')?.value || 'execution_time_local';
+  const times = parseIterTimes(document.getElementById('btIterTimes')?.value || '');
+  if (!times.length) {
+    status.textContent = 'enter at least one time (e.g. 06:30,07:30)';
+    return;
+  }
+
+  const rows = [];
+  renderIterationSummary(rows, axis);
+
+  for (let i=0;i<times.length;i++) {
+    const t = times[i];
+    const body = collectBacktestRequestBody();
+    body[axis] = t;
+    status.textContent = `iteration ${i+1}/${times.length}: starting ${axis}=${t}…`;
+
+    const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const j = await r.json();
+    const jobId = j.job_id;
+
+    const st = await waitBacktestJob(jobId, (x) => {
+      status.textContent = `iteration ${i+1}/${times.length}: ${t} • ${x.state} ${x.progress||0}/${x.total||0}`;
+    });
+
+    if (st.state !== 'done') {
+      rows.push({iter_value: t, state: st.state || 'error', ret: '—', dd: '—', sh: '—', job_id: jobId});
+      renderIterationSummary(rows, axis);
+      status.textContent = `iteration stopped at ${t}: ${st.state || 'error'}`;
+      break;
+    }
+
+    const res = await getJSON('/api/backtest/result?job_id=' + encodeURIComponent(jobId));
+    await renderBacktest(res);
+    const m = res.metrics || {};
+    rows.push({
+      iter_value: t,
+      state: 'done',
+      ret: pct(m.return),
+      dd: pct(m.max_drawdown),
+      sh: Number(m.sharpe||0).toFixed(3),
+      job_id: jobId,
+    });
+    renderIterationSummary(rows, axis);
+    status.textContent = `iteration ${i+1}/${times.length} done: ${t}`;
+  }
 }
 
 async function pollBacktest() {
@@ -1994,6 +2099,16 @@ document.getElementById('btRun')?.addEventListener('click', (e) => {
   runBacktest().catch(err => {
     document.getElementById('btStatus').textContent = 'error: ' + err;
   });
+});
+
+document.getElementById('btRunIter')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (!confirm('Run strict sequential iteration now? This launches one backtest at a time.')) return;
+  try {
+    await runBacktestIteration();
+  } catch (err) {
+    document.getElementById('btStatus').textContent = 'iteration error: ' + (err?.message || err);
+  }
 });
 
 document.getElementById('btTradeSearch')?.addEventListener('input', () => {
