@@ -41,9 +41,13 @@ class BacktestParams:
     execution_time_mode: Literal["daily", "intraday"] = "daily"
     execution_time: Literal["open", "close"] = "close"  # daily mode only
     execution_time_local: str = "15:55"  # intraday mode only
+    execution_time_local_equities: str | None = None
+    execution_time_local_crypto: str | None = None
     execution_tz: str = "America/Los_Angeles"
     # Exit/risk check time (intraday mode): used for stop/exclusion/dd exits
     risk_check_time_local: str = "12:30"
+    risk_check_time_local_equities: str | None = None
+    risk_check_time_local_crypto: str | None = None
     # Per-asset risk schedule (fallback to daily at risk_check_time_local)
     risk_check_frequency_equities: Literal["weekly", "daily"] | None = None
     risk_check_day_equities: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] | None = None

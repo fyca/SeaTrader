@@ -79,6 +79,14 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
     if params.get("risk_check_time_local"):
         bot.setdefault("scheduling", {})
         bot["scheduling"]["daily_risk_check_time_local"] = str(params.get("risk_check_time_local"))
+    if params.get("risk_check_time_local_equities"):
+        bot.setdefault("scheduling", {})
+        bot["scheduling"].setdefault("equities", {})
+        bot["scheduling"]["equities"]["risk_check_time_local"] = str(params.get("risk_check_time_local_equities"))
+    if params.get("risk_check_time_local_crypto"):
+        bot.setdefault("scheduling", {})
+        bot["scheduling"].setdefault("crypto", {})
+        bot["scheduling"]["crypto"]["risk_check_time_local"] = str(params.get("risk_check_time_local_crypto"))
 
     # per-asset schedule overrides
     bot.setdefault("scheduling", {})
@@ -102,23 +110,29 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
     if params.get("risk_check_day_crypto"):
         bot["scheduling"]["crypto"]["risk_check_day"] = str(params.get("risk_check_day_crypto")).upper()
 
-    # execution timing mapping (best-effort): sets the time our unattended rebalance should run.
-    # This does NOT change pricing/fills in live; it just schedules when the CLI executes.
+    # execution timing mapping (best-effort): sets unattended scheduler times.
     exec_mode = params.get("execution_time_mode") or "daily"
+    bot.setdefault("scheduling", {})
+    bot["scheduling"].setdefault("equities", {})
+    bot["scheduling"].setdefault("crypto", {})
+
     if exec_mode == "intraday":
         t = params.get("execution_time_local")
+        t_eq = params.get("execution_time_local_equities") or t
+        t_cr = params.get("execution_time_local_crypto") or t
         if t:
-            bot.setdefault("scheduling", {})
             bot["scheduling"]["weekly_rebalance_time_local"] = str(t)
-            bot["scheduling"]["timezone"] = str(params.get("execution_tz") or "America/Los_Angeles")
+        if t_eq:
+            bot["scheduling"]["equities"]["rebalance_time_local"] = str(t_eq)
+        if t_cr:
+            bot["scheduling"]["crypto"]["rebalance_time_local"] = str(t_cr)
+        bot["scheduling"]["timezone"] = str(params.get("execution_tz") or "America/Los_Angeles")
     else:
-        # daily open/close approximation
         et = params.get("execution_time") or "close"
-        bot.setdefault("scheduling", {})
-        if et == "open":
-            bot["scheduling"]["weekly_rebalance_time_local"] = "06:35"  # ~09:35 ET
-        else:
-            bot["scheduling"]["weekly_rebalance_time_local"] = "12:55"  # ~15:55 ET
+        t = "06:35" if et == "open" else "12:55"
+        bot["scheduling"]["weekly_rebalance_time_local"] = t
+        bot["scheduling"].setdefault("equities", {}).setdefault("rebalance_time_local", t)
+        bot["scheduling"].setdefault("crypto", {}).setdefault("rebalance_time_local", t)
         bot["scheduling"]["timezone"] = "America/Los_Angeles"
 
     return bot

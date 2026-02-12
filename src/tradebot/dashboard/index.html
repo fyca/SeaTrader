@@ -108,15 +108,15 @@
         <div class="muted" style="margin: 10px 0 6px 0;">Execution options (paper/live)</div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
           <div>
-            <div class="muted" style="font-size:12px;">Use limit orders</div>
+            <div class="muted" style="font-size:12px;">Use limit orders (global fallback)</div>
             <select id="useLimitOrdersSelect"><option value="false">No (market)</option><option value="true">Yes (limit)</option></select>
           </div>
           <div>
-            <div class="muted" style="font-size:12px;">Limit offset (bps)</div>
+            <div class="muted" style="font-size:12px;">Limit offset (bps, global fallback)</div>
             <input id="limitOffsetInput" placeholder="10" />
           </div>
           <div>
-            <div class="muted" style="font-size:12px;">Weekly rebalance day</div>
+            <div class="muted" style="font-size:12px;">Weekly rebalance day (legacy fallback)</div>
             <select id="weeklyRebalanceDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select>
           </div>
         </div>
@@ -138,6 +138,64 @@
             <input id="fallbackTimeInput" placeholder="06:30" />
           </div>
         </div>
+        <div class="muted" style="margin: 10px 0 6px 0;">Per-asset order settings (live/paper)</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div>
+            <div class="muted" style="font-size:12px;">Stocks order type</div>
+            <select id="eqOrderTypeSelect"><option value="market">Market</option><option value="limit">Limit</option></select>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Stocks limit offset (bps)</div>
+            <input id="eqLimitOffsetInput" placeholder="10" />
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Crypto order type</div>
+            <select id="crOrderTypeSelect"><option value="market">Market</option><option value="limit">Limit</option></select>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Crypto limit offset (bps)</div>
+            <input id="crLimitOffsetInput" placeholder="10" />
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div>
+            <div class="muted" style="font-size:12px;">Stocks fallback</div>
+            <select id="eqFallbackEnableSelect"><option value="false">Off</option><option value="true">On</option></select>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Stocks fallback time (PT)</div>
+            <input id="eqFallbackTimeInput" placeholder="06:30" />
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Crypto fallback</div>
+            <select id="crFallbackEnableSelect"><option value="false">Off</option><option value="true">On</option></select>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Crypto fallback time (PT)</div>
+            <input id="crFallbackTimeInput" placeholder="06:30" />
+          </div>
+        </div>
+
+        <div class="muted" style="margin: 10px 0 6px 0;">Per-asset schedules (live/paper)</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div><div class="muted" style="font-size:12px;">Stocks rebalance freq</div><select id="eqRebFreqSelect"><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
+          <div><div class="muted" style="font-size:12px;">Stocks rebalance day</div><select id="eqRebDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+          <div><div class="muted" style="font-size:12px;">Stocks rebalance time (PT)</div><input id="eqRebTimeInput" placeholder="06:35" /></div>
+          <div><div class="muted" style="font-size:12px;">Stocks risk freq</div><select id="eqRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div><div class="muted" style="font-size:12px;">Stocks risk day</div><select id="eqRiskDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+          <div><div class="muted" style="font-size:12px;">Stocks risk time (PT)</div><input id="eqRiskTimeInput" placeholder="18:05" /></div>
+          <div><div class="muted" style="font-size:12px;">Crypto rebalance freq</div><select id="crRebFreqSelect"><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
+          <div><div class="muted" style="font-size:12px;">Crypto rebalance day</div><select id="crRebDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div><div class="muted" style="font-size:12px;">Crypto rebalance time (PT)</div><input id="crRebTimeInput" placeholder="06:35" /></div>
+          <div><div class="muted" style="font-size:12px;">Crypto risk freq</div><select id="crRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+          <div><div class="muted" style="font-size:12px;">Crypto risk day</div><select id="crRiskDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+          <div><div class="muted" style="font-size:12px;">Crypto risk time (PT)</div><input id="crRiskTimeInput" placeholder="18:05" /></div>
+        </div>
+
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
           <div>
             <div class="muted" style="font-size:12px;">Max orders/run</div>
@@ -152,6 +210,7 @@
             <input id="maxTotalInput" placeholder="15000 or none" />
           </div>
         </div>
+        <div id="liveScheduleSummary" class="muted" style="margin-top:8px;"></div>
 
         <div class="muted" style="margin: 10px 0 6px 0;">Config (JSON) — edit and save</div>
         <textarea id="configEditor" style="width:100%; height:160px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px;"></textarea>
@@ -259,12 +318,28 @@
               </select>
             </div>
             <div>
-              <div class="muted">Intraday time (PT)</div>
-              <input id="btExecLocal" placeholder="HH:MM" value="15:55" style="width:120px;" />
+              <div class="muted">Intraday time (PT, global fallback)</div>
+              <input id="btExecLocal" placeholder="HH:MM" value="15:55" style="width:170px;" />
+            </div>
+            <div>
+              <div class="muted">Stocks buy time (PT)</div>
+              <input id="btEqExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" />
+            </div>
+            <div>
+              <div class="muted">Crypto buy time (PT)</div>
+              <input id="btCrExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" />
             </div>
             <div>
               <div class="muted">Risk-check time (PT, global fallback)</div>
               <input id="btRiskTime" placeholder="HH:MM" value="12:30" style="width:170px;" />
+            </div>
+            <div>
+              <div class="muted">Stocks risk time (PT)</div>
+              <input id="btEqRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" />
+            </div>
+            <div>
+              <div class="muted">Crypto risk time (PT)</div>
+              <input id="btCrRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" />
             </div>
             <div>
               <div class="muted">Stocks risk freq</div>
@@ -735,7 +810,11 @@ function collectBacktestRequestBody() {
   const execution_time_mode = (document.getElementById('btExecMode')?.value || 'daily');
   const execution_time = (document.getElementById('btExecTime')?.value || 'close');
   const execution_time_local = (document.getElementById('btExecLocal')?.value || '15:55');
+  const execution_time_local_equities = (document.getElementById('btEqExecLocal')?.value || execution_time_local);
+  const execution_time_local_crypto = (document.getElementById('btCrExecLocal')?.value || execution_time_local);
   const risk_check_time_local = (document.getElementById('btRiskTime')?.value || '12:30');
+  const risk_check_time_local_equities = (document.getElementById('btEqRiskTime')?.value || risk_check_time_local);
+  const risk_check_time_local_crypto = (document.getElementById('btCrRiskTime')?.value || risk_check_time_local);
   const execution_tz = 'America/Los_Angeles';
   const asset_mode = (document.getElementById('btAssets')?.value || 'both');
   const rebalance = (document.getElementById('btRebalance')?.value || 'weekly');
@@ -776,7 +855,9 @@ function collectBacktestRequestBody() {
     order_type_equities, order_type_crypto, limit_offset_bps_equities, limit_offset_bps_crypto,
     limit_fallback_to_market_open, limit_fallback_time_local,
     initial_equity: 100000, strategy_id, execution_time_mode, execution_time,
-    execution_time_local, risk_check_time_local, execution_tz, asset_mode,
+    execution_time_local, execution_time_local_equities, execution_time_local_crypto,
+    risk_check_time_local, risk_check_time_local_equities, risk_check_time_local_crypto,
+    execution_tz, asset_mode,
     rebalance, rebalance_day,
     rebalance_frequency_equities, rebalance_day_equities,
     rebalance_frequency_crypto, rebalance_day_crypto,
@@ -1709,6 +1790,47 @@ async function main() {
   const wrd = document.getElementById('weeklyRebalanceDaySelect');
   if (wrd) wrd.value = String(cfg.scheduling?.weekly_rebalance_day || 'MON');
 
+  const exEq = cfg.execution?.equities || {};
+  const exCr = cfg.execution?.crypto || {};
+  const schEq = cfg.scheduling?.equities || {};
+  const schCr = cfg.scheduling?.crypto || {};
+
+  const setv = (id, v, d='') => { const el=document.getElementById(id); if (el) el.value = String(v ?? d); };
+  setv('eqOrderTypeSelect', exEq.order_type, 'market');
+  setv('eqLimitOffsetInput', exEq.limit_offset_bps, cfg.execution?.limit_offset_bps ?? 10);
+  setv('eqFallbackEnableSelect', Boolean(exEq.fallback_to_market_at_open), 'false');
+  setv('eqFallbackTimeInput', exEq.fallback_time_local, cfg.execution?.fallback_time_local ?? '06:30');
+
+  setv('crOrderTypeSelect', exCr.order_type, 'market');
+  setv('crLimitOffsetInput', exCr.limit_offset_bps, cfg.execution?.limit_offset_bps ?? 10);
+  setv('crFallbackEnableSelect', Boolean(exCr.fallback_to_market_at_open), 'false');
+  setv('crFallbackTimeInput', exCr.fallback_time_local, cfg.execution?.fallback_time_local ?? '06:30');
+
+  setv('eqRebFreqSelect', schEq.rebalance_frequency, 'weekly');
+  setv('eqRebDaySelect', schEq.rebalance_day, cfg.scheduling?.weekly_rebalance_day || 'MON');
+  setv('eqRebTimeInput', schEq.rebalance_time_local, cfg.scheduling?.weekly_rebalance_time_local || '06:35');
+  setv('eqRiskFreqSelect', schEq.risk_check_frequency, 'daily');
+  setv('eqRiskDaySelect', schEq.risk_check_day, cfg.scheduling?.weekly_rebalance_day || 'MON');
+  setv('eqRiskTimeInput', schEq.risk_check_time_local, cfg.scheduling?.daily_risk_check_time_local || '18:05');
+
+  setv('crRebFreqSelect', schCr.rebalance_frequency, 'weekly');
+  setv('crRebDaySelect', schCr.rebalance_day, cfg.scheduling?.weekly_rebalance_day || 'MON');
+  setv('crRebTimeInput', schCr.rebalance_time_local, cfg.scheduling?.weekly_rebalance_time_local || '06:35');
+  setv('crRiskFreqSelect', schCr.risk_check_frequency, 'daily');
+  setv('crRiskDaySelect', schCr.risk_check_day, cfg.scheduling?.weekly_rebalance_day || 'MON');
+  setv('crRiskTimeInput', schCr.risk_check_time_local, cfg.scheduling?.daily_risk_check_time_local || '18:05');
+
+  const lss = document.getElementById('liveScheduleSummary');
+  if (lss) {
+    const ss = scheduleStatus || {};
+    const parts = [];
+    if (ss.rebalance_next_run_equities) parts.push(`next stocks rebalance: ${ss.rebalance_next_run_equities}`);
+    if (ss.rebalance_next_run_crypto) parts.push(`next crypto rebalance: ${ss.rebalance_next_run_crypto}`);
+    if (ss.risk_next_run_equities) parts.push(`next stocks risk: ${ss.risk_next_run_equities}`);
+    if (ss.risk_next_run_crypto) parts.push(`next crypto risk: ${ss.risk_next_run_crypto}`);
+    lss.textContent = parts.length ? parts.join(' • ') : '(next-run schedule appears here after scheduler starts)';
+  }
+
   // Config editor
   const editor = document.getElementById('configEditor');
   if (editor && (!editor.value || editor.dataset.loaded !== '1')) {
@@ -1817,7 +1939,11 @@ async function main() {
       execution_time_mode: (document.getElementById('btExecMode')?.value || 'daily'),
       execution_time: (document.getElementById('btExecTime')?.value || 'close'),
       execution_time_local: (document.getElementById('btExecLocal')?.value || '15:55'),
+      execution_time_local_equities: (document.getElementById('btEqExecLocal')?.value || (document.getElementById('btExecLocal')?.value || '15:55')),
+      execution_time_local_crypto: (document.getElementById('btCrExecLocal')?.value || (document.getElementById('btExecLocal')?.value || '15:55')),
       risk_check_time_local: (document.getElementById('btRiskTime')?.value || '12:30'),
+      risk_check_time_local_equities: (document.getElementById('btEqRiskTime')?.value || (document.getElementById('btRiskTime')?.value || '12:30')),
+      risk_check_time_local_crypto: (document.getElementById('btCrRiskTime')?.value || (document.getElementById('btRiskTime')?.value || '12:30')),
       execution_tz: 'America/Los_Angeles',
       asset_mode: (document.getElementById('btAssets')?.value || 'both'),
       rebalance: (document.getElementById('btRebalance')?.value || 'weekly'),
@@ -1856,7 +1982,11 @@ async function main() {
     setVal('btExecMode', p.execution_time_mode);
     setVal('btExecTime', p.execution_time);
     setVal('btExecLocal', p.execution_time_local);
+    setVal('btEqExecLocal', p.execution_time_local_equities);
+    setVal('btCrExecLocal', p.execution_time_local_crypto);
     setVal('btRiskTime', p.risk_check_time_local);
+    setVal('btEqRiskTime', p.risk_check_time_local_equities);
+    setVal('btCrRiskTime', p.risk_check_time_local_crypto);
     setVal('btAssets', p.asset_mode);
     setVal('btRebalance', p.rebalance);
     setVal('btRebalanceDay', p.rebalance_day);
@@ -2184,8 +2314,37 @@ async function saveConfig() {
     body.execution.extended_hours_start_time_local = String(document.getElementById('extendedStartTimeInput')?.value || '06:00');
     body.execution.fallback_to_market_at_open = String(document.getElementById('fallbackEnableSelect')?.value || 'false') === 'true';
     body.execution.fallback_time_local = String(document.getElementById('fallbackTimeInput')?.value || '06:30');
+
+    body.execution.equities = body.execution.equities || {};
+    body.execution.equities.order_type = String(document.getElementById('eqOrderTypeSelect')?.value || 'market');
+    body.execution.equities.limit_offset_bps = Number(document.getElementById('eqLimitOffsetInput')?.value || '10');
+    body.execution.equities.fallback_to_market_at_open = String(document.getElementById('eqFallbackEnableSelect')?.value || 'false') === 'true';
+    body.execution.equities.fallback_time_local = String(document.getElementById('eqFallbackTimeInput')?.value || '06:30');
+
+    body.execution.crypto = body.execution.crypto || {};
+    body.execution.crypto.order_type = String(document.getElementById('crOrderTypeSelect')?.value || 'market');
+    body.execution.crypto.limit_offset_bps = Number(document.getElementById('crLimitOffsetInput')?.value || '10');
+    body.execution.crypto.fallback_to_market_at_open = String(document.getElementById('crFallbackEnableSelect')?.value || 'false') === 'true';
+    body.execution.crypto.fallback_time_local = String(document.getElementById('crFallbackTimeInput')?.value || '06:30');
+
     body.scheduling = body.scheduling || {};
     body.scheduling.weekly_rebalance_day = String(document.getElementById('weeklyRebalanceDaySelect')?.value || 'MON').toUpperCase();
+
+    body.scheduling.equities = body.scheduling.equities || {};
+    body.scheduling.equities.rebalance_frequency = String(document.getElementById('eqRebFreqSelect')?.value || 'weekly');
+    body.scheduling.equities.rebalance_day = String(document.getElementById('eqRebDaySelect')?.value || 'MON').toUpperCase();
+    body.scheduling.equities.rebalance_time_local = String(document.getElementById('eqRebTimeInput')?.value || '06:35');
+    body.scheduling.equities.risk_check_frequency = String(document.getElementById('eqRiskFreqSelect')?.value || 'daily');
+    body.scheduling.equities.risk_check_day = String(document.getElementById('eqRiskDaySelect')?.value || 'MON').toUpperCase();
+    body.scheduling.equities.risk_check_time_local = String(document.getElementById('eqRiskTimeInput')?.value || '18:05');
+
+    body.scheduling.crypto = body.scheduling.crypto || {};
+    body.scheduling.crypto.rebalance_frequency = String(document.getElementById('crRebFreqSelect')?.value || 'weekly');
+    body.scheduling.crypto.rebalance_day = String(document.getElementById('crRebDaySelect')?.value || 'MON').toUpperCase();
+    body.scheduling.crypto.rebalance_time_local = String(document.getElementById('crRebTimeInput')?.value || '06:35');
+    body.scheduling.crypto.risk_check_frequency = String(document.getElementById('crRiskFreqSelect')?.value || 'daily');
+    body.scheduling.crypto.risk_check_day = String(document.getElementById('crRiskDaySelect')?.value || 'MON').toUpperCase();
+    body.scheduling.crypto.risk_check_time_local = String(document.getElementById('crRiskTimeInput')?.value || '18:05');
 
     status.textContent = 'saving…';
     const r = await fetch('/api/config' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {

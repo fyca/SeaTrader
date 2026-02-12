@@ -141,16 +141,33 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             if getattr(p, "execution_time_mode", "daily") == "intraday":
                 from tradebot.backtest.intraday import IntradayPriceProvider
 
-                prov = IntradayPriceProvider(
+                eq_exec_t = getattr(p, "execution_time_local_equities", None) or p.execution_time_local
+                cr_exec_t = getattr(p, "execution_time_local_crypto", None) or p.execution_time_local
+                eq_risk_t = getattr(p, "risk_check_time_local_equities", None) or getattr(p, "risk_check_time_local", "12:30")
+                cr_risk_t = getattr(p, "risk_check_time_local_crypto", None) or getattr(p, "risk_check_time_local", "12:30")
+
+                prov_eq = IntradayPriceProvider(
                     stocks_client=clients.stocks,
                     crypto_client=clients.crypto,
-                    exec_time_local=p.execution_time_local,
+                    exec_time_local=eq_exec_t,
                     tz=p.execution_tz,
                 )
-                risk_prov = IntradayPriceProvider(
+                prov_cr = IntradayPriceProvider(
                     stocks_client=clients.stocks,
                     crypto_client=clients.crypto,
-                    exec_time_local=getattr(p, "risk_check_time_local", "12:30"),
+                    exec_time_local=cr_exec_t,
+                    tz=p.execution_tz,
+                )
+                risk_prov_eq = IntradayPriceProvider(
+                    stocks_client=clients.stocks,
+                    crypto_client=clients.crypto,
+                    exec_time_local=eq_risk_t,
+                    tz=p.execution_tz,
+                )
+                risk_prov_cr = IntradayPriceProvider(
+                    stocks_client=clients.stocks,
+                    crypto_client=clients.crypto,
+                    exec_time_local=cr_risk_t,
                     tz=p.execution_tz,
                 )
 
@@ -169,13 +186,16 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                 def intraday_cb(sym, day):
                     if day not in reb_days:
                         return None
-                    return prov.price(sym, day)
+                    is_crypto = "/" in str(sym)
+                    return (prov_cr if is_crypto else prov_eq).price(sym, day)
 
                 def intraday_limit_touch_cb(sym, day, side, limit_px):
-                    return prov.limit_touched(sym, day, side, float(limit_px))
+                    is_crypto = "/" in str(sym)
+                    return (prov_cr if is_crypto else prov_eq).limit_touched(sym, day, side, float(limit_px))
 
                 def risk_intraday_cb(sym, day):
-                    return risk_prov.price(sym, day)
+                    is_crypto = "/" in str(sym)
+                    return (risk_prov_cr if is_crypto else risk_prov_eq).price(sym, day)
 
             res = run_backtest(
                 stock_bars=stock_bars,
