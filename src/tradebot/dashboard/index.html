@@ -120,19 +120,11 @@
         <div class="muted" style="font-size:12px; margin-bottom:8px;">Global fallback controls removed. Configure stocks and crypto independently below.</div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
           <div>
-            <div class="muted" style="font-size:12px;">Enable pre/after-hours (equities)</div>
-            <select id="extendedHoursSelect"><option value="false">No</option><option value="true">Yes</option></select>
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Extended-hours start time (PT)</div>
-            <input id="extendedStartTimeInput" placeholder="06:00" />
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Fallback mode</div>
+            <div class="muted" style="font-size:12px;">Fallback mode (legacy/global)</div>
             <select id="fallbackEnableSelect"><option value="false">Off</option><option value="true">On (cancel unfilled limits)</option></select>
           </div>
           <div>
-            <div class="muted" style="font-size:12px;">Fallback to market at (PT)</div>
+            <div class="muted" style="font-size:12px;">Fallback to market at (PT, legacy/global)</div>
             <input id="fallbackTimeInput" placeholder="06:30" />
           </div>
         </div>
@@ -142,6 +134,14 @@
           <div class="pill" style="justify-content:center;"><b>Crypto controls</b></div>
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div>
+            <div class="muted" style="font-size:12px;">Stocks premarket/extended-hours</div>
+            <select id="extendedHoursSelect"><option value="false">Off</option><option value="true">On</option></select>
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Stocks premarket trade time (PT)</div>
+            <input id="extendedStartTimeInput" placeholder="06:00" />
+          </div>
           <div>
             <div class="muted" style="font-size:12px;">Stocks order type</div>
             <select id="eqOrderTypeSelect"><option value="market">Market</option><option value="limit">Limit</option></select>
@@ -325,8 +325,8 @@
                 <option value="close" selected>Evening (close)</option>
               </select>
             </div>
-            <div>
-              <div class="muted">Intraday time (PT)</div>
+            <div style="display:none;">
+              <div class="muted">Intraday time (PT, legacy hidden)</div>
               <input id="btExecLocal" placeholder="HH:MM" value="15:55" style="width:170px;" />
             </div>
             <div>
@@ -355,7 +355,7 @@
             <div class="subcard" style="padding:10px;">
               <div style="font-weight:700; margin-bottom:8px;">Stocks settings</div>
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                <div><div class="muted">Buy time (PT)</div><input id="btEqExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
+                <div><div class="muted">Premarket trade time (PT)</div><input id="btEqExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
                 <div><div class="muted">Risk time (PT)</div><input id="btEqRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" /></div>
                 <div><div class="muted">Rebalance freq</div><select id="btEqRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select></div>
                 <div><div class="muted">Rebalance day</div><select id="btEqRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
@@ -770,8 +770,8 @@ function collectBacktestRequestBody() {
   const strategy_id = (document.getElementById('btStrategy')?.value || 'baseline_trendvol');
   const execution_time_mode = (document.getElementById('btExecMode')?.value || 'daily');
   const execution_time = (document.getElementById('btExecTime')?.value || 'close');
-  const execution_time_local = (document.getElementById('btExecLocal')?.value || '15:55');
   const execution_time_local_equities = (document.getElementById('btEqExecLocal')?.value || '06:30');
+  const execution_time_local = execution_time_local_equities;
   const execution_time_local_crypto = (document.getElementById('btCrExecLocal')?.value || '06:30');
   const risk_check_time_local = (document.getElementById('btRiskTime')?.value || '12:30');
   const risk_check_time_local_equities = (document.getElementById('btEqRiskTime')?.value || '12:30');
@@ -1899,7 +1899,7 @@ async function main() {
       strategy_id: (document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
       execution_time_mode: (document.getElementById('btExecMode')?.value || 'daily'),
       execution_time: (document.getElementById('btExecTime')?.value || 'close'),
-      execution_time_local: (document.getElementById('btExecLocal')?.value || '15:55'),
+      execution_time_local: (document.getElementById('btEqExecLocal')?.value || '06:30'),
       execution_time_local_equities: (document.getElementById('btEqExecLocal')?.value || '06:30'),
       execution_time_local_crypto: (document.getElementById('btCrExecLocal')?.value || '06:30'),
       risk_check_time_local: (document.getElementById('btRiskTime')?.value || '12:30'),
