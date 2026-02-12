@@ -29,6 +29,9 @@ from tradebot.util.equity_curve import append_equity_point
 def cmd_rebalance(args: argparse.Namespace) -> int:
     # Optional preset override
     cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
+    run_asset_mode = str(getattr(args, "asset_mode", None) or "both").lower()
+    if run_asset_mode not in ("both", "equities", "crypto"):
+        run_asset_mode = "both"
 
     # Optional unattended scheduling: wait until configured/local time (rebalance only).
     if args.wait_until is not None:
@@ -154,6 +157,10 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     # 4) Targets
     equity_budget = equity * cfg.allocation.equities
     crypto_budget = equity * cfg.allocation.crypto
+    if run_asset_mode == "equities":
+        crypto_budget = 0.0
+    elif run_asset_mode == "crypto":
+        equity_budget = 0.0
     targets = build_equal_weight_targets(
         equity_symbols=eq_sel,
         crypto_symbols=cr_sel,
@@ -162,6 +169,12 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     )
     target_map = {t.symbol: float(t.notional_usd) for t in targets}
     class_map = {t.symbol: t.asset_class for t in targets}
+    if run_asset_mode == "equities":
+        target_map = {k:v for k,v in target_map.items() if "/" not in k}
+        class_map = {k:v for k,v in class_map.items() if "/" not in k}
+    elif run_asset_mode == "crypto":
+        target_map = {k:v for k,v in target_map.items() if "/" in k}
+        class_map = {k:v for k,v in class_map.items() if "/" in k}
 
     # 5) Current positions (notional)
     current_positions = clients.trading.get_all_positions()
@@ -185,6 +198,10 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     # liquidation_mode parity
     if cfg.rebalance.liquidation_mode == "hold_until_exit":
         for sym, cur in current_map.items():
+            if run_asset_mode == "equities" and "/" in sym:
+                continue
+            if run_asset_mode == "crypto" and "/" not in sym:
+                continue
             if sym not in target_map:
                 target_map[sym] = float(cur)
                 class_map.setdefault(sym, "crypto" if "/" in sym else "equity")
@@ -192,6 +209,10 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     # immediate liquidation for excluded symbols
     if cfg.rebalance.symbol_pnl_floor_liquidate and excluded:
         for sym in excluded:
+            if run_asset_mode == "equities" and "/" in sym:
+                continue
+            if run_asset_mode == "crypto" and "/" not in sym:
+                continue
             if sym in current_map:
                 target_map[sym] = 0.0
                 class_map.setdefault(sym, "crypto" if "/" in sym else "equity")
@@ -417,11 +438,13 @@ def main() -> int:
         help="Optional local time HH:MM to sleep until before running (uses config.scheduling.timezone). Useful for unattended open/close runs.",
     )
     pr.add_argument("--preset", default=None, help="Override config.active_preset for this run")
+    pr.add_argument("--asset-mode", default="both", choices=["both","equities","crypto"], help="Restrict run to one asset class")
     pr.set_defaults(func=cmd_rebalance)
 
     pc = sub.add_parser("risk-check", help="Run drawdown/freeze check (no trades)")
     pc.add_argument("--config", default=str(Path("config/config.yaml")), help="Path to config YAML")
     pc.add_argument("--preset", default=None, help="Override config.active_preset for this run")
+    pc.add_argument("--asset-mode", default="both", choices=["both","equities","crypto"], help="Restrict run to one asset class")
     pc.set_defaults(func=cmd_risk_check)
 
     pd = sub.add_parser("dashboard", help="Run local HTML dashboard server")

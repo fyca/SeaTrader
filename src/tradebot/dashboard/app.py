@@ -510,21 +510,39 @@ def create_app(*, config_path: str) -> FastAPI:
                 try:
                     cfg = load_config(config_path, preset_override=preset)
                     tz_name = str(getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
-                    day_name = str(getattr(cfg.scheduling, "weekly_rebalance_day", "MON"))
-                    if bool(getattr(cfg.execution, "extended_hours", False)):
-                        hhmm = str(getattr(cfg.execution, "extended_hours_start_time_local", None) or getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35"))
-                    else:
-                        hhmm = str(getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35"))
 
-                    sec, when_iso = _seconds_until_weekly(day_name, hhmm, tz_name)
+                    eq_s = getattr(cfg.scheduling, "equities", None)
+                    cr_s = getattr(cfg.scheduling, "crypto", None)
+
+                    eq_freq = str(getattr(eq_s, "rebalance_frequency", "weekly"))
+                    eq_day = str(getattr(eq_s, "rebalance_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+                    eq_tm = str(getattr(eq_s, "rebalance_time_local", getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35")))
+
+                    cr_freq = str(getattr(cr_s, "rebalance_frequency", "weekly"))
+                    cr_day = str(getattr(cr_s, "rebalance_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+                    cr_tm = str(getattr(cr_s, "rebalance_time_local", getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35")))
+
+                    waits = []
+                    if eq_freq == "daily":
+                        waits.append(("equities", *_seconds_until_local_hhmm(eq_tm, tz_name)))
+                    else:
+                        waits.append(("equities", *_seconds_until_weekly(eq_day, eq_tm, tz_name)))
+                    if cr_freq == "daily":
+                        waits.append(("crypto", *_seconds_until_local_hhmm(cr_tm, tz_name)))
+                    else:
+                        waits.append(("crypto", *_seconds_until_weekly(cr_day, cr_tm, tz_name)))
+
+                    asset_mode, sec, when_iso = min(waits, key=lambda x: float(x[1]))
+                    schedule_state[f"rebalance_next_run_{asset_mode}"] = when_iso
                     schedule_state["rebalance_next_run"] = when_iso
                     import time as _time
                     _time.sleep(max(1.0, sec))
                     if not bool(schedule_state.get("rebalance_weekly_enabled")):
                         break
 
-                    rc = int(cmd_rebalance(argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset)))
+                    rc = int(cmd_rebalance(argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset, asset_mode=asset_mode)))
                     schedule_state["rebalance_last_run"] = datetime.now(timezone.utc).isoformat()
+                    schedule_state["rebalance_last_asset_mode"] = asset_mode
                     schedule_state["rebalance_last_state"] = "done" if rc == 0 else f"rc={rc}"
                     schedule_state["rebalance_last_error"] = None
                 except Exception as e:
@@ -549,16 +567,38 @@ def create_app(*, config_path: str) -> FastAPI:
             while bool(schedule_state.get("risk_daily_enabled")):
                 try:
                     cfg = load_config(config_path, preset_override=preset)
-                    hhmm = str(getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05"))
                     tz_name = str(getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
-                    sec, when_iso = _seconds_until_local_hhmm(hhmm, tz_name)
+                    eq_s = getattr(cfg.scheduling, "equities", None)
+                    cr_s = getattr(cfg.scheduling, "crypto", None)
+
+                    eq_freq = str(getattr(eq_s, "risk_check_frequency", "daily"))
+                    eq_day = str(getattr(eq_s, "risk_check_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+                    eq_tm = str(getattr(eq_s, "risk_check_time_local", getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")))
+
+                    cr_freq = str(getattr(cr_s, "risk_check_frequency", "daily"))
+                    cr_day = str(getattr(cr_s, "risk_check_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+                    cr_tm = str(getattr(cr_s, "risk_check_time_local", getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")))
+
+                    waits = []
+                    if eq_freq == "weekly":
+                        waits.append(("equities", *_seconds_until_weekly(eq_day, eq_tm, tz_name)))
+                    else:
+                        waits.append(("equities", *_seconds_until_local_hhmm(eq_tm, tz_name)))
+                    if cr_freq == "weekly":
+                        waits.append(("crypto", *_seconds_until_weekly(cr_day, cr_tm, tz_name)))
+                    else:
+                        waits.append(("crypto", *_seconds_until_local_hhmm(cr_tm, tz_name)))
+
+                    asset_mode, sec, when_iso = min(waits, key=lambda x: float(x[1]))
+                    schedule_state[f"risk_next_run_{asset_mode}"] = when_iso
                     schedule_state["risk_next_run"] = when_iso
                     import time as _time
                     _time.sleep(max(1.0, sec))
                     if not bool(schedule_state.get("risk_daily_enabled")):
                         break
-                    rc = int(cmd_risk_check(argparse.Namespace(config=config_path, preset=preset)))
+                    rc = int(cmd_risk_check(argparse.Namespace(config=config_path, preset=preset, asset_mode=asset_mode)))
                     schedule_state["risk_last_run"] = datetime.now(timezone.utc).isoformat()
+                    schedule_state["risk_last_asset_mode"] = asset_mode
                     schedule_state["risk_last_state"] = "done" if rc == 0 else f"rc={rc}"
                     schedule_state["risk_last_error"] = None
                 except Exception as e:
@@ -580,6 +620,7 @@ def create_app(*, config_path: str) -> FastAPI:
         place_orders = bool(body.get("place_orders", True))
         wait_until_configured = bool(body.get("wait_until_configured", False))
         queue_daily_risk_check = bool(body.get("queue_daily_risk_check", True))
+        asset_mode = str(body.get("asset_mode") or "both")
 
         if kind not in ("rebalance", "risk-check"):
             raise HTTPException(status_code=400, detail="kind must be rebalance or risk-check")
@@ -608,10 +649,10 @@ def create_app(*, config_path: str) -> FastAPI:
                         action_jobs[job_id]["wait_until"] = "configured schedule"
                         rc = 0
                     else:
-                        ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset)
+                        ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset, asset_mode=asset_mode)
                         rc = int(cmd_rebalance(ns))
                 else:
-                    ns = argparse.Namespace(config=config_path, preset=preset)
+                    ns = argparse.Namespace(config=config_path, preset=preset, asset_mode=asset_mode)
                     rc = int(cmd_risk_check(ns))
                 action_jobs[job_id]["state"] = "done"
                 action_jobs[job_id]["rc"] = rc
@@ -642,6 +683,10 @@ def create_app(*, config_path: str) -> FastAPI:
 
     CRON_TAG_REB = "# SEATRADER_REBALANCE"
     CRON_TAG_RISK = "# SEATRADER_RISK"
+    CRON_TAG_REB_EQ = "# SEATRADER_REBALANCE_EQ"
+    CRON_TAG_REB_CR = "# SEATRADER_REBALANCE_CR"
+    CRON_TAG_RISK_EQ = "# SEATRADER_RISK_EQ"
+    CRON_TAG_RISK_CR = "# SEATRADER_RISK_CR"
 
     def _cron_get_lines() -> list[str]:
         try:
@@ -664,8 +709,8 @@ def create_app(*, config_path: str) -> FastAPI:
     @app.get("/api/scheduler/cron-status")
     def cron_status():
         lines = _cron_get_lines()
-        reb = [ln for ln in lines if CRON_TAG_REB in ln]
-        risk = [ln for ln in lines if CRON_TAG_RISK in ln]
+        reb = [ln for ln in lines if (CRON_TAG_REB in ln or CRON_TAG_REB_EQ in ln or CRON_TAG_REB_CR in ln)]
+        risk = [ln for ln in lines if (CRON_TAG_RISK in ln or CRON_TAG_RISK_EQ in ln or CRON_TAG_RISK_CR in ln)]
 
         def _sched(line: str):
             try:
@@ -696,26 +741,53 @@ def create_app(*, config_path: str) -> FastAPI:
     async def cron_setup(req: Request):
         require_token(req)
         cfg = load_config(config_path)
-        lines = [ln for ln in _cron_get_lines() if (CRON_TAG_REB not in ln and CRON_TAG_RISK not in ln)]
+        tags = (CRON_TAG_REB, CRON_TAG_RISK, CRON_TAG_REB_EQ, CRON_TAG_REB_CR, CRON_TAG_RISK_EQ, CRON_TAG_RISK_CR)
+        lines = [ln for ln in _cron_get_lines() if not any(t in ln for t in tags)]
 
-        hh_r, mm_r = [int(x) for x in str(getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35")).split(":")]
-        dow = _dow_num(str(getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
-        hh_k, mm_k = [int(x) for x in str(getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")).split(":")]
+        eqs = getattr(cfg.scheduling, "equities", None)
+        crs = getattr(cfg.scheduling, "crypto", None)
+
+        eq_reb_freq = str(getattr(eqs, "rebalance_frequency", "weekly"))
+        eq_reb_day = str(getattr(eqs, "rebalance_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+        eq_reb_time = str(getattr(eqs, "rebalance_time_local", getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35")))
+
+        cr_reb_freq = str(getattr(crs, "rebalance_frequency", "weekly"))
+        cr_reb_day = str(getattr(crs, "rebalance_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+        cr_reb_time = str(getattr(crs, "rebalance_time_local", getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35")))
+
+        eq_risk_freq = str(getattr(eqs, "risk_check_frequency", "daily"))
+        eq_risk_day = str(getattr(eqs, "risk_check_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+        eq_risk_time = str(getattr(eqs, "risk_check_time_local", getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")))
+
+        cr_risk_freq = str(getattr(crs, "risk_check_frequency", "daily"))
+        cr_risk_day = str(getattr(crs, "risk_check_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
+        cr_risk_time = str(getattr(crs, "risk_check_time_local", getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")))
 
         repo = Path(config_path).resolve().parent.parent
         cmd_base = f"cd {repo} && source .venv/bin/activate"
-        reb_cmd = f"{cmd_base} && tradebot rebalance --config {config_path} --place-orders"
-        risk_cmd = f"{cmd_base} && tradebot risk-check --config {config_path}"
+        reb_eq_cmd = f"{cmd_base} && tradebot rebalance --config {config_path} --place-orders --asset-mode equities"
+        reb_cr_cmd = f"{cmd_base} && tradebot rebalance --config {config_path} --place-orders --asset-mode crypto"
+        risk_eq_cmd = f"{cmd_base} && tradebot risk-check --config {config_path} --asset-mode equities"
+        risk_cr_cmd = f"{cmd_base} && tradebot risk-check --config {config_path} --asset-mode crypto"
 
-        lines.append(f"{mm_r} {hh_r} * * {dow} /bin/bash -lc '{reb_cmd}' {CRON_TAG_REB}")
-        lines.append(f"{mm_k} {hh_k} * * * /bin/bash -lc '{risk_cmd}' {CRON_TAG_RISK}")
+        def _line(hhmm: str, day: str | None, cmd: str, tag: str):
+            hh, mm = [int(x) for x in str(hhmm).split(":")]
+            if day is None:
+                return f"{mm} {hh} * * * /bin/bash -lc '{cmd}' {tag}"
+            return f"{mm} {hh} * * {_dow_num(day)} /bin/bash -lc '{cmd}' {tag}"
+
+        lines.append(_line(eq_reb_time, None if eq_reb_freq == "daily" else eq_reb_day, reb_eq_cmd, CRON_TAG_REB_EQ))
+        lines.append(_line(cr_reb_time, None if cr_reb_freq == "daily" else cr_reb_day, reb_cr_cmd, CRON_TAG_REB_CR))
+        lines.append(_line(eq_risk_time, None if eq_risk_freq == "daily" else eq_risk_day, risk_eq_cmd, CRON_TAG_RISK_EQ))
+        lines.append(_line(cr_risk_time, None if cr_risk_freq == "daily" else cr_risk_day, risk_cr_cmd, CRON_TAG_RISK_CR))
         _cron_write_lines(lines)
         return {"ok": True}
 
     @app.post("/api/scheduler/cron/stop")
     async def cron_stop(req: Request):
         require_token(req)
-        lines = [ln for ln in _cron_get_lines() if (CRON_TAG_REB not in ln and CRON_TAG_RISK not in ln)]
+        tags = (CRON_TAG_REB, CRON_TAG_RISK, CRON_TAG_REB_EQ, CRON_TAG_REB_CR, CRON_TAG_RISK_EQ, CRON_TAG_RISK_CR)
+        lines = [ln for ln in _cron_get_lines() if not any(t in ln for t in tags)]
         _cron_write_lines(lines)
         return {"ok": True}
 

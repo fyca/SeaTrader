@@ -18,6 +18,9 @@ from tradebot.util.equity_curve import append_equity_point
 
 def cmd_risk_check(args: argparse.Namespace) -> int:
     cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
+    run_asset_mode = str(getattr(args, "asset_mode", None) or "both").lower()
+    if run_asset_mode not in ("both", "equities", "crypto"):
+        run_asset_mode = "both"
     env = load_env()
     clients = make_alpaca_clients(env)
 
@@ -42,6 +45,10 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
 
     eq_syms = [s for s in held if "/" not in s]
     cr_syms = [s for s in held if "/" in s]
+    if run_asset_mode == "equities":
+        cr_syms = []
+    elif run_asset_mode == "crypto":
+        eq_syms = []
 
     exit_plans = []
 
