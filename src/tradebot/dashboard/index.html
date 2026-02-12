@@ -351,31 +351,46 @@
             </div>
           </div>
 
-          <div class="assetSplit" style="margin-top:10px;">
+          <div class="muted" style="margin: 10px 0 6px 0;">Per-asset order settings (backtest)</div>
+          <div class="assetSplit" style="margin-top:4px;">
             <div class="subcard" style="padding:10px;">
-              <div style="font-weight:700; margin-bottom:8px;">Stocks settings</div>
+              <div style="font-weight:700; margin-bottom:8px;">Stocks controls</div>
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <div><div class="muted">Order type</div><select id="btEqOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select></div>
+                <div><div class="muted">Limit offset (bps)</div><input id="btEqLimitOffset" placeholder="10" value="10" style="width:120px;" /></div>
                 <div><div class="muted">Premarket trade time (PT)</div><input id="btEqExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
                 <div><div class="muted">Risk time (PT)</div><input id="btEqRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" /></div>
+              </div>
+            </div>
+            <div class="subcard" style="padding:10px;">
+              <div style="font-weight:700; margin-bottom:8px;">Crypto controls</div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <div><div class="muted">Order type</div><select id="btCrOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select></div>
+                <div><div class="muted">Limit offset (bps)</div><input id="btCrLimitOffset" placeholder="10" value="10" style="width:120px;" /></div>
+                <div><div class="muted">Buy time (PT)</div><input id="btCrExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
+                <div><div class="muted">Risk time (PT)</div><input id="btCrRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" /></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="muted" style="margin: 10px 0 6px 0;">Per-asset schedules (backtest)</div>
+          <div class="assetSplit" style="margin-top:4px;">
+            <div class="subcard" style="padding:10px;">
+              <div style="font-weight:700; margin-bottom:8px;">Stocks schedule</div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
                 <div><div class="muted">Rebalance freq</div><select id="btEqRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select></div>
                 <div><div class="muted">Rebalance day</div><select id="btEqRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
                 <div><div class="muted">Risk freq</div><select id="btEqRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select></div>
                 <div><div class="muted">Risk day</div><select id="btEqRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
-                <div><div class="muted">Order type</div><select id="btEqOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select></div>
-                <div><div class="muted">Offset bps</div><input id="btEqLimitOffset" placeholder="10" value="10" style="width:120px;" /></div>
               </div>
             </div>
             <div class="subcard" style="padding:10px;">
-              <div style="font-weight:700; margin-bottom:8px;">Crypto settings</div>
+              <div style="font-weight:700; margin-bottom:8px;">Crypto schedule</div>
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                <div><div class="muted">Buy time (PT)</div><input id="btCrExecLocal" placeholder="HH:MM" value="06:30" style="width:120px;" /></div>
-                <div><div class="muted">Risk time (PT)</div><input id="btCrRiskTime" placeholder="HH:MM" value="12:30" style="width:120px;" /></div>
                 <div><div class="muted">Rebalance freq</div><select id="btCrRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select></div>
                 <div><div class="muted">Rebalance day</div><select id="btCrRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
                 <div><div class="muted">Risk freq</div><select id="btCrRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select></div>
                 <div><div class="muted">Risk day</div><select id="btCrRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
-                <div><div class="muted">Order type</div><select id="btCrOrderType" style="width:130px;"><option value="market">Market</option><option value="limit">Limit</option></select></div>
-                <div><div class="muted">Offset bps</div><input id="btCrLimitOffset" placeholder="10" value="10" style="width:120px;" /></div>
               </div>
             </div>
           </div>
