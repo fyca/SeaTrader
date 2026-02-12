@@ -295,6 +295,22 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         except Exception:
             pass
 
+    sym_order_type: dict[str, str] = {}
+    sym_limit_offset: dict[str, float] = {}
+    sym_fallback_enabled: dict[str, bool] = {}
+    sym_fallback_time: dict[str, str] = {}
+    for pl in plans:
+        is_crypto = "/" in str(pl.symbol)
+        ex = cfg.execution.crypto if is_crypto else cfg.execution.equities
+        # backward compatible: if no per-asset override, derive from global bool
+        ord_type = str(getattr(ex, "order_type", "")).lower() if ex else ""
+        if ord_type not in ("market", "limit"):
+            ord_type = "limit" if bool(cfg.execution.use_limit_orders) else "market"
+        sym_order_type[pl.symbol] = ord_type
+        sym_limit_offset[pl.symbol] = float(getattr(ex, "limit_offset_bps", cfg.execution.limit_offset_bps) or cfg.execution.limit_offset_bps)
+        sym_fallback_enabled[pl.symbol] = bool(getattr(ex, "fallback_to_market_at_open", getattr(cfg.execution, "fallback_to_market_at_open", False)))
+        sym_fallback_time[pl.symbol] = str(getattr(ex, "fallback_time_local", getattr(cfg.execution, "fallback_time_local", "06:30")))
+
     placed = place_notional_market_orders(
         clients.trading,
         plans,
@@ -302,10 +318,12 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         limit_offset_bps=float(cfg.execution.limit_offset_bps),
         ref_price_by_symbol=ref_px,
         extended_hours=bool(getattr(cfg.execution, "extended_hours", False)),
+        symbol_order_type=sym_order_type,
+        symbol_limit_offset_bps=sym_limit_offset,
     )
 
     # Optional premarket fallback: if unfilled LIMITs remain by configured open time, resend as market.
-    if bool(cfg.execution.use_limit_orders) and bool(getattr(cfg.execution, "fallback_to_market_at_open", False)):
+    if any(sym_fallback_enabled.values()):
         try:
             from datetime import datetime, timedelta
             from zoneinfo import ZoneInfo
@@ -315,16 +333,36 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
 
             tz = ZoneInfo(getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
             now = datetime.now(tz)
-            hh, mm = [int(x) for x in str(getattr(cfg.execution, "fallback_time_local", "06:30")).split(":")]
-            target = now.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(seconds=int(getattr(cfg.execution, "fallback_grace_seconds", 20)))
-            if target > now:
-                wait_s = (target - now).total_seconds()
-                print(f"Waiting {int(wait_s)}s for limit->market fallback window at {target.strftime('%H:%M:%S %Z')}...")
-                _time.sleep(wait_s)
+            grace = int(getattr(cfg.execution, "fallback_grace_seconds", 20))
+
+            targets = []
+            for po in placed:
+                if po.order_type != "limit" or not bool(sym_fallback_enabled.get(po.symbol, False)):
+                    continue
+                try:
+                    hh, mm = [int(x) for x in str(sym_fallback_time.get(po.symbol, "06:30")).split(":")]
+                    t = now.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(seconds=grace)
+                    targets.append(t)
+                except Exception:
+                    continue
+            if targets:
+                first_target = min(targets)
+                if first_target > now:
+                    wait_s = (first_target - now).total_seconds()
+                    print(f"Waiting {int(wait_s)}s for first limit->market fallback window at {first_target.strftime('%H:%M:%S %Z')}...")
+                    _time.sleep(wait_s)
 
             fallback_count = 0
             for po in placed:
-                if po.order_type != "limit":
+                if po.order_type != "limit" or not bool(sym_fallback_enabled.get(po.symbol, False)):
+                    continue
+                now_po = datetime.now(tz)
+                try:
+                    hh, mm = [int(x) for x in str(sym_fallback_time.get(po.symbol, "06:30")).split(":")]
+                    t_po = now_po.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(seconds=grace)
+                    if now_po < t_po:
+                        continue
+                except Exception:
                     continue
                 try:
                     o = clients.trading.get_order_by_id(po.id)

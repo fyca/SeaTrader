@@ -46,9 +46,19 @@ class Signals(BaseModel):
     crypto: SignalParams = SignalParams(ma_long=120, ma_short=30, vol_lookback=20, max_ann_vol=2.50)
 
 
+class AssetExecution(BaseModel):
+    order_type: Literal["market", "limit"] = "market"
+    limit_offset_bps: float = 10.0
+    fallback_to_market_at_open: bool = False
+    fallback_time_local: str = "06:30"
+
+
 class Execution(BaseModel):
     use_limit_orders: bool = False
     limit_offset_bps: int = 10
+    # Per-asset override knobs (if unset, global fields above apply)
+    equities: AssetExecution = AssetExecution()
+    crypto: AssetExecution = AssetExecution()
     # Equities: allow pre/after-hours where broker supports it (typically LIMIT DAY)
     extended_hours: bool = False
     # If premarket limit orders remain unfilled by fallback_time_local (+grace), cancel and resend market.
@@ -63,11 +73,22 @@ class Execution(BaseModel):
     max_total_notional_usd: float | None = 15000
 
 
+class AssetSchedule(BaseModel):
+    rebalance_frequency: Literal["daily", "weekly"] = "weekly"
+    rebalance_day: str = "MON"
+    rebalance_time_local: str = "06:35"
+    risk_check_frequency: Literal["daily", "weekly"] = "daily"
+    risk_check_day: str = "MON"
+    risk_check_time_local: str = "18:05"
+
+
 class Scheduling(BaseModel):
     weekly_rebalance_day: str = "MON"
     weekly_rebalance_time_local: str = "06:35"  # PT by default (near US market open)
     daily_risk_check_time_local: str = "18:05"
     timezone: str = "America/Los_Angeles"
+    equities: AssetSchedule = AssetSchedule()
+    crypto: AssetSchedule = AssetSchedule()
 
 
 class Universe(BaseModel):

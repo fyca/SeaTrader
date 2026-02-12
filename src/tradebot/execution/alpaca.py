@@ -25,18 +25,29 @@ def place_notional_market_orders(
     limit_offset_bps: float = 10.0,
     ref_price_by_symbol: dict[str, float] | None = None,
     extended_hours: bool = False,
+    symbol_order_type: dict[str, str] | None = None,
+    symbol_limit_offset_bps: dict[str, float] | None = None,
 ) -> list[PlacedOrder]:
-    """Place notional orders (market by default; optional limit with offset)."""
+    """Place notional orders (market by default; optional limit with offset).
+
+    Per-symbol overrides via symbol_order_type/symbol_limit_offset_bps allow
+    different behavior for equities vs crypto.
+    """
     out: list[PlacedOrder] = []
     ref_price_by_symbol = ref_price_by_symbol or {}
+    symbol_order_type = symbol_order_type or {}
+    symbol_limit_offset_bps = symbol_limit_offset_bps or {}
 
     for pl in plans:
         side = OrderSide.BUY if pl.side == "buy" else OrderSide.SELL
+        ord_type = str(symbol_order_type.get(pl.symbol, "")).lower()
+        use_limit_for_symbol = (ord_type == "limit") if ord_type in ("market", "limit") else bool(use_limit_orders)
+        off_bps = float(symbol_limit_offset_bps.get(pl.symbol, limit_offset_bps))
 
-        if use_limit_orders:
+        if use_limit_for_symbol:
             ref = float(ref_price_by_symbol.get(pl.symbol, 0.0) or 0.0)
             if ref > 0:
-                mul = (1 + limit_offset_bps / 10000.0) if pl.side == "buy" else (1 - limit_offset_bps / 10000.0)
+                mul = (1 + off_bps / 10000.0) if pl.side == "buy" else (1 - off_bps / 10000.0)
                 raw_lim = ref * mul
                 # Alpaca min pricing increments:
                 # - >= $1.00 => max 2 decimals
