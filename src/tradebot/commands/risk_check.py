@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 
 from rich import print
+from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import MarketOrderRequest
 
 from tradebot.adapters.alpaca_client import make_alpaca_clients
 from tradebot.adapters.bars import fetch_stock_bars, fetch_crypto_bars
@@ -142,6 +144,58 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
         for e in exit_plans:
             print(f"- SELL {e['symbol']:12s} ({e['asset_class']}) reason={e['reason']}")
 
+    executed_liquidations = []
+    if exit_plans and bool(getattr(cfg.risk, "execute_exit_liquidations", False)):
+        # de-dup by symbol to avoid double-ordering the same asset
+        pos_by_symbol = {p.symbol: p for p in positions}
+        seen: set[str] = set()
+        for e in exit_plans:
+            sym = str(e.get("symbol") or "").strip()
+            if not sym or sym in seen:
+                continue
+            seen.add(sym)
+            pos = pos_by_symbol.get(sym)
+            if pos is None:
+                continue
+            try:
+                qty = abs(float(pos.qty))
+            except Exception:
+                qty = 0.0
+            if qty <= 0:
+                continue
+            if bool(getattr(cfg, "dry_run", False)):
+                executed_liquidations.append({
+                    "symbol": sym,
+                    "qty": qty,
+                    "side": "sell",
+                    "status": "skipped_dry_run",
+                    "reason": e.get("reason"),
+                })
+                continue
+            tif = TimeInForce.GTC if "/" in sym else TimeInForce.DAY
+            try:
+                req = MarketOrderRequest(symbol=sym, qty=qty, side=OrderSide.SELL, time_in_force=tif)
+                o = clients.trading.submit_order(req)
+                executed_liquidations.append({
+                    "symbol": sym,
+                    "qty": qty,
+                    "side": "sell",
+                    "status": "submitted",
+                    "order_id": str(getattr(o, "id", "")),
+                    "reason": e.get("reason"),
+                })
+                print(f"[green]Submitted SELL[/green] {sym} qty={qty}")
+            except Exception as ex:
+                executed_liquidations.append({
+                    "symbol": sym,
+                    "qty": qty,
+                    "side": "sell",
+                    "status": "error",
+                    "error": str(ex),
+                    "reason": e.get("reason"),
+                })
+                print(f"[red]Failed SELL[/red] {sym}: {ex}")
+
     write_artifact(
         "last_risk_check.json",
         {
@@ -150,6 +204,8 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
             "drawdown": dd_state.drawdown,
             "frozen": dd_state.frozen,
             "exit_signals": exit_plans,
+            "execute_exit_liquidations": bool(getattr(cfg.risk, "execute_exit_liquidations", False)),
+            "executed_liquidations": executed_liquidations,
         },
     )
     append_equity_point(equity=equity, cash=float(getattr(acct, "cash", 0.0) or 0.0))

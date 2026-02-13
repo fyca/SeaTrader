@@ -116,6 +116,13 @@
           <option value="0.16">16%</option><option value="0.17">17%</option><option value="0.18">18%</option><option value="0.19">19%</option><option value="0.20">20%</option>
         </select>
 
+        <div style="margin:8px 0 10px 0; display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+          <div>
+            <div class="muted" style="font-size:12px;">Execute risk-check liquidations</div>
+            <select id="riskExecLiquidationsSelect"><option value="false">Off (signals only)</option><option value="true">On (place sell orders)</option></select>
+          </div>
+        </div>
+
         <div class="muted" style="margin: 10px 0 6px 0;">Execution options (paper/live)</div>
         <div class="muted" style="font-size:12px; margin-bottom:8px;">Global fallback controls removed. Configure stocks and crypto independently below.</div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
@@ -1720,6 +1727,8 @@ async function main() {
     const v = cfg.risk?.per_asset_stop_loss_pct;
     slSel.value = (v===null || v===undefined) ? '' : String(v);
   }
+  const rlSel = document.getElementById('riskExecLiquidationsSelect');
+  if (rlSel) rlSel.value = String(Boolean(cfg.risk?.execute_exit_liquidations));
 
   // Guardrail inputs
   const setGuard = (id, v) => {
@@ -2259,6 +2268,7 @@ async function saveConfig() {
     const sl = document.getElementById('stopLossSelect')?.value;
     body.risk = body.risk || {};
     body.risk.per_asset_stop_loss_pct = sl ? Number(sl) : null;
+    body.risk.execute_exit_liquidations = String(document.getElementById('riskExecLiquidationsSelect')?.value || 'false') === 'true';
 
     const parseMaybeNone = (v, isInt=false) => {
       const s = String(v ?? '').trim().toLowerCase();

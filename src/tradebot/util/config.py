@@ -31,6 +31,8 @@ class Risk(BaseModel):
     # freeze (default): block buys, allow sells
     # liquidate_to_cash: liquidate all holdings when threshold hit
     dd_stop_behavior: Literal["freeze", "liquidate_to_cash"] = "freeze"
+    # When true, risk-check will place sell orders for symbols in exit_signals.
+    execute_exit_liquidations: bool = False
 
 
 class SignalParams(BaseModel):
