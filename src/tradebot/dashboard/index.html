@@ -125,16 +125,7 @@
 
         <div class="muted" style="margin: 10px 0 6px 0;">Execution options (paper/live)</div>
         <div class="muted" style="font-size:12px; margin-bottom:8px;">Global fallback controls removed. Configure stocks and crypto independently below.</div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
-          <div>
-            <div class="muted" style="font-size:12px;">Fallback mode (legacy/global)</div>
-            <select id="fallbackEnableSelect"><option value="false">Off</option><option value="true">On (cancel unfilled limits)</option></select>
-          </div>
-          <div>
-            <div class="muted" style="font-size:12px;">Fallback to market at (PT, legacy/global)</div>
-            <input id="fallbackTimeInput" placeholder="06:30" />
-          </div>
-        </div>
+        <!-- legacy/global fallback controls removed -->
         <div class="muted" style="margin: 10px 0 6px 0;">Per-asset order settings (live/paper)</div>
         <div class="assetSplit" style="margin-bottom:8px;">
           <div class="subcard" style="padding:10px;">
@@ -1746,12 +1737,8 @@ async function main() {
   if (loi) loi.value = String(cfg.execution?.limit_offset_bps ?? 10);
   const ehe = document.getElementById('extendedHoursSelect');
   if (ehe) ehe.value = String(Boolean(cfg.execution?.extended_hours));
-  const fbe = document.getElementById('fallbackEnableSelect');
-  if (fbe) fbe.value = String(Boolean(cfg.execution?.fallback_to_market_at_open));
   const est = document.getElementById('extendedStartTimeInput');
   if (est) est.value = String(cfg.execution?.extended_hours_start_time_local ?? '06:00');
-  const fbt = document.getElementById('fallbackTimeInput');
-  if (fbt) fbt.value = String(cfg.execution?.fallback_time_local ?? '06:30');
   const wrd = document.getElementById('weeklyRebalanceDaySelect');
   if (wrd) wrd.value = String(cfg.scheduling?.weekly_rebalance_day || 'MON');
 
