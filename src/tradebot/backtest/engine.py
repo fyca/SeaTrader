@@ -201,12 +201,17 @@ def run_backtest(
         s = closes.get(sym)
         if s is None or len(s) == 0:
             return None
-        # use last available close on/before day
+        # use last valid close on/before day (skip NaN/zero/invalid tails)
         sub = s.loc[:day]
         if len(sub) == 0:
             return None
-        v = float(sub.iloc[-1])
-        return v if np.isfinite(v) and v > 0 else None
+        vals = sub.dropna().astype(float)
+        if len(vals) == 0:
+            return None
+        for v in reversed(vals.values.tolist()):
+            if np.isfinite(v) and float(v) > 0:
+                return float(v)
+        return None
 
     def px_open(sym: str, day: pd.Timestamp) -> float | None:
         s = opens.get(sym)
@@ -215,8 +220,13 @@ def run_backtest(
         sub = s.loc[:day]
         if len(sub) == 0:
             return None
-        v = float(sub.iloc[-1])
-        return v if np.isfinite(v) and v > 0 else None
+        vals = sub.dropna().astype(float)
+        if len(vals) == 0:
+            return None
+        for v in reversed(vals.values.tolist()):
+            if np.isfinite(v) and float(v) > 0:
+                return float(v)
+        return None
 
     def px_col(sym: str, day: pd.Timestamp, col: str) -> float | None:
         df = stock_bars.get(sym) if sym in stock_bars else crypto_bars.get(sym)
@@ -281,6 +291,9 @@ def run_backtest(
         for sym, q in positions_qty.items():
             p = px(sym, day)
             if p is None:
+                # fallback valuation if mark is temporarily missing
+                p = float(positions_avg_cost.get(sym, 0.0) or 0.0)
+            if p <= 0:
                 continue
             total += q * p
         return float(total)
@@ -618,6 +631,9 @@ def run_backtest(
                     total_unreal = 0.0
                     for sym, q in positions_qty.items():
                         p0 = px(sym, day)
+                        avg_cost = float(positions_avg_cost.get(sym, 0.0) or 0.0)
+                        if p0 is None:
+                            p0 = avg_cost if avg_cost > 0 else None
                         if p0 is None:
                             continue
                         mv = float(q * p0)
@@ -902,6 +918,9 @@ def run_backtest(
         total_unreal = 0.0
         for sym, q in positions_qty.items():
             p0 = px(sym, day)
+            avg_cost = float(positions_avg_cost.get(sym, 0.0) or 0.0)
+            if p0 is None:
+                p0 = avg_cost if avg_cost > 0 else None
             if p0 is None:
                 continue
             mv = float(q * p0)

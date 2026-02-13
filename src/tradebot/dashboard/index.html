@@ -1418,8 +1418,8 @@ async function renderBacktest(res) {
       const eqEnd = Number(day.equity||0);
       const cashStart = prev ? Number(prev.cash||0) : cashEnd;
       const eqStart = prev ? Number(prev.equity||0) : eqEnd;
-      const invStart = eqStart - cashStart;
-      const invEnd = eqEnd - cashEnd;
+      const invStart = Math.max(0, eqStart - cashStart);
+      const invEnd = Math.max(0, eqEnd - cashEnd);
 
       const evs = byDate.get(date) || [];
       if (lNeedles.length) {
