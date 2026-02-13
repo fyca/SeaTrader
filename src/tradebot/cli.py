@@ -128,6 +128,22 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     eq_sel, eq_sig_details = strat.select_equities(bars=eq_bars, cfg=cfg)
     cr_sel, cr_sig_details = strat.select_crypto(bars=cr_bars, cfg=cfg)
 
+    # Optional crypto price floor (settings.limits.min_crypto_price)
+    min_cr_px = getattr(cfg.limits, "min_crypto_price", None)
+    if min_cr_px is not None:
+        keep = []
+        for s in cr_sel:
+            try:
+                df = cr_bars.get(s)
+                if df is None or len(df) == 0 or "close" not in df.columns:
+                    continue
+                px = float(df["close"].dropna().iloc[-1])
+                if px >= float(min_cr_px):
+                    keep.append(s)
+            except Exception:
+                continue
+        cr_sel = keep
+
     print(f"Selected: equities={len(eq_sel)} crypto={len(cr_sel)}")
     if eq_sel:
         print("Equities:", ", ".join(eq_sel))

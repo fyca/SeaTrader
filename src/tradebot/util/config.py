@@ -16,6 +16,7 @@ class Limits(BaseModel):
     max_equity_positions: int = 10
     max_crypto_positions: int = 5
     min_stock_price: float = 5.0
+    min_crypto_price: float | None = None
     min_avg_dollar_volume_20d: float = 20_000_000
     min_avg_crypto_dollar_volume_20d: float = 5_000_000
 

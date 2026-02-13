@@ -86,6 +86,7 @@ class BacktestParams:
 
     universe_mode: Literal["full", "single"] = "full"
     symbol: str | None = None
+    min_crypto_price: float | None = None
 
 
 @dataclass(frozen=True)
@@ -671,6 +672,11 @@ def run_backtest(
 
             eq_sel, _eq_details = strat.select_equities(bars=eq_bars_day, cfg=cfg)
             cr_sel, _cr_details = strat.select_crypto(bars=cr_bars_day, cfg=cfg)
+
+            # Optional crypto price floor (per-run param, else config)
+            min_cr_px = params.min_crypto_price if params.min_crypto_price is not None else getattr(cfg.limits, "min_crypto_price", None)
+            if min_cr_px is not None:
+                cr_sel = [s for s in cr_sel if ((px(s, day) or 0.0) >= float(min_cr_px))]
 
             # targets (notional)
             equity_now = portfolio_value(day)

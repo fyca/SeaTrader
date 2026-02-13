@@ -178,7 +178,11 @@
           </div>
         </div>
 
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px;">
+          <div>
+            <div class="muted" style="font-size:12px;">Min crypto price (live)</div>
+            <input id="minCryptoPriceInput" placeholder="e.g. 1.0 or none" />
+          </div>
           <div>
             <div class="muted" style="font-size:12px;">Max orders/run</div>
             <input id="maxOrdersInput" placeholder="25 or none" />
@@ -419,6 +423,10 @@
             <div>
               <div class="muted">Custom DD stop</div>
               <input id="btDD" placeholder="e.g. 0.25" style="width:160px;" />
+            </div>
+            <div>
+              <div class="muted">Min crypto price (backtest)</div>
+              <input id="btMinCryptoPrice" placeholder="e.g. 1.0 or none" style="width:180px;" />
             </div>
             <div>
               <div class="muted">Exclude if symbol P/L % &lt;=</div>
@@ -1719,6 +1727,7 @@ async function main() {
     if (!el) return;
     el.value = (v===null || v===undefined) ? 'none' : String(v);
   };
+  setGuard('minCryptoPriceInput', cfg.limits?.min_crypto_price);
   setGuard('maxOrdersInput', cfg.execution?.max_orders_per_run);
   setGuard('maxSingleInput', cfg.execution?.max_single_order_notional_usd);
   setGuard('maxTotalInput', cfg.execution?.max_total_notional_usd);
@@ -1880,6 +1889,8 @@ async function main() {
     const portfolio_dd_stop = ddStopRaw ? Number(ddStopRaw) : null;
     const symFloorRaw = (document.getElementById('btSymFloor')?.value || '').trim();
     const symbol_pnl_floor_pct = symFloorRaw ? Number(symFloorRaw) : null;
+    const minCryptoRaw = (document.getElementById('btMinCryptoPrice')?.value || '').trim();
+    const min_crypto_price = minCryptoRaw ? Number(minCryptoRaw) : null;
 
     return {
       strategy_id: (document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
@@ -1919,6 +1930,7 @@ async function main() {
       per_asset_stop_loss_pct,
       portfolio_dd_stop,
       symbol_pnl_floor_pct,
+      min_crypto_price,
       symbol_pnl_floor_liquidate: Boolean(document.getElementById('btSymFloorLiquidate')?.checked),
       symbol_pnl_floor_include_unrealized: Boolean(document.getElementById('btSymFloorInclUnreal')?.checked),
     };
@@ -1962,6 +1974,7 @@ async function main() {
     setVal('btDD', '');
     setVal('btDDPreset', p.portfolio_dd_stop);
     setVal('btSymFloor', p.symbol_pnl_floor_pct);
+    setVal('btMinCryptoPrice', p.min_crypto_price);
     const liq = document.getElementById('btSymFloorLiquidate');
     if (liq && p.symbol_pnl_floor_liquidate!==undefined) liq.checked = Boolean(p.symbol_pnl_floor_liquidate);
     const iu = document.getElementById('btSymFloorInclUnreal');
@@ -2253,6 +2266,9 @@ async function saveConfig() {
       const n = isInt ? parseInt(s, 10) : Number(s);
       return Number.isFinite(n) ? n : null;
     };
+    body.limits = body.limits || {};
+    body.limits.min_crypto_price = parseMaybeNone(document.getElementById('minCryptoPriceInput')?.value, false);
+
     body.execution = body.execution || {};
     body.execution.max_orders_per_run = parseMaybeNone(document.getElementById('maxOrdersInput')?.value, true);
     body.execution.max_single_order_notional_usd = parseMaybeNone(document.getElementById('maxSingleInput')?.value, false);
