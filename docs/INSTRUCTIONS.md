@@ -4,13 +4,9 @@ This guide is for day-to-day usage of SeaTrader in **paper mode first**, then li
 
 ---
 
-## 1) Dashboard map (annotated)
+## 1) Dashboard map
 
-### Main dashboard
-
-![Dashboard annotated](screenshots/annotated/dashboard-classic-comfortable-annotated.png)
-
-What each callout means:
+### Main dashboard sections
 
 1. **Account & Bot State**  
    Watch equity/cash, flags, and quick-run actions.
@@ -21,11 +17,7 @@ What each callout means:
 4. **Results Panels**  
    Validate outputs: trades, daily ledger, open positions at end, backtest history.
 
-### Strategy builder
-
-![Builder annotated](screenshots/annotated/builder-classic-comfortable-annotated.png)
-
-What each callout means:
+### Strategy builder sections
 
 1. **Strategy Meta** — strategy id/name and save controls.
 2. **Entry/Exit Rules** — boolean logic for position entry/exit.

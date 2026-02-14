@@ -37,11 +37,7 @@ Open: `http://127.0.0.1:8008`
 ## Operator docs
 
 - **Step-by-step usage guide:** [`docs/INSTRUCTIONS.md`](docs/INSTRUCTIONS.md)
-- Includes **annotated screenshots** of dashboard and builder.
-
-Annotated screenshots:
-- `docs/screenshots/annotated/dashboard-classic-comfortable-annotated.png`
-- `docs/screenshots/annotated/builder-classic-comfortable-annotated.png`
+- Screenshot callouts were removed for clarity; instructions are text-first.
 
 ---
 
