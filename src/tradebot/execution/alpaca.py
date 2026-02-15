@@ -15,6 +15,7 @@ class PlacedOrder:
     order_type: str
     expected_price: float | None = None
     limit_price: float | None = None
+    qty: float | None = None
 
 
 def place_notional_market_orders(
@@ -27,6 +28,7 @@ def place_notional_market_orders(
     extended_hours: bool = False,
     symbol_order_type: dict[str, str] | None = None,
     symbol_limit_offset_bps: dict[str, float] | None = None,
+    symbol_sell_qty: dict[str, float] | None = None,
 ) -> list[PlacedOrder]:
     """Place notional orders (market by default; optional limit with offset).
 
@@ -37,6 +39,7 @@ def place_notional_market_orders(
     ref_price_by_symbol = ref_price_by_symbol or {}
     symbol_order_type = symbol_order_type or {}
     symbol_limit_offset_bps = symbol_limit_offset_bps or {}
+    symbol_sell_qty = symbol_sell_qty or {}
 
     for pl in plans:
         side = OrderSide.BUY if pl.side == "buy" else OrderSide.SELL
@@ -53,15 +56,20 @@ def place_notional_market_orders(
                 # - >= $1.00 => max 2 decimals
                 # - <  $1.00 => max 4 decimals
                 lim = round(raw_lim, 2 if raw_lim >= 1 else 4)
-                req = LimitOrderRequest(
+                qty_override = float(symbol_sell_qty.get(pl.symbol, 0.0) or 0.0) if pl.side == "sell" else 0.0
+                req_kwargs = dict(
                     symbol=pl.symbol,
-                    notional=round(float(pl.notional_usd), 2),
                     side=side,
                     type=OrderType.LIMIT,
                     time_in_force=TimeInForce.DAY,
                     limit_price=lim,
                     extended_hours=(extended_hours and ("/" not in pl.symbol)),
                 )
+                if pl.side == "sell" and qty_override > 0:
+                    req_kwargs["qty"] = qty_override
+                else:
+                    req_kwargs["notional"] = round(float(pl.notional_usd), 2)
+                req = LimitOrderRequest(**req_kwargs)
                 o = trading_client.submit_order(req)
                 out.append(
                     PlacedOrder(
@@ -72,16 +80,22 @@ def place_notional_market_orders(
                         order_type="limit",
                         expected_price=ref,
                         limit_price=lim,
+                        qty=(float(symbol_sell_qty.get(pl.symbol, 0.0) or 0.0) if pl.side == "sell" else None),
                     )
                 )
                 continue
 
-        req = MarketOrderRequest(
+        qty_override = float(symbol_sell_qty.get(pl.symbol, 0.0) or 0.0) if pl.side == "sell" else 0.0
+        req_kwargs = dict(
             symbol=pl.symbol,
-            notional=round(float(pl.notional_usd), 2),
             side=side,
             time_in_force=TimeInForce.DAY,
         )
+        if pl.side == "sell" and qty_override > 0:
+            req_kwargs["qty"] = qty_override
+        else:
+            req_kwargs["notional"] = round(float(pl.notional_usd), 2)
+        req = MarketOrderRequest(**req_kwargs)
         o = trading_client.submit_order(req)
         out.append(
             PlacedOrder(
@@ -92,6 +106,7 @@ def place_notional_market_orders(
                 order_type="market",
                 expected_price=(ref_price_by_symbol.get(pl.symbol) if pl.symbol in ref_price_by_symbol else None),
                 limit_price=None,
+                qty=(float(symbol_sell_qty.get(pl.symbol, 0.0) or 0.0) if pl.side == "sell" else None),
             )
         )
     return out

@@ -197,11 +197,24 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     current_map: dict[str, float] = {}
     avg_entry_map: dict[str, float] = {}
     cur_price_map: dict[str, float] = {}
+    sell_qty_by_symbol: dict[str, float] = {}
     for p in current_positions:
         sym = getattr(p, "symbol", "")
         mv = float(getattr(p, "market_value", 0.0) or 0.0)
         if sym:
             current_map[sym] = mv
+            try:
+                q_avail = float(getattr(p, "qty_available", 0.0) or 0.0)
+            except Exception:
+                q_avail = 0.0
+            if q_avail <= 0:
+                try:
+                    q_avail = abs(float(getattr(p, "qty", 0.0) or 0.0))
+                except Exception:
+                    q_avail = 0.0
+            if q_avail > 0:
+                # tiny haircut to avoid broker precision boundary rejects
+                sell_qty_by_symbol[sym] = q_avail * 0.999
             try:
                 avg_entry_map[sym] = float(getattr(p, "avg_entry_price", 0.0) or 0.0)
             except Exception:
@@ -374,6 +387,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         extended_hours=bool(getattr(cfg.execution, "extended_hours", False)),
         symbol_order_type=sym_order_type,
         symbol_limit_offset_bps=sym_limit_offset,
+        symbol_sell_qty=sell_qty_by_symbol,
     )
 
     # Optional premarket fallback: if unfilled LIMITs remain by configured open time, resend as market.
@@ -428,12 +442,16 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                         # Partial fill: skip auto-fallback to avoid oversizing on notional orders.
                         continue
                     clients.trading.cancel_order_by_id(po.id)
-                    req = MarketOrderRequest(
+                    req_kwargs = dict(
                         symbol=po.symbol,
-                        notional=round(float(po.notional_usd), 2),
                         side=OrderSide.BUY if po.side == "buy" else OrderSide.SELL,
                         time_in_force=TimeInForce.DAY,
                     )
+                    if po.side == "sell" and float(po.qty or 0.0) > 0:
+                        req_kwargs["qty"] = float(po.qty)
+                    else:
+                        req_kwargs["notional"] = round(float(po.notional_usd), 2)
+                    req = MarketOrderRequest(**req_kwargs)
                     clients.trading.submit_order(req)
                     fallback_count += 1
                 except Exception:
