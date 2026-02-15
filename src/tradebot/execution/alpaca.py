@@ -70,7 +70,19 @@ def place_notional_market_orders(
                 else:
                     req_kwargs["notional"] = round(float(pl.notional_usd), 2)
                 req = LimitOrderRequest(**req_kwargs)
-                o = trading_client.submit_order(req)
+                try:
+                    o = trading_client.submit_order(req)
+                    used_qty = qty_override if (pl.side == "sell" and qty_override > 0) else None
+                except Exception as e:
+                    msg = str(e).lower()
+                    if pl.side == "sell" and qty_override > 0 and ("insufficient qty" in msg or "insufficient" in msg):
+                        retry_qty = qty_override * 0.999
+                        req_kwargs["qty"] = retry_qty
+                        req = LimitOrderRequest(**req_kwargs)
+                        o = trading_client.submit_order(req)
+                        used_qty = retry_qty
+                    else:
+                        raise
                 out.append(
                     PlacedOrder(
                         symbol=pl.symbol,
@@ -80,7 +92,7 @@ def place_notional_market_orders(
                         order_type="limit",
                         expected_price=ref,
                         limit_price=lim,
-                        qty=(float(symbol_sell_qty.get(pl.symbol, 0.0) or 0.0) if pl.side == "sell" else None),
+                        qty=used_qty,
                     )
                 )
                 continue
@@ -96,7 +108,19 @@ def place_notional_market_orders(
         else:
             req_kwargs["notional"] = round(float(pl.notional_usd), 2)
         req = MarketOrderRequest(**req_kwargs)
-        o = trading_client.submit_order(req)
+        try:
+            o = trading_client.submit_order(req)
+            used_qty = qty_override if (pl.side == "sell" and qty_override > 0) else None
+        except Exception as e:
+            msg = str(e).lower()
+            if pl.side == "sell" and qty_override > 0 and ("insufficient qty" in msg or "insufficient" in msg):
+                retry_qty = qty_override * 0.999
+                req_kwargs["qty"] = retry_qty
+                req = MarketOrderRequest(**req_kwargs)
+                o = trading_client.submit_order(req)
+                used_qty = retry_qty
+            else:
+                raise
         out.append(
             PlacedOrder(
                 symbol=pl.symbol,
@@ -106,7 +130,7 @@ def place_notional_market_orders(
                 order_type="market",
                 expected_price=(ref_price_by_symbol.get(pl.symbol) if pl.symbol in ref_price_by_symbol else None),
                 limit_price=None,
-                qty=(float(symbol_sell_qty.get(pl.symbol, 0.0) or 0.0) if pl.side == "sell" else None),
+                qty=used_qty,
             )
         )
     return out

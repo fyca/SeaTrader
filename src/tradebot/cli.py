@@ -213,8 +213,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                 except Exception:
                     q_avail = 0.0
             if q_avail > 0:
-                # tiny haircut to avoid broker precision boundary rejects
-                sell_qty_by_symbol[sym] = q_avail * 0.999
+                sell_qty_by_symbol[sym] = q_avail
             try:
                 avg_entry_map[sym] = float(getattr(p, "avg_entry_price", 0.0) or 0.0)
             except Exception:
