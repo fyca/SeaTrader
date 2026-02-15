@@ -289,15 +289,43 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
             keep.append(pl)
         plans = keep
 
+    selected_set = set(eq_sel) | set(cr_sel)
+
+    def _sell_cause(sym: str, cur_mv: float, tgt_mv: float) -> str:
+        if sym in excluded:
+            return "excluded_by_symbol_pnl_floor"
+        if run_asset_mode == "equities" and "/" in sym:
+            return "asset_mode_filtered_crypto"
+        if run_asset_mode == "crypto" and "/" not in sym:
+            return "asset_mode_filtered_equity"
+        if tgt_mv <= 0 and cur_mv > 0 and sym not in selected_set:
+            if cfg.rebalance.liquidation_mode == "liquidate_non_selected":
+                return "deselected_liquidate_non_selected"
+            return "deselected"
+        if tgt_mv < cur_mv:
+            return "rebalance_downsize_to_target"
+        return "rebalance_sell"
+
     print("\nOrder plan (notional USD):")
     if not plans:
         print("(no trades)")
+
+    sell_cause_counts: dict[str, int] = {}
     for pl in plans:
         cur_mv = float(current_map.get(pl.symbol, 0.0) or 0.0)
         tgt_mv = float(target_map.get(pl.symbol, 0.0) or 0.0)
         delta = tgt_mv - cur_mv
+        detail_reason = pl.reason
+        if pl.side == "sell":
+            detail_reason = _sell_cause(pl.symbol, cur_mv, tgt_mv)
+            sell_cause_counts[detail_reason] = int(sell_cause_counts.get(detail_reason, 0)) + 1
         print(f"- {pl.side.upper():4s} {pl.symbol:12s} ${pl.notional_usd:,.2f}  ({pl.asset_class})")
-        print(f"    now=${cur_mv:,.2f} target=${tgt_mv:,.2f} delta=${delta:,.2f} reason={pl.reason}")
+        print(f"    now=${cur_mv:,.2f} target=${tgt_mv:,.2f} delta=${delta:,.2f} reason={detail_reason}")
+
+    if sell_cause_counts:
+        print("[rebalance] Sell-cause summary:")
+        for k, v in sorted(sell_cause_counts.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f"  - {k}: {v}")
 
     write_artifact(
         "last_rebalance.json",
@@ -314,10 +342,14 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                     "side": p.side,
                     "notional_usd": p.notional_usd,
                     "asset_class": p.asset_class,
-                    "reason": p.reason,
+                    "reason": (_sell_cause(p.symbol, float(current_map.get(p.symbol, 0.0) or 0.0), float(target_map.get(p.symbol, 0.0) or 0.0)) if p.side == "sell" else p.reason),
+                    "current_notional_usd": float(current_map.get(p.symbol, 0.0) or 0.0),
+                    "target_notional_usd": float(target_map.get(p.symbol, 0.0) or 0.0),
+                    "delta_notional_usd": float(target_map.get(p.symbol, 0.0) or 0.0) - float(current_map.get(p.symbol, 0.0) or 0.0),
                 }
                 for p in plans
             ],
+            "sell_cause_counts": sell_cause_counts,
             "frozen": dd_state.frozen,
         },
     )
