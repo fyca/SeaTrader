@@ -293,16 +293,14 @@
             </div>
             <div>
               <div class="muted">Execution mode</div>
-              <select id="btExecMode" style="width:180px;">
-                <option value="daily" selected>Daily (open/close)</option>
-                <option value="intraday">Intraday (1m bars)</option>
+              <select id="btExecMode" style="width:180px;" disabled>
+                <option value="intraday" selected>Intraday (1m bars)</option>
               </select>
             </div>
-            <div>
+            <div style="display:none;">
               <div class="muted">Execution time</div>
               <select id="btExecTime" style="width:160px;">
-                <option value="open">Morning (open)</option>
-                <option value="close" selected>Evening (close)</option>
+                <option value="close" selected>Close</option>
               </select>
             </div>
             <div style="display:none;">
@@ -773,8 +771,8 @@ function collectBacktestRequestBody() {
   const start = document.getElementById('btStart')?.value;
   const end = document.getElementById('btEnd')?.value;
   const strategy_id = (document.getElementById('btStrategy')?.value || 'baseline_trendvol');
-  const execution_time_mode = (document.getElementById('btExecMode')?.value || 'daily');
-  const execution_time = (document.getElementById('btExecTime')?.value || 'close');
+  const execution_time_mode = 'intraday';
+  const execution_time = 'close';
   const execution_time_local_equities = (document.getElementById('btEqExecLocal')?.value || '06:30');
   const execution_time_local = execution_time_local_equities;
   const execution_time_local_crypto = (document.getElementById('btCrExecLocal')?.value || '06:30');
@@ -796,8 +794,7 @@ function collectBacktestRequestBody() {
   const rebalance_mode = (document.getElementById('btRebalanceMode')?.value || 'target_notional');
   const liquidation_mode = (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected');
   const slippage_bps = Number(document.getElementById('btSlip')?.value || '10');
-  const use_limit_orders = String(document.getElementById('btUseLimit')?.value || 'false') === 'true';
-  const limit_offset_bps = Number(document.getElementById('btLimitOffset')?.value || '10');
+  // global limit-order toggles removed; use per-asset order settings only.
   const order_type_equities = String(document.getElementById('btEqOrderType')?.value || 'market');
   const order_type_crypto = String(document.getElementById('btCrOrderType')?.value || 'market');
   const limit_offset_bps_equities = Number(document.getElementById('btEqLimitOffset')?.value || '10');
@@ -817,7 +814,7 @@ function collectBacktestRequestBody() {
   const limit_fallback_to_market_open_crypto = String(document.getElementById('btCrLimitFallback')?.value || 'false') === 'true';
 
   return {
-    start, end, slippage_bps, use_limit_orders, limit_offset_bps,
+    start, end, slippage_bps,
     order_type_equities, order_type_crypto, limit_offset_bps_equities, limit_offset_bps_crypto,
     limit_fallback_to_market_open_equities, limit_fallback_to_market_open_crypto,
     limit_fallback_to_market_open: (limit_fallback_to_market_open_equities || limit_fallback_to_market_open_crypto),
@@ -1917,8 +1914,8 @@ async function main() {
 
     return {
       strategy_id: (document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
-      execution_time_mode: (document.getElementById('btExecMode')?.value || 'daily'),
-      execution_time: (document.getElementById('btExecTime')?.value || 'close'),
+      execution_time_mode: 'intraday',
+      execution_time: 'close',
       execution_time_local: (document.getElementById('btEqExecLocal')?.value || '06:30'),
       execution_time_local_equities: (document.getElementById('btEqExecLocal')?.value || '06:30'),
       execution_time_local_crypto: (document.getElementById('btCrExecLocal')?.value || '06:30'),
@@ -1940,8 +1937,6 @@ async function main() {
       rebalance_mode: (document.getElementById('btRebalanceMode')?.value || 'target_notional'),
       liquidation_mode: (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected'),
       slippage_bps: Number(document.getElementById('btSlip')?.value || '10'),
-      use_limit_orders: String(document.getElementById('btUseLimit')?.value || 'false') === 'true',
-      limit_offset_bps: Number(document.getElementById('btLimitOffset')?.value || '10'),
       order_type_equities: (document.getElementById('btEqOrderType')?.value || 'market'),
       order_type_crypto: (document.getElementById('btCrOrderType')?.value || 'market'),
       limit_offset_bps_equities: Number(document.getElementById('btEqLimitOffset')?.value || '10'),
@@ -1985,8 +1980,6 @@ async function main() {
     setVal('btRebalanceMode', p.rebalance_mode);
     setVal('btLiquidation', p.liquidation_mode);
     setVal('btSlip', p.slippage_bps);
-    setVal('btUseLimit', String(Boolean(p.use_limit_orders)));
-    setVal('btLimitOffset', p.limit_offset_bps);
     setVal('btEqOrderType', p.order_type_equities);
     setVal('btCrOrderType', p.order_type_crypto);
     setVal('btEqLimitOffset', p.limit_offset_bps_equities);

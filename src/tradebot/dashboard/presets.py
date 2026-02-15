@@ -111,7 +111,7 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
         bot["scheduling"]["crypto"]["risk_check_day"] = str(params.get("risk_check_day_crypto")).upper()
 
     # execution timing mapping (best-effort): sets unattended scheduler times.
-    exec_mode = params.get("execution_time_mode") or "daily"
+    exec_mode = params.get("execution_time_mode") or "intraday"
     bot.setdefault("scheduling", {})
     bot["scheduling"].setdefault("equities", {})
     bot["scheduling"].setdefault("crypto", {})

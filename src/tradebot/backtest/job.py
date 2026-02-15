@@ -171,22 +171,26 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     tz=p.execution_tz,
                 )
 
-                # Only apply intraday pricing on rebalance days.
-                # Precompute the rebalance day set once (avoid O(days) work per symbol call).
+                # Only apply intraday pricing on asset-specific rebalance days.
                 start_d = pd.to_datetime(p.start)
                 end_d = pd.to_datetime(p.end)
                 all_days = pd.date_range(start_d, end_d, freq="D")
-                if p.rebalance == "daily":
-                    reb_days = set(all_days)
-                else:
-                    day_map = {"MON":0, "TUE":1, "WED":2, "THU":3, "FRI":4, "SAT":5, "SUN":6}
-                    wd = day_map.get(str(getattr(p, "rebalance_day", "MON")).upper(), 0)
-                    reb_days = set([d for d in all_days if d.weekday() == wd])
+                day_map = {"MON":0, "TUE":1, "WED":2, "THU":3, "FRI":4, "SAT":5, "SUN":6}
+
+                eq_freq = str(getattr(p, "rebalance_frequency_equities", None) or p.rebalance)
+                eq_day = str(getattr(p, "rebalance_day_equities", None) or p.rebalance_day)
+                cr_freq = str(getattr(p, "rebalance_frequency_crypto", None) or p.rebalance)
+                cr_day = str(getattr(p, "rebalance_day_crypto", None) or p.rebalance_day)
+
+                eq_reb_days = set(all_days) if eq_freq == "daily" else set([d for d in all_days if d.weekday() == day_map.get(eq_day.upper(), 0)])
+                cr_reb_days = set(all_days) if cr_freq == "daily" else set([d for d in all_days if d.weekday() == day_map.get(cr_day.upper(), 0)])
 
                 def intraday_cb(sym, day):
-                    if day not in reb_days:
-                        return None
                     is_crypto = "/" in str(sym)
+                    if is_crypto and day not in cr_reb_days:
+                        return None
+                    if (not is_crypto) and day not in eq_reb_days:
+                        return None
                     return (prov_cr if is_crypto else prov_eq).price(sym, day)
 
                 def intraday_limit_touch_cb(sym, day, side, limit_px):

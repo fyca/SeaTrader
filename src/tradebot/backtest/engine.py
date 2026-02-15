@@ -17,9 +17,10 @@ class BacktestParams:
     end: str    # YYYY-MM-DD
     initial_equity: float = 100000.0
     slippage_bps: float = 10.0
+    # Deprecated global knobs retained only for backward-compat preset loading.
     use_limit_orders: bool = False
     limit_offset_bps: float = 10.0
-    # Per-asset execution options (fallback to global use_limit_orders/offset when unset)
+    # Per-asset execution options
     order_type_equities: Literal["market", "limit"] | None = None
     order_type_crypto: Literal["market", "limit"] | None = None
     limit_offset_bps_equities: float | None = None
@@ -40,7 +41,7 @@ class BacktestParams:
     # Execution pricing options
     # - daily mode: uses daily open/close as before
     # - intraday mode: fetches minute bars on rebalance days and prices at execution_time_local
-    execution_time_mode: Literal["daily", "intraday"] = "daily"
+    execution_time_mode: Literal["daily", "intraday"] = "intraday"
     execution_time: Literal["open", "close"] = "close"  # daily mode only
     execution_time_local: str = "15:55"  # intraday mode only
     execution_time_local_equities: str | None = None
@@ -270,6 +271,7 @@ def run_backtest(
     def _use_limit_for(sym: str) -> bool:
         is_crypto = "/" in sym
         ot = (params.order_type_crypto if is_crypto else params.order_type_equities)
+        # Global limit toggle intentionally ignored; per-asset order_type is authoritative.
         if ot in ("market", "limit"):
             return ot == "limit"
         return False
@@ -488,7 +490,7 @@ def run_backtest(
 
     for i, day in enumerate(days):
         # Process pending simulated limit orders first
-        if params.use_limit_orders or params.order_type_equities == "limit" or params.order_type_crypto == "limit":
+        if params.order_type_equities == "limit" or params.order_type_crypto == "limit":
             _process_pending_limits(day)
 
         # Mark-to-market
@@ -662,29 +664,36 @@ def run_backtest(
             strat = get_strategy(params.strategy_id)
 
             # build bars dict slices up to current day (excluding banned symbols)
+            # Keep full OHLCV columns for strategy parity with live selection logic.
+            def _slice_df(src: dict[str, pd.DataFrame], sym: str, day_: pd.Timestamp) -> pd.DataFrame | None:
+                df0 = src.get(sym)
+                if df0 is None or len(df0) == 0:
+                    return None
+                try:
+                    dfx = df0.copy()
+                    dfx.index = _naive_utc_index(dfx.index)
+                    dfx = dfx.sort_index().loc[:day_]
+                    if len(dfx) == 0:
+                        return None
+                    return dfx
+                except Exception:
+                    return None
+
             eq_bars_day: dict[str, pd.DataFrame] = {}
             for sym in stock_universe:
                 if sym in excluded:
                     continue
-                s = closes.get(sym)
-                if s is None or len(s) == 0:
-                    continue
-                s2 = s.loc[:day]
-                if len(s2) == 0:
-                    continue
-                eq_bars_day[sym] = pd.DataFrame({"close": s2.values}, index=s2.index)
+                dfx = _slice_df(stock_bars, sym, day)
+                if dfx is not None:
+                    eq_bars_day[sym] = dfx
 
             cr_bars_day: dict[str, pd.DataFrame] = {}
             for sym in crypto_universe:
                 if sym in excluded:
                     continue
-                s = closes.get(sym)
-                if s is None or len(s) == 0:
-                    continue
-                s2 = s.loc[:day]
-                if len(s2) == 0:
-                    continue
-                cr_bars_day[sym] = pd.DataFrame({"close": s2.values}, index=s2.index)
+                dfx = _slice_df(crypto_bars, sym, day)
+                if dfx is not None:
+                    cr_bars_day[sym] = dfx
 
             eq_sel, _eq_details = strat.select_equities(bars=eq_bars_day, cfg=cfg)
             cr_sel, _cr_details = strat.select_crypto(bars=cr_bars_day, cfg=cfg)
@@ -958,8 +967,11 @@ def run_backtest(
 
     # daily returns for vol/sharpe
     dr = np.diff(rets) / np.where(rets[:-1] == 0, 1, rets[:-1]) if len(rets) > 1 else np.array([0.0])
-    vol = float(np.std(dr, ddof=0) * np.sqrt(365.0)) if len(dr) > 2 else 0.0
-    sharpe = float((np.mean(dr) / (np.std(dr, ddof=0) + 1e-12)) * np.sqrt(365.0)) if len(dr) > 2 else 0.0
+    ann_factor = 365.0 if str(params.asset_mode) == "crypto" else 252.0
+    vol = float(np.std(dr, ddof=0) * np.sqrt(ann_factor)) if len(dr) > 2 else 0.0
+    sharpe = float((np.mean(dr) / (np.std(dr, ddof=0) + 1e-12)) * np.sqrt(ann_factor)) if len(dr) > 2 else 0.0
+    sharpe_252 = float((np.mean(dr) / (np.std(dr, ddof=0) + 1e-12)) * np.sqrt(252.0)) if len(dr) > 2 else 0.0
+    sharpe_365 = float((np.mean(dr) / (np.std(dr, ddof=0) + 1e-12)) * np.sqrt(365.0)) if len(dr) > 2 else 0.0
 
     wins = [t for t in trades if (t.get("pnl") or 0.0) > 0]
     losses = [t for t in trades if (t.get("pnl") or 0.0) <= 0]
@@ -973,6 +985,9 @@ def run_backtest(
         "max_drawdown": max_dd,
         "ann_vol": vol,
         "sharpe": sharpe,
+        "sharpe_252": sharpe_252,
+        "sharpe_365": sharpe_365,
+        "sharpe_annualization_days": int(ann_factor),
         "trade_count": len(trades),
         "win_rate": (len(wins) / len(trades)) if trades else None,
         "avg_win": float(np.mean([t["pnl"] for t in wins])) if wins else None,
