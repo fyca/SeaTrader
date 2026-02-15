@@ -332,6 +332,24 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         except Exception:
             pass
 
+    # Cap SELL notionals slightly below currently available market value to avoid
+    # broker rejects like "insufficient qty available" from tiny price/qty drift.
+    adjusted_plans: list[OrderPlan] = []
+    for pl in plans:
+        if pl.side != "sell":
+            adjusted_plans.append(pl)
+            continue
+        cur_mv = float(current_map.get(pl.symbol, 0.0) or 0.0)
+        if cur_mv <= 0:
+            continue
+        safe_cap = cur_mv * 0.998  # small headroom for price movement/rounding
+        n = min(float(pl.notional_usd), safe_cap)
+        if n <= 0:
+            continue
+        adjusted_plans.append(OrderPlan(symbol=pl.symbol, side=pl.side, notional_usd=n, asset_class=pl.asset_class, reason=pl.reason))
+
+    plans = adjusted_plans
+
     sym_order_type: dict[str, str] = {}
     sym_limit_offset: dict[str, float] = {}
     sym_fallback_enabled: dict[str, bool] = {}
