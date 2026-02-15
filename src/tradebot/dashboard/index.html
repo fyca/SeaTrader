@@ -1000,6 +1000,18 @@ async function runBacktestIteration() {
     const t = times[i];
     const body = collectBacktestRequestBody();
     body[axis] = t;
+    // Keep per-asset intraday fields aligned with selected iteration axis.
+    // Otherwise crypto-only runs can appear unchanged because *_crypto overrides
+    // execution_time_local/risk_check_time_local in the backend.
+    if (axis === 'execution_time_local') {
+      body.execution_time_local_equities = t;
+      body.execution_time_local_crypto = t;
+      body.limit_fallback_time_local = t;
+    }
+    if (axis === 'risk_check_time_local') {
+      body.risk_check_time_local_equities = t;
+      body.risk_check_time_local_crypto = t;
+    }
     status.textContent = `iteration ${i+1}/${times.length}: starting ${axis}=${t}…`;
 
     const r = await fetch('/api/backtest/start' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
