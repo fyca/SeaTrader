@@ -55,6 +55,13 @@ def start_backtest(*, config_path: str, params: dict) -> str:
         try:
             _write(status_path, {"state": "fetching_data", "progress": 0, "total": 1})
             cfg = load_config(config_path)
+            # Optional backtest-only liquidity override from dashboard controls.
+            try:
+                adv_override = params.get("min_avg_crypto_dollar_volume_20d")
+                if adv_override is not None:
+                    cfg.limits.min_avg_crypto_dollar_volume_20d = float(adv_override)
+            except Exception:
+                pass
             env = load_env()
             clients = make_alpaca_clients(env)
 

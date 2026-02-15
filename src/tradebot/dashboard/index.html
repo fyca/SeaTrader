@@ -176,10 +176,23 @@
           </div>
         </div>
 
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap:8px;">
           <div>
             <div class="muted" style="font-size:12px;">Min crypto price (live)</div>
             <input id="minCryptoPriceInput" placeholder="e.g. 1.0 or none" />
+          </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Crypto ADV 20d min (live)</div>
+            <select id="minCryptoAdvLiveSelect">
+              <option value="100000">$100k</option>
+              <option value="250000">$250k</option>
+              <option value="500000">$500k</option>
+              <option value="1000000">$1m</option>
+              <option value="2500000">$2.5m</option>
+              <option value="5000000" selected>$5m (default)</option>
+              <option value="10000000">$10m</option>
+              <option value="25000000">$25m</option>
+            </select>
           </div>
           <div>
             <div class="muted" style="font-size:12px;">Max orders/run</div>
@@ -427,6 +440,19 @@
             <div>
               <div class="muted">Min crypto price (backtest)</div>
               <input id="btMinCryptoPrice" placeholder="e.g. 1.0 or none" style="width:180px;" />
+            </div>
+            <div>
+              <div class="muted">Crypto ADV 20d min (backtest)</div>
+              <select id="btMinCryptoAdv" style="width:180px;">
+                <option value="100000">$100k</option>
+                <option value="250000">$250k</option>
+                <option value="500000">$500k</option>
+                <option value="1000000">$1m</option>
+                <option value="2500000">$2.5m</option>
+                <option value="5000000" selected>$5m (default)</option>
+                <option value="10000000">$10m</option>
+                <option value="25000000">$25m</option>
+              </select>
             </div>
             <div>
               <div class="muted">Exclude if symbol P/L % &lt;=</div>
@@ -801,6 +827,9 @@ function collectBacktestRequestBody() {
   const limit_offset_bps_crypto = Number(document.getElementById('btCrLimitOffset')?.value || '10');
   const symbol = (document.getElementById('btSymbol')?.value || '').trim();
   const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
+  const minCryptoRaw = (document.getElementById('btMinCryptoPrice')?.value || '').trim();
+  const min_crypto_price = minCryptoRaw ? Number(minCryptoRaw) : null;
+  const min_avg_crypto_dollar_volume_20d = Number(document.getElementById('btMinCryptoAdv')?.value || '5000000');
   const symFloorRaw = (document.getElementById('btSymFloor')?.value || '').trim();
   const symbol_pnl_floor_pct = symFloorRaw ? Number(symFloorRaw) : null;
   const symbol_pnl_floor_liquidate = Boolean(document.getElementById('btSymFloorLiquidate')?.checked);
@@ -831,6 +860,7 @@ function collectBacktestRequestBody() {
     rebalance_mode, liquidation_mode,
     universe_mode: symbol ? 'single' : 'full', symbol: symbol || null,
     portfolio_dd_stop, per_asset_stop_loss_pct,
+    min_crypto_price, min_avg_crypto_dollar_volume_20d,
     symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized
   };
 }
@@ -1752,6 +1782,13 @@ async function main() {
     el.value = (v===null || v===undefined) ? 'none' : String(v);
   };
   setGuard('minCryptoPriceInput', cfg.limits?.min_crypto_price);
+  const minCrAdvSel = document.getElementById('minCryptoAdvLiveSelect');
+  if (minCrAdvSel) {
+    const v = Number(cfg.limits?.min_avg_crypto_dollar_volume_20d ?? 5000000);
+    const vals = Array.from(minCrAdvSel.options).map(o => Number(o.value)).filter(Number.isFinite);
+    const nearest = vals.reduce((a,b)=> Math.abs(b-v) < Math.abs(a-v) ? b : a, vals[0] ?? 5000000);
+    minCrAdvSel.value = String(nearest);
+  }
   setGuard('maxOrdersInput', cfg.execution?.max_orders_per_run);
   setGuard('maxSingleInput', cfg.execution?.max_single_order_notional_usd);
   setGuard('maxTotalInput', cfg.execution?.max_total_notional_usd);
@@ -1911,6 +1948,7 @@ async function main() {
     const symbol_pnl_floor_pct = symFloorRaw ? Number(symFloorRaw) : null;
     const minCryptoRaw = (document.getElementById('btMinCryptoPrice')?.value || '').trim();
     const min_crypto_price = minCryptoRaw ? Number(minCryptoRaw) : null;
+    const min_avg_crypto_dollar_volume_20d = Number(document.getElementById('btMinCryptoAdv')?.value || '5000000');
 
     return {
       strategy_id: (document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
@@ -1949,6 +1987,7 @@ async function main() {
       portfolio_dd_stop,
       symbol_pnl_floor_pct,
       min_crypto_price,
+      min_avg_crypto_dollar_volume_20d,
       symbol_pnl_floor_liquidate: Boolean(document.getElementById('btSymFloorLiquidate')?.checked),
       symbol_pnl_floor_include_unrealized: Boolean(document.getElementById('btSymFloorInclUnreal')?.checked),
     };
@@ -1991,6 +2030,7 @@ async function main() {
     setVal('btDDPreset', p.portfolio_dd_stop);
     setVal('btSymFloor', p.symbol_pnl_floor_pct);
     setVal('btMinCryptoPrice', p.min_crypto_price);
+    setVal('btMinCryptoAdv', p.min_avg_crypto_dollar_volume_20d ?? 5000000);
     const liq = document.getElementById('btSymFloorLiquidate');
     if (liq && p.symbol_pnl_floor_liquidate!==undefined) liq.checked = Boolean(p.symbol_pnl_floor_liquidate);
     const iu = document.getElementById('btSymFloorInclUnreal');
@@ -2308,6 +2348,7 @@ async function saveConfig() {
     };
     body.limits = body.limits || {};
     body.limits.min_crypto_price = parseMaybeNone(document.getElementById('minCryptoPriceInput')?.value, false);
+    body.limits.min_avg_crypto_dollar_volume_20d = Number(document.getElementById('minCryptoAdvLiveSelect')?.value || '5000000');
 
     body.execution = body.execution || {};
     body.execution.max_orders_per_run = parseMaybeNone(document.getElementById('maxOrdersInput')?.value, true);
