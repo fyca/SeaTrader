@@ -171,6 +171,27 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
             d_txt = str(d)
         print(f"  [CR] {s}: {d_txt}")
 
+    # Explain currently-held names that are not selected this run.
+    held_not_selected_diag: dict[str, object] = {}
+    held_symbols = [str(getattr(p, "symbol", "") or "") for p in clients.trading.get_all_positions()]
+    held_symbols = [s for s in held_symbols if s]
+    if held_symbols:
+        print("[rebalance] Held but not selected diagnostics:")
+        for sym in sorted(set(held_symbols)):
+            if sym in eq_sel or sym in cr_sel:
+                continue
+            d = eq_sig_details.get(sym) if "/" not in sym else cr_sig_details.get(sym)
+            if d is None:
+                held_not_selected_diag[sym] = {"reject_reason": "not_in_candidate_universe_or_missing_bars"}
+                print(f"  {sym}: not in candidate universe / no bars returned")
+                continue
+            held_not_selected_diag[sym] = d
+            try:
+                d_txt = json.dumps(d, default=str, separators=(",", ":"))
+            except Exception:
+                d_txt = str(d)
+            print(f"  {sym}: {d_txt}")
+
     # Apply symbol exclusion floor (parity with backtest, unrealized-based in live).
     excluded = set([str(s).upper() for s in (state.excluded_symbols or [])])
     floor = cfg.rebalance.symbol_pnl_floor_pct
@@ -336,6 +357,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                 "equities": {s: eq_sig_details.get(s) for s in eq_sel},
                 "crypto": {s: cr_sig_details.get(s) for s in cr_sel},
             },
+            "held_not_selected_diagnostics": held_not_selected_diag,
             "plans": [
                 {
                     "symbol": p.symbol,
