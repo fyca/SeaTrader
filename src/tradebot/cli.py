@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import json
 
 from rich import print
 
@@ -154,6 +155,22 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     if cr_sel:
         print("Crypto:", ", ".join(cr_sel))
 
+    print("[rebalance] Selection diagnostics:")
+    for s in eq_sel:
+        d = eq_sig_details.get(s)
+        try:
+            d_txt = json.dumps(d, default=str, separators=(",", ":"))
+        except Exception:
+            d_txt = str(d)
+        print(f"  [EQ] {s}: {d_txt}")
+    for s in cr_sel:
+        d = cr_sig_details.get(s)
+        try:
+            d_txt = json.dumps(d, default=str, separators=(",", ":"))
+        except Exception:
+            d_txt = str(d)
+        print(f"  [CR] {s}: {d_txt}")
+
     # Apply symbol exclusion floor (parity with backtest, unrealized-based in live).
     excluded = set([str(s).upper() for s in (state.excluded_symbols or [])])
     floor = cfg.rebalance.symbol_pnl_floor_pct
@@ -276,7 +293,11 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     if not plans:
         print("(no trades)")
     for pl in plans:
+        cur_mv = float(current_map.get(pl.symbol, 0.0) or 0.0)
+        tgt_mv = float(target_map.get(pl.symbol, 0.0) or 0.0)
+        delta = tgt_mv - cur_mv
         print(f"- {pl.side.upper():4s} {pl.symbol:12s} ${pl.notional_usd:,.2f}  ({pl.asset_class})")
+        print(f"    now=${cur_mv:,.2f} target=${tgt_mv:,.2f} delta=${delta:,.2f} reason={pl.reason}")
 
     write_artifact(
         "last_rebalance.json",
@@ -371,6 +392,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     sym_limit_offset: dict[str, float] = {}
     sym_fallback_enabled: dict[str, bool] = {}
     sym_fallback_time: dict[str, str] = {}
+    print("[rebalance] Execution mode by symbol:")
     for pl in plans:
         is_crypto = "/" in str(pl.symbol)
         ex = cfg.execution.crypto if is_crypto else cfg.execution.equities
@@ -381,6 +403,10 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         sym_limit_offset[pl.symbol] = float(getattr(ex, "limit_offset_bps", 10.0) or 10.0)
         sym_fallback_enabled[pl.symbol] = bool(getattr(ex, "fallback_to_market_at_open", False))
         sym_fallback_time[pl.symbol] = str(getattr(ex, "fallback_time_local", "06:30"))
+        print(
+            f"  {pl.symbol}: order_type={ord_type} limit_offset_bps={sym_limit_offset[pl.symbol]} "
+            f"fallback_to_market={sym_fallback_enabled[pl.symbol]} at {sym_fallback_time[pl.symbol]}"
+        )
 
     print("[rebalance] Phase 6/6: submitting orders to Alpaca… 🚀")
     placed = place_notional_market_orders(
@@ -477,7 +503,9 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
 
     print("\nPlaced orders:")
     for o in placed:
-        print(f"- {o.side.upper():4s} {o.symbol:12s} ${o.notional_usd:,.2f}  id={o.id}")
+        qty_txt = f" qty={o.qty}" if (o.qty is not None and float(o.qty) > 0) else ""
+        lim_txt = f" limit={o.limit_price}" if (o.limit_price is not None) else ""
+        print(f"- {o.side.upper():4s} {o.symbol:12s} ${o.notional_usd:,.2f}{qty_txt} type={o.order_type}{lim_txt} id={o.id}")
     return 0
 
 

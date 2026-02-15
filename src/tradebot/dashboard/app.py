@@ -628,18 +628,37 @@ def create_app(*, config_path: str) -> FastAPI:
             raise HTTPException(status_code=400, detail="kind must be rebalance or risk-check")
 
         job_id = str(uuid.uuid4())
+        repo_dir = Path(config_path).resolve().parent.parent
+        log_dir = repo_dir / "data" / "action_logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / f"{job_id}.log"
         action_jobs[job_id] = {
             "state": "starting",
             "kind": kind,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "wait_until_configured": wait_until_configured,
             "place_orders": place_orders,
+            "log_path": str(log_path),
         }
 
         def _run():
             class _JobWriter(io.TextIOBase):
-                def __init__(self):
+                def __init__(self, file_path: Path):
                     self._buf = ""
+                    self._file_path = file_path
+
+                def _emit(self, line: str):
+                    action_jobs[job_id]["message"] = line
+                    logs = action_jobs[job_id].setdefault("logs", [])
+                    logs.append(line)
+                    # Keep a generous in-memory tail for UI while writing full log to disk.
+                    if len(logs) > 2000:
+                        del logs[:-2000]
+                    try:
+                        with self._file_path.open("a", encoding="utf-8") as f:
+                            f.write(line + "\n")
+                    except Exception:
+                        pass
 
                 def write(self, s):
                     try:
@@ -652,21 +671,12 @@ def create_app(*, config_path: str) -> FastAPI:
                         line = line.strip()
                         if not line:
                             continue
-                        action_jobs[job_id]["message"] = line
-                        logs = action_jobs[job_id].setdefault("logs", [])
-                        logs.append(line)
-                        if len(logs) > 40:
-                            del logs[:-40]
+                        self._emit(line)
                     return len(txt)
 
                 def flush(self):
                     if self._buf.strip():
-                        line = self._buf.strip()
-                        action_jobs[job_id]["message"] = line
-                        logs = action_jobs[job_id].setdefault("logs", [])
-                        logs.append(line)
-                        if len(logs) > 40:
-                            del logs[:-40]
+                        self._emit(self._buf.strip())
                     self._buf = ""
 
             try:
@@ -674,7 +684,7 @@ def create_app(*, config_path: str) -> FastAPI:
                 from tradebot.commands.risk_check import cmd_risk_check
 
                 action_jobs[job_id]["state"] = "running"
-                w = _JobWriter()
+                w = _JobWriter(log_path)
                 with contextlib.redirect_stdout(w), contextlib.redirect_stderr(w):
                     if kind == "rebalance":
                         if wait_until_configured:
