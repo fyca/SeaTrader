@@ -88,6 +88,8 @@ class BacktestParams:
     universe_mode: Literal["full", "single"] = "full"
     symbol: str | None = None
     min_crypto_price: float | None = None
+    # Optional backtest-only override for liquidity gate.
+    min_avg_crypto_dollar_volume_20d: float | None = None
 
 
 @dataclass(frozen=True)
