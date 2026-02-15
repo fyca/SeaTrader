@@ -597,6 +597,17 @@
               </table>
             </div>
           </div>
+          <div style="margin-top:10px;">
+            <h2>Exit signals (from last rebalance sell plan)</h2>
+            <div class="tableWrap">
+              <table>
+                <thead>
+                  <tr><th>Symbol</th><th>Reason</th><th>Now $</th><th>Target $</th><th>Delta $</th><th>Sell $</th></tr>
+                </thead>
+                <tbody id="rebalanceExitSignals"></tbody>
+              </table>
+            </div>
+          </div>
           <div style="margin-top:8px;"><details><summary class="muted">Raw JSON</summary><pre id="rebalance"></pre></details></div>
         </div>
         <div class="card col-6">
@@ -2170,6 +2181,7 @@ async function main() {
       kv(rbSum, 'Selected equities', (rb.selected?.equities || []).join(', ') || '—');
       kv(rbSum, 'Selected crypto', (rb.selected?.crypto || []).join(', ') || '—');
       kv(rbSum, 'Planned orders', String((rb.plans || []).length));
+      kv(rbSum, 'Planned sells', String((rb.plans || []).filter(p => String(p.side||'').toLowerCase()==='sell').length));
 
       // Entry signals table (selected)
       const entBody = document.getElementById('entrySignals');
@@ -2198,6 +2210,28 @@ async function main() {
           const tr = document.createElement('tr');
           tr.innerHTML = `<td colspan="5" class="muted">(none)</td>`;
           entBody.appendChild(tr);
+        }
+      }
+
+      // Exit/sell signals table from last rebalance plan
+      const rebExBody = document.getElementById('rebalanceExitSignals');
+      if (rebExBody) {
+        rebExBody.innerHTML = '';
+        const sells = (rb.plans || []).filter(p => String(p.side||'').toLowerCase() === 'sell');
+        sells.sort((a,b) => Number(b.notional_usd||0) - Number(a.notional_usd||0));
+        for (const p of sells) {
+          const tr = document.createElement('tr');
+          tr.className = 'exit';
+          const nowMv = (p.current_notional_usd!==null && p.current_notional_usd!==undefined) ? money(p.current_notional_usd) : '—';
+          const tgtMv = (p.target_notional_usd!==null && p.target_notional_usd!==undefined) ? money(p.target_notional_usd) : '—';
+          const delta = (p.delta_notional_usd!==null && p.delta_notional_usd!==undefined) ? money(p.delta_notional_usd) : '—';
+          tr.innerHTML = `<td>${p.symbol||'—'}</td><td>${p.reason||'sell'}</td><td>${nowMv}</td><td>${tgtMv}</td><td>${delta}</td><td>${money(p.notional_usd)}</td>`;
+          rebExBody.appendChild(tr);
+        }
+        if (rebExBody.children.length === 0) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td colspan="6" class="muted">(none)</td>`;
+          rebExBody.appendChild(tr);
         }
       }
     }
