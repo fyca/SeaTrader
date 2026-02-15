@@ -209,6 +209,10 @@
           <button id="runRiskCheckBtn" class="secondary">Run risk-check</button>
           <span id="runActionStatus" class="muted"></span>
         </div>
+        <div style="margin-top:8px;">
+          <div class="muted" style="font-size:12px; margin-bottom:4px;">Run log</div>
+          <textarea id="runActionLog" readonly style="width:100%; min-height:120px; max-height:220px; resize:vertical; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:12px;"></textarea>
+        </div>
         <div style="display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">
           <button id="cronSetupBtn" class="secondary">Setup cron</button>
           <button id="cronRestartBtn" class="secondary">Restart cron</button>
@@ -2360,9 +2364,12 @@ let actionJobId = null;
 
 async function runDashboardAction(kind, extraBody={}) {
   const el = document.getElementById('runActionStatus');
+  const logEl = document.getElementById('runActionLog');
   const token = document.getElementById('token')?.value || '';
   try {
+    actionLastLogCount = 0;
     el.textContent = 'starting ' + kind + '…';
+    if (logEl) logEl.value = `[${new Date().toLocaleTimeString()}] starting ${kind}...\n`;
     const r = await fetch('/api/actions/run' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -2372,16 +2379,28 @@ async function runDashboardAction(kind, extraBody={}) {
     const j = await r.json();
     actionJobId = j.job_id;
     el.textContent = kind + ' started: ' + actionJobId.slice(0,8);
+    if (logEl) {
+      logEl.value += `[${new Date().toLocaleTimeString()}] job ${actionJobId.slice(0,8)} started\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
   } catch (e) {
     el.textContent = 'error: ' + e;
   }
 }
 
+let actionLastLogCount = 0;
 async function pollActionJob() {
   if (!actionJobId) return;
   const el = document.getElementById('runActionStatus');
+  const logEl = document.getElementById('runActionLog');
   try {
     const st = await getJSON('/api/actions/status?job_id=' + encodeURIComponent(actionJobId));
+    const logs = Array.isArray(st.logs) ? st.logs : [];
+    if (logEl && logs.length !== actionLastLogCount) {
+      logEl.value = logs.join('\n') + (logs.length ? '\n' : '');
+      logEl.scrollTop = logEl.scrollHeight;
+      actionLastLogCount = logs.length;
+    }
     if (st.state === 'running' || st.state === 'starting') {
       const msg = (st.message || '').trim();
       el.textContent = msg ? `${st.kind||'action'}: ${msg}` : `${st.kind||'action'} ${st.state}…`;
@@ -2390,12 +2409,14 @@ async function pollActionJob() {
     if (st.state === 'done') {
       el.textContent = `${st.kind||'action'} done`;
       actionJobId = null;
+      actionLastLogCount = 0;
       main().catch(()=>{});
       return;
     }
     if (st.state === 'error') {
       el.textContent = `${st.kind||'action'} error: ${st.error||'unknown'}`;
       actionJobId = null;
+      actionLastLogCount = 0;
       return;
     }
   } catch {}
