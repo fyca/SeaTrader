@@ -6,6 +6,19 @@ from alpaca.trading.enums import AssetClass
 from alpaca.trading.requests import GetAssetsRequest
 
 
+_STABLECOIN_BASES = {
+    "USDC", "USDT", "DAI", "BUSD", "TUSD", "USDP", "PYUSD", "FDUSD", "GUSD", "LUSD", "FRAX"
+}
+
+
+def _is_stablecoin_symbol(sym: str) -> bool:
+    s = str(sym or "").upper().strip()
+    if not s:
+        return False
+    base = s.split("/")[0] if "/" in s else s
+    return base in _STABLECOIN_BASES
+
+
 @dataclass(frozen=True)
 class CryptoUniverseItem:
     symbol: str
@@ -24,6 +37,8 @@ def list_tradable_crypto(trading_client) -> list[CryptoUniverseItem]:
             continue
         sym = getattr(a, "symbol", None)
         if not sym:
+            continue
+        if _is_stablecoin_symbol(sym):
             continue
         out.append(CryptoUniverseItem(symbol=sym, name=getattr(a, "name", "") or ""))
 
