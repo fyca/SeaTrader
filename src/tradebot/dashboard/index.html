@@ -2383,7 +2383,8 @@ async function pollActionJob() {
   try {
     const st = await getJSON('/api/actions/status?job_id=' + encodeURIComponent(actionJobId));
     if (st.state === 'running' || st.state === 'starting') {
-      el.textContent = `${st.kind||'action'} ${st.state}…`;
+      const msg = (st.message || '').trim();
+      el.textContent = msg ? `${st.kind||'action'}: ${msg}` : `${st.kind||'action'} ${st.state}…`;
       return;
     }
     if (st.state === 'done') {

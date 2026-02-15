@@ -6,6 +6,8 @@ import subprocess
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
+import io
+import contextlib
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -635,25 +637,60 @@ def create_app(*, config_path: str) -> FastAPI:
         }
 
         def _run():
+            class _JobWriter(io.TextIOBase):
+                def __init__(self):
+                    self._buf = ""
+
+                def write(self, s):
+                    try:
+                        txt = str(s)
+                    except Exception:
+                        return 0
+                    self._buf += txt
+                    while "\n" in self._buf:
+                        line, self._buf = self._buf.split("\n", 1)
+                        line = line.strip()
+                        if not line:
+                            continue
+                        action_jobs[job_id]["message"] = line
+                        logs = action_jobs[job_id].setdefault("logs", [])
+                        logs.append(line)
+                        if len(logs) > 40:
+                            del logs[:-40]
+                    return len(txt)
+
+                def flush(self):
+                    if self._buf.strip():
+                        line = self._buf.strip()
+                        action_jobs[job_id]["message"] = line
+                        logs = action_jobs[job_id].setdefault("logs", [])
+                        logs.append(line)
+                        if len(logs) > 40:
+                            del logs[:-40]
+                    self._buf = ""
+
             try:
                 from tradebot.cli import cmd_rebalance
                 from tradebot.commands.risk_check import cmd_risk_check
 
                 action_jobs[job_id]["state"] = "running"
-                if kind == "rebalance":
-                    if wait_until_configured:
-                        # queue persistent weekly scheduler instead of one-shot sleep/run
-                        _ensure_weekly_rebalance_scheduler(preset, place_orders=place_orders)
-                        if queue_daily_risk_check:
-                            _ensure_daily_risk_scheduler(preset)
-                        action_jobs[job_id]["wait_until"] = "configured schedule"
-                        rc = 0
+                w = _JobWriter()
+                with contextlib.redirect_stdout(w), contextlib.redirect_stderr(w):
+                    if kind == "rebalance":
+                        if wait_until_configured:
+                            # queue persistent weekly scheduler instead of one-shot sleep/run
+                            _ensure_weekly_rebalance_scheduler(preset, place_orders=place_orders)
+                            if queue_daily_risk_check:
+                                _ensure_daily_risk_scheduler(preset)
+                            action_jobs[job_id]["wait_until"] = "configured schedule"
+                            rc = 0
+                        else:
+                            ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset, asset_mode=asset_mode)
+                            rc = int(cmd_rebalance(ns))
                     else:
-                        ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset, asset_mode=asset_mode)
-                        rc = int(cmd_rebalance(ns))
-                else:
-                    ns = argparse.Namespace(config=config_path, preset=preset, asset_mode=asset_mode)
-                    rc = int(cmd_risk_check(ns))
+                        ns = argparse.Namespace(config=config_path, preset=preset, asset_mode=asset_mode)
+                        rc = int(cmd_risk_check(ns))
+                w.flush()
                 action_jobs[job_id]["state"] = "done"
                 action_jobs[job_id]["rc"] = rc
                 action_jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()

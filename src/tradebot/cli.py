@@ -89,6 +89,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     )
     append_equity_point(equity=equity, cash=cash)
 
+    print("[rebalance] Phase 1/6: loading universes…")
     # 1) Universes
     eq_univ = list_tradable_equities(clients.trading, exclude_leveraged_etfs=cfg.universe.exclude_leveraged_etfs)
     cr_univ = list_tradable_crypto(clients.trading)
@@ -118,10 +119,12 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
 
     print(f"Universe candidates: equities={len(eq_symbols)} crypto={len(cr_symbols)}")
 
+    print(f"[rebalance] Phase 2/6: fetching bars (equities={len(eq_symbols)}, crypto={len(cr_symbols)})…")
     # 2) Data
     eq_bars = fetch_stock_bars(clients.stocks, eq_symbols, lookback_days=cfg.signals.lookback_days)
     cr_bars = fetch_crypto_bars(clients.crypto, cr_symbols, lookback_days=cfg.signals.lookback_days)
 
+    print(f"[rebalance] Phase 3/6: evaluating strategy '{cfg.strategy_id}'…")
     # 3) Strategy selection
     strat = get_strategy(cfg.strategy_id)
 
@@ -144,6 +147,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                 continue
         cr_sel = keep
 
+    print(f"[rebalance] Phase 4/6: strategy scored candidates.")
     print(f"Selected: equities={len(eq_sel)} crypto={len(cr_sel)}")
     if eq_sel:
         print("Equities:", ", ".join(eq_sel))
@@ -245,6 +249,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                 target_map[sym] = 0.0
                 class_map.setdefault(sym, "crypto" if "/" in sym else "equity")
 
+    print("[rebalance] Phase 5/6: building order plan…")
     # 6) Plan orders
     plans = diff_to_orders(current_notional=current_map, targets=target_map, asset_class_by_symbol=class_map)
 
@@ -377,6 +382,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         sym_fallback_enabled[pl.symbol] = bool(getattr(ex, "fallback_to_market_at_open", False))
         sym_fallback_time[pl.symbol] = str(getattr(ex, "fallback_time_local", "06:30"))
 
+    print("[rebalance] Phase 6/6: submitting orders to Alpaca… 🚀")
     placed = place_notional_market_orders(
         clients.trading,
         plans,
