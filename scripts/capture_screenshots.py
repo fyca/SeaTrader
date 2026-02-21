@@ -15,6 +15,10 @@ PAGES = [
     ("builder", "http://127.0.0.1:8008/builder"),
 ]
 
+HUB_PAGES = [
+    ("hub", "http://127.0.0.1:8099/"),
+]
+
 
 def main() -> None:
     with sync_playwright() as p:
@@ -39,6 +43,15 @@ def main() -> None:
                         path=str(OUT / f"{name}-{theme}-{dens}.png"),
                         full_page=True,
                     )
+
+        # Hub screenshots (single style)
+        for name, url in HUB_PAGES:
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_timeout(1000)
+            page.screenshot(
+                path=str(OUT / f"{name}.png"),
+                full_page=True,
+            )
 
         browser.close()
 

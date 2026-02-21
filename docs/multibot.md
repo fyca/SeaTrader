@@ -38,6 +38,10 @@ python3 multibot/hub_server.py
 
 Open: `http://127.0.0.1:8099`
 
+Hub preview:
+
+![Multi-bot hub](screenshots/hub.png)
+
 ## Script controls
 
 ```bash
