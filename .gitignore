@@ -15,6 +15,9 @@ data/
 .vscode/
 .idea/
 
+# Windows ADS metadata sidecar files
+*:Zone.Identifier
+
 # Multi-bot runtime
 multibot/pids/
 multibot/logs/
