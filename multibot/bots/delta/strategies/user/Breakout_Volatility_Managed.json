@@ -1,0 +1,24 @@
+{
+  "id": "Breakout_Volatility_Managed",
+  "name": "Breakout Volatility Managed",
+  "entry": {
+    "all": [
+      {"left": {"kind": "breakout", "n": 55}, "op": "==", "right": 1},
+      {"left": {"kind": "close"}, "op": ">", "right": {"kind": "sma", "n": 150}},
+      {"left": {"kind": "ann_vol", "n": 20}, "op": "<", "right": 1.15}
+    ]
+  },
+  "exit": {
+    "any": [
+      {"left": {"kind": "close"}, "op": "<", "right": {"kind": "sma", "n": 100}},
+      {"left": {"kind": "lowest", "n": 20}, "op": "==", "right": {"kind": "close"}},
+      {"left": {"kind": "roc", "n": 10}, "op": "<", "right": -0.07}
+    ]
+  },
+  "score_factors": [
+    {"weight": 1.0, "value": {"kind": "roc", "n": 63}},
+    {"weight": 0.55, "value": {"kind": "sma_slope", "n": 100, "lookback": 10}},
+    {"weight": -0.6, "value": {"kind": "ann_vol", "n": 20}},
+    {"weight": 0.2, "value": {"kind": "dist_sma", "n": 150}}
+  ]
+}

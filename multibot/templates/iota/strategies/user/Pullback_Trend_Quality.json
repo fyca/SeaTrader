@@ -1,0 +1,24 @@
+{
+  "id": "Pullback_Trend_Quality",
+  "name": "Pullback Trend Quality",
+  "entry": {
+    "all": [
+      {"left": {"kind": "close"}, "op": ">", "right": {"kind": "sma", "n": 200}},
+      {"left": {"kind": "sma", "n": 50}, "op": ">", "right": {"kind": "sma", "n": 200}},
+      {"left": {"kind": "dist_sma", "n": 50}, "op": "<", "right": 0.03},
+      {"left": {"kind": "rsi", "n": 14}, "op": "<", "right": 58}
+    ]
+  },
+  "exit": {
+    "any": [
+      {"left": {"kind": "close"}, "op": "<", "right": {"kind": "sma", "n": 200}},
+      {"left": {"kind": "rsi", "n": 14}, "op": ">", "right": 72}
+    ]
+  },
+  "score_factors": [
+    {"weight": 0.85, "value": {"kind": "roc", "n": 20}},
+    {"weight": 0.4, "value": {"kind": "sma_slope", "n": 50, "lookback": 7}},
+    {"weight": -0.45, "value": {"kind": "ann_vol", "n": 20}},
+    {"weight": -0.25, "value": {"kind": "dist_sma", "n": 50}}
+  ]
+}

@@ -14,3 +14,10 @@ data/
 .DS_Store
 .vscode/
 .idea/
+
+# Multi-bot runtime
+multibot/pids/
+multibot/logs/
+multibot/bots/*/.env
+multibot/bots/*/data/
+multibot/bots/*/logs/

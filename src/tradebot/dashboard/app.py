@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 import io
 import contextlib
 from pathlib import Path
+from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -21,8 +22,10 @@ from tradebot.backtest.job import start_backtest, get_status as bt_status, get_r
 from tradebot.util.config import load_config
 from tradebot.util.env import load_env
 from tradebot.adapters.alpaca_client import make_alpaca_clients
-from tradebot.util.state import load_state
+from tradebot.util.state import load_state, save_state
 from tradebot.adapters.bars import fetch_stock_bars, fetch_crypto_bars
+from tradebot.util.market_hours import get_market_status
+from tradebot.util.live_ledger import get_runs as live_ledger_runs, get_events as live_ledger_events
 
 
 def _read_json(path: Path):
@@ -186,6 +189,93 @@ def create_app(*, config_path: str) -> FastAPI:
         st = load_state()
         return {"peak_equity": st.peak_equity}
 
+    @app.get("/api/exclusions")
+    def exclusions():
+        st = load_state()
+        excluded = sorted(set([str(s).upper() for s in (st.excluded_symbols or []) if str(s).strip()]))
+
+        env = load_env()
+        clients = make_alpaca_clients(env)
+
+        pos_map: dict[str, dict] = {}
+        try:
+            for p in clients.trading.get_all_positions():
+                sym = str(getattr(p, "symbol", "") or "").upper()
+                if not sym:
+                    continue
+                pos_map[sym] = {
+                    "qty": float(getattr(p, "qty", 0.0) or 0.0),
+                    "qty_available": float(getattr(p, "qty_available", 0.0) or 0.0),
+                    "market_value": float(getattr(p, "market_value", 0.0) or 0.0),
+                    "avg_entry_price": float(getattr(p, "avg_entry_price", 0.0) or 0.0),
+                    "unrealized_pl": float(getattr(p, "unrealized_pl", 0.0) or 0.0),
+                    "unrealized_plpc": float(getattr(p, "unrealized_plpc", 0.0) or 0.0),
+                    "current_price": float(getattr(p, "current_price", 0.0) or 0.0),
+                    "lastday_price": float(getattr(p, "lastday_price", 0.0) or 0.0),
+                }
+        except Exception:
+            pass
+
+        eq_syms = [s for s in excluded if "/" not in s]
+        cr_syms = [s for s in excluded if "/" in s]
+        close_map: dict[str, float] = {}
+        if eq_syms:
+            try:
+                bars = fetch_stock_bars(clients.stocks, eq_syms, lookback_days=10)
+                for s, df in bars.items():
+                    if df is not None and len(df) and "close" in df.columns:
+                        close_map[str(s).upper()] = float(df["close"].dropna().iloc[-1])
+            except Exception:
+                pass
+        if cr_syms:
+            try:
+                bars = fetch_crypto_bars(clients.crypto, cr_syms, lookback_days=10)
+                for s, df in bars.items():
+                    if df is not None and len(df) and "close" in df.columns:
+                        close_map[str(s).upper()] = float(df["close"].dropna().iloc[-1])
+            except Exception:
+                pass
+
+        rows = []
+        for sym in excluded:
+            p = pos_map.get(sym, {})
+            last_trade = p.get("current_price") or close_map.get(sym)
+            rows.append(
+                {
+                    "symbol": sym,
+                    "held": sym in pos_map,
+                    "qty": p.get("qty"),
+                    "qty_available": p.get("qty_available"),
+                    "market_value": p.get("market_value"),
+                    "avg_entry_price": p.get("avg_entry_price"),
+                    "unrealized_pl": p.get("unrealized_pl"),
+                    "unrealized_plpc": p.get("unrealized_plpc"),
+                    "last_trade_price": last_trade,
+                    "last_close": close_map.get(sym),
+                    "reason": "symbol_pnl_floor",
+                }
+            )
+
+        cfg = load_config(config_path)
+        return {
+            "count": len(rows),
+            "floor_pct": getattr(cfg.rebalance, "symbol_pnl_floor_pct", None),
+            "symbols": rows,
+        }
+
+    @app.post("/api/exclusions/remove")
+    async def exclusions_remove(req: Request):
+        require_token(req)
+        body = await req.json()
+        symbol = str((body or {}).get("symbol") or "").strip().upper()
+        if not symbol:
+            raise HTTPException(status_code=400, detail="Missing symbol")
+        st = load_state()
+        cur = [str(s).upper() for s in (st.excluded_symbols or [])]
+        st.excluded_symbols = [s for s in cur if s != symbol]
+        save_state(st)
+        return {"ok": True, "removed": symbol, "count": len(st.excluded_symbols or [])}
+
     @app.get("/api/account")
     def account():
         env = load_env()
@@ -236,6 +326,12 @@ def create_app(*, config_path: str) -> FastAPI:
             "shorting_enabled": bool(getattr(acct, "shorting_enabled", False)),
             "crypto_status": str(getattr(acct, "crypto_status", "")),
         }
+
+    @app.get("/api/market-status")
+    def market_status():
+        env = load_env()
+        clients = make_alpaca_clients(env)
+        return get_market_status(clients.trading)
 
     @app.get("/api/positions")
     def positions():
@@ -391,7 +487,7 @@ def create_app(*, config_path: str) -> FastAPI:
         s = s.strip()
         return s.upper()
 
-    def _orders_by_status(status, limit: int = 500):
+    def _orders_by_status(status, limit: int = 500, include_current_price: bool = False):
         env = load_env()
         clients = make_alpaca_clients(env)
         from alpaca.trading.requests import GetOrdersRequest
@@ -400,11 +496,15 @@ def create_app(*, config_path: str) -> FastAPI:
         orders = clients.trading.get_orders(filter=req)
 
         out = []
+        symbols: list[str] = []
         for o in orders:
+            symbol = getattr(o, "symbol", "")
+            if symbol:
+                symbols.append(symbol)
             out.append(
                 {
                     "id": str(getattr(o, "id", "")),
-                    "symbol": getattr(o, "symbol", ""),
+                    "symbol": symbol,
                     "side": _norm_enum(getattr(o, "side", "")),
                     "status": _norm_enum(getattr(o, "status", "")),
                     "type": _norm_enum(getattr(o, "type", "")),
@@ -418,13 +518,39 @@ def create_app(*, config_path: str) -> FastAPI:
                     "filled_at": str(getattr(o, "filled_at", "")),
                 }
             )
+
+        if include_current_price and out:
+            uniq_syms = sorted(set(s for s in symbols if s))
+            eq_syms = [s for s in uniq_syms if "/" not in s]
+            cr_syms = [s for s in uniq_syms if "/" in s]
+            price_map: dict[str, float] = {}
+            if eq_syms:
+                try:
+                    bars = fetch_stock_bars(clients.stocks, eq_syms, lookback_days=10)
+                    for s, df in bars.items():
+                        if df is not None and len(df) and "close" in df.columns:
+                            price_map[s] = float(df["close"].dropna().iloc[-1])
+                except Exception:
+                    pass
+            if cr_syms:
+                try:
+                    bars = fetch_crypto_bars(clients.crypto, cr_syms, lookback_days=10)
+                    for s, df in bars.items():
+                        if df is not None and len(df) and "close" in df.columns:
+                            price_map[s] = float(df["close"].dropna().iloc[-1])
+                except Exception:
+                    pass
+            for row in out:
+                px = price_map.get(str(row.get("symbol") or ""))
+                row["current_price"] = px if (px is not None and px > 0) else None
+
         return out
 
     @app.get("/api/open-orders")
     def open_orders():
         from alpaca.trading.enums import QueryOrderStatus
 
-        return _orders_by_status(QueryOrderStatus.OPEN, limit=500)
+        return _orders_by_status(QueryOrderStatus.OPEN, limit=500, include_current_price=True)
 
     @app.get("/api/recent-fills")
     def recent_fills(limit: int = 200):
@@ -498,6 +624,47 @@ def create_app(*, config_path: str) -> FastAPI:
         target = target + timedelta(days=delta_days)
         return (target - now).total_seconds(), target.isoformat()
 
+    def _is_equity_trading_day(trading_client, day_local) -> bool:
+        try:
+            ds = day_local.isoformat()
+            cal = trading_client.get_calendar(start=ds, end=ds)
+            for r in cal or []:
+                d = str(getattr(r, "date", "") or "")
+                if d.startswith(ds):
+                    return True
+            return False
+        except Exception:
+            # fallback: weekday heuristic if calendar unavailable
+            return int(day_local.weekday()) < 5
+
+    def _seconds_until_weekly_equity_market_day(day_name: str, hhmm: str, tz_name: str, trading_client) -> tuple[float, str, str | None]:
+        from zoneinfo import ZoneInfo
+
+        day_map = {"MON":0, "TUE":1, "WED":2, "THU":3, "FRI":4, "SAT":5, "SUN":6}
+        wd = day_map.get(str(day_name).upper(), 0)
+        tz = ZoneInfo(tz_name)
+        now = datetime.now(tz)
+        hh, mm = [int(x) for x in str(hhmm).split(":")]
+
+        target = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        delta_days = (wd - now.weekday()) % 7
+        if delta_days == 0 and target <= now:
+            delta_days = 7
+        target = target + timedelta(days=delta_days)
+        base_target = target
+
+        # Roll forward to next equity trading day (holiday/weekend fallback)
+        for _ in range(10):
+            if _is_equity_trading_day(trading_client, target.date()):
+                break
+            target = target + timedelta(days=1)
+
+        note = None
+        if target.date() != base_target.date():
+            note = f"holiday/weekend fallback from {base_target.date().isoformat()}"
+
+        return (target - now).total_seconds(), target.isoformat(), note
+
     def _ensure_weekly_rebalance_scheduler(preset, place_orders: bool = True):
         if bool(schedule_state.get("rebalance_weekly_enabled")):
             return
@@ -525,10 +692,17 @@ def create_app(*, config_path: str) -> FastAPI:
                     cr_tm = str(getattr(cr_s, "rebalance_time_local", getattr(cfg.scheduling, "weekly_rebalance_time_local", "06:35")))
 
                     waits = []
+                    schedule_state["rebalance_next_run_reason_equities"] = None
                     if eq_freq == "daily":
-                        waits.append(("equities", *_seconds_until_local_hhmm(eq_tm, tz_name)))
+                        sec_eq, when_eq = _seconds_until_local_hhmm(eq_tm, tz_name)
+                        waits.append(("equities", sec_eq, when_eq))
                     else:
-                        waits.append(("equities", *_seconds_until_weekly(eq_day, eq_tm, tz_name)))
+                        env2 = load_env()
+                        clients2 = make_alpaca_clients(env2)
+                        sec_eq, when_eq, note_eq = _seconds_until_weekly_equity_market_day(eq_day, eq_tm, tz_name, clients2.trading)
+                        waits.append(("equities", sec_eq, when_eq))
+                        if note_eq:
+                            schedule_state["rebalance_next_run_reason_equities"] = note_eq
                     if cr_freq == "daily":
                         waits.append(("crypto", *_seconds_until_local_hhmm(cr_tm, tz_name)))
                     else:
@@ -771,8 +945,34 @@ def create_app(*, config_path: str) -> FastAPI:
             except Exception:
                 return None
 
+        def _line_for_tag(tag: str):
+            for ln in lines:
+                if tag in ln:
+                    return ln
+            return None
+
+        def _read_text(path: Path):
+            try:
+                if path.exists():
+                    return path.read_text().strip() or None
+            except Exception:
+                return None
+            return None
+
         reb_s = _sched(reb[0]) if reb else None
         risk_s = _sched(risk[0]) if risk else None
+
+        reb_eq_line = _line_for_tag(CRON_TAG_REB_EQ)
+        reb_cr_line = _line_for_tag(CRON_TAG_REB_CR)
+        risk_eq_line = _line_for_tag(CRON_TAG_RISK_EQ)
+        risk_cr_line = _line_for_tag(CRON_TAG_RISK_CR)
+
+        repo = Path(config_path).resolve().parent.parent
+        stamp_reb_eq = _read_text(repo / "data" / "cron_last_run_rebalance_equities.txt")
+        stamp_reb_cr = _read_text(repo / "data" / "cron_last_run_rebalance_crypto.txt")
+        stamp_risk_eq = _read_text(repo / "data" / "cron_last_run_risk_equities.txt")
+        stamp_risk_cr = _read_text(repo / "data" / "cron_last_run_risk_crypto.txt")
+
         return {
             "ok": True,
             "enabled": bool(reb or risk),
@@ -782,6 +982,18 @@ def create_app(*, config_path: str) -> FastAPI:
             "risk_enabled": bool(risk),
             "rebalance_schedule": reb_s,
             "risk_schedule": risk_s,
+            "rebalance_equities_enabled": bool(reb_eq_line),
+            "rebalance_crypto_enabled": bool(reb_cr_line),
+            "risk_equities_enabled": bool(risk_eq_line),
+            "risk_crypto_enabled": bool(risk_cr_line),
+            "rebalance_schedule_equities": _sched(reb_eq_line) if reb_eq_line else None,
+            "rebalance_schedule_crypto": _sched(reb_cr_line) if reb_cr_line else None,
+            "risk_schedule_equities": _sched(risk_eq_line) if risk_eq_line else None,
+            "risk_schedule_crypto": _sched(risk_cr_line) if risk_cr_line else None,
+            "rebalance_last_run_equities": stamp_reb_eq,
+            "rebalance_last_run_crypto": stamp_reb_cr,
+            "risk_last_run_equities": stamp_risk_eq,
+            "risk_last_run_crypto": stamp_risk_cr,
         }
 
     @app.post("/api/scheduler/cron/setup")
@@ -812,10 +1024,15 @@ def create_app(*, config_path: str) -> FastAPI:
 
         repo = Path(config_path).resolve().parent.parent
         cmd_base = f"cd {repo} && source .venv/bin/activate"
-        reb_eq_cmd = f"{cmd_base} && tradebot rebalance --config {config_path} --place-orders --asset-mode equities"
-        reb_cr_cmd = f"{cmd_base} && tradebot rebalance --config {config_path} --place-orders --asset-mode crypto"
-        risk_eq_cmd = f"{cmd_base} && tradebot risk-check --config {config_path} --asset-mode equities"
-        risk_cr_cmd = f"{cmd_base} && tradebot risk-check --config {config_path} --asset-mode crypto"
+        reb_eq_stamp = str(repo / "data" / "cron_last_run_rebalance_equities.txt")
+        reb_cr_stamp = str(repo / "data" / "cron_last_run_rebalance_crypto.txt")
+        risk_eq_stamp = str(repo / "data" / "cron_last_run_risk_equities.txt")
+        risk_cr_stamp = str(repo / "data" / "cron_last_run_risk_crypto.txt")
+
+        reb_eq_cmd = f"{cmd_base} && date -Iseconds > {reb_eq_stamp} && tradebot rebalance --config {config_path} --place-orders --asset-mode equities"
+        reb_cr_cmd = f"{cmd_base} && date -Iseconds > {reb_cr_stamp} && tradebot rebalance --config {config_path} --place-orders --asset-mode crypto"
+        risk_eq_cmd = f"{cmd_base} && date -Iseconds > {risk_eq_stamp} && tradebot risk-check --config {config_path} --asset-mode equities"
+        risk_cr_cmd = f"{cmd_base} && date -Iseconds > {risk_cr_stamp} && tradebot risk-check --config {config_path} --asset-mode crypto"
 
         def _line(hhmm: str, day: str | None, cmd: str, tag: str):
             hh, mm = [int(x) for x in str(hhmm).split(":")]
@@ -1100,6 +1317,235 @@ def create_app(*, config_path: str) -> FastAPI:
             except Exception:
                 continue
         return out
+
+    @app.get("/api/live-ledger/runs")
+    def live_ledger_runs_api(limit: int = 200):
+        return {"runs": live_ledger_runs(limit=limit)}
+
+    @app.get("/api/live-ledger/events")
+    def live_ledger_events_api(limit: int = 500, run_id: str | None = None, kind: str | None = None):
+        return {"events": live_ledger_events(limit=limit, run_id=run_id, kind=kind)}
+
+    @app.get("/api/live-ledger/metrics")
+    def live_ledger_metrics_api(days: int = 90):
+        path = Path("data/equity_curve.jsonl")
+        curve: list[dict] = []
+        if path.exists():
+            for ln in path.read_text().splitlines():
+                if not ln.strip():
+                    continue
+                try:
+                    curve.append(json.loads(ln))
+                except Exception:
+                    continue
+
+        curve.sort(key=lambda x: str(x.get("ts") or ""))
+        events = live_ledger_events(limit=5000)
+
+        def _equity_at_or_before(ts_iso: str | None):
+            if not ts_iso:
+                return None
+            v = None
+            for row in curve:
+                rts = str(row.get("ts") or "")
+                if rts and rts <= ts_iso:
+                    try:
+                        v = float(row.get("equity"))
+                    except Exception:
+                        pass
+                else:
+                    break
+            return v
+
+        latest_eq = float(curve[-1].get("equity")) if curve else None
+        latest_cash = float(curve[-1].get("cash")) if curve else None
+        start_eq = float(curve[0].get("equity")) if curve else None
+
+        max_dd = None
+        cur_dd = None
+        peak = None
+        if curve:
+            peak = float(curve[0].get("equity") or 0.0)
+            dds = []
+            for r in curve:
+                eq = float(r.get("equity") or 0.0)
+                if eq > peak:
+                    peak = eq
+                dd = 0.0 if peak <= 0 else (peak - eq) / peak
+                dds.append(dd)
+            max_dd = max(dds) if dds else None
+            cur_dd = dds[-1] if dds else None
+
+        now_ts = str(curve[-1].get("ts")) if curve else None
+        d1 = None
+        d7 = None
+        d30 = None
+        if now_ts:
+            try:
+                now_dt = datetime.fromisoformat(now_ts.replace("Z", "+00:00"))
+                e1 = _equity_at_or_before((now_dt - timedelta(days=1)).isoformat())
+                e7 = _equity_at_or_before((now_dt - timedelta(days=7)).isoformat())
+                e30 = _equity_at_or_before((now_dt - timedelta(days=30)).isoformat())
+                if latest_eq is not None and e1 not in (None, 0):
+                    d1 = (latest_eq / e1) - 1.0
+                if latest_eq is not None and e7 not in (None, 0):
+                    d7 = (latest_eq / e7) - 1.0
+                if latest_eq is not None and e30 not in (None, 0):
+                    d30 = (latest_eq / e30) - 1.0
+            except Exception:
+                pass
+
+        total_return = None
+        if latest_eq is not None and start_eq not in (None, 0):
+            total_return = (latest_eq / start_eq) - 1.0
+
+        event_counts: dict[str, int] = defaultdict(int)
+        buy_notional = 0.0
+        sell_notional = 0.0
+        for e in events:
+            et = str(e.get("event_type") or "unknown")
+            event_counts[et] += 1
+            try:
+                n = float(e.get("notional_usd") or 0.0)
+            except Exception:
+                n = 0.0
+            if "buy" in et:
+                buy_notional += n
+            if "sell" in et:
+                sell_notional += n
+
+        turnover = None
+        if latest_eq and latest_eq > 0:
+            turnover = (buy_notional + sell_notional) / latest_eq
+
+        daily_curve_last: dict[str, dict] = {}
+        for r in curve:
+            ts = str(r.get("ts") or "")
+            day = ts[:10] if len(ts) >= 10 else ""
+            if not day:
+                continue
+            daily_curve_last[day] = r
+
+        daily_ev: dict[str, dict] = defaultdict(lambda: {
+            "order_count": 0,
+            "buy_notional": 0.0,
+            "sell_notional": 0.0,
+            "exit_signal_count": 0,
+            "liquidation_count": 0,
+        })
+        for e in events:
+            ts = str(e.get("ts") or "")
+            day = ts[:10] if len(ts) >= 10 else ""
+            if not day:
+                continue
+            et = str(e.get("event_type") or "")
+            row = daily_ev[day]
+            if et == "order_submitted":
+                row["order_count"] += 1
+            if et == "exit_signal":
+                row["exit_signal_count"] += 1
+            if et == "liquidation":
+                row["liquidation_count"] += 1
+
+        # Buy/sell notional in daily summary should reflect actual FILLS only
+        # (not planned orders and not merely submitted orders).
+        try:
+            from alpaca.trading.enums import QueryOrderStatus
+
+            closed = _orders_by_status(QueryOrderStatus.CLOSED, limit=500)
+            fills = [o for o in closed if str(o.get("filled_at") or "").strip() not in ("", "None")]
+            for o in fills:
+                ts = str(o.get("filled_at") or "")
+                day = ts[:10] if len(ts) >= 10 else ""
+                if not day:
+                    continue
+                row = daily_ev[day]
+                side = str(o.get("side") or "").lower()
+                try:
+                    n = float(o.get("filled_notional_usd") or 0.0)
+                except Exception:
+                    n = 0.0
+                if n <= 0:
+                    try:
+                        fq = float(o.get("filled_qty") or 0.0)
+                    except Exception:
+                        fq = 0.0
+                    try:
+                        fpx = float(o.get("filled_avg_price") or 0.0)
+                    except Exception:
+                        fpx = 0.0
+                    n = max(0.0, fq * fpx)
+                if side == "buy":
+                    row["buy_notional"] += n
+                elif side == "sell":
+                    row["sell_notional"] += n
+        except Exception:
+            pass
+
+        all_days = sorted(set(daily_curve_last.keys()) | set(daily_ev.keys()))
+        if days > 0:
+            all_days = all_days[-max(1, min(int(days), 3650)) :]
+
+        daily_rows: list[dict] = []
+        prev_eq = None
+        for day in all_days:
+            c = daily_curve_last.get(day) or {}
+            ev = daily_ev.get(day) or {}
+            eq = c.get("equity")
+            cash = c.get("cash")
+            eq_delta = None
+            if eq is not None and prev_eq is not None:
+                try:
+                    eq_delta = float(eq) - float(prev_eq)
+                except Exception:
+                    eq_delta = None
+            if eq is not None:
+                prev_eq = eq
+            daily_rows.append({
+                "day": day,
+                "equity": eq,
+                "cash": cash,
+                "equity_delta": eq_delta,
+                "order_count": ev.get("order_count", 0),
+                "buy_notional": ev.get("buy_notional", 0.0),
+                "sell_notional": ev.get("sell_notional", 0.0),
+                "exit_signal_count": ev.get("exit_signal_count", 0),
+                "liquidation_count": ev.get("liquidation_count", 0),
+            })
+
+        chart = []
+        peak2 = None
+        for r in curve[-max(1, min(int(days) * 24, 5000)) :] if curve else []:
+            try:
+                eq = float(r.get("equity") or 0.0)
+            except Exception:
+                continue
+            if peak2 is None or eq > peak2:
+                peak2 = eq
+            dd = 0.0 if (not peak2 or peak2 <= 0) else (peak2 - eq) / peak2
+            chart.append({"ts": r.get("ts"), "equity": eq, "drawdown": dd})
+
+        return {
+            "summary": {
+                "latest_equity": latest_eq,
+                "latest_cash": latest_cash,
+                "start_equity": start_eq,
+                "total_return": total_return,
+                "return_1d": d1,
+                "return_7d": d7,
+                "return_30d": d30,
+                "current_drawdown": cur_dd,
+                "max_drawdown": max_dd,
+                "order_submitted_count": int(event_counts.get("order_submitted", 0)),
+                "exit_signal_count": int(event_counts.get("exit_signal", 0)),
+                "liquidation_count": int(event_counts.get("liquidation", 0)),
+                "buy_notional_usd": buy_notional,
+                "sell_notional_usd": sell_notional,
+                "turnover_vs_equity": turnover,
+            },
+            "daily": daily_rows,
+            "chart": chart,
+        }
 
     @app.get("/api/benchmarks")
     def benchmarks(start: str, end: str):

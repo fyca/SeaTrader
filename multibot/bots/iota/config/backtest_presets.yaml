@@ -1,0 +1,36 @@
+presets:
+- name: Morning-Breakout-StocksCrypto
+  params:
+    strategy_id: breakout_trend
+    execution_time_mode: daily
+    execution_time: close
+    execution_time_local: "15:55"
+    execution_tz: America/Los_Angeles
+    asset_mode: both
+    rebalance: weekly
+    rebalance_mode: target_notional
+    liquidation_mode: liquidate_non_selected
+    slippage_bps: 10
+    per_asset_stop_loss_pct: null
+    portfolio_dd_stop: 0.2
+    symbol_pnl_floor_pct: -0.005
+    symbol_pnl_floor_liquidate: true
+    symbol_pnl_floor_include_unrealized: true
+- name: default_safe_weekly
+  params:
+    strategy_id: baseline_trendvol
+    execution_time_mode: daily
+    execution_time: close
+    execution_time_local: "15:55"
+    execution_tz: America/Los_Angeles
+    rebalance: weekly
+    asset_mode: both
+    rebalance_mode: target_notional
+    liquidation_mode: liquidate_non_selected
+    slippage_bps: 10
+    per_asset_stop_loss_pct: 0.05
+    portfolio_dd_stop: 0.2
+    execution_time: close
+    symbol_pnl_floor_pct: -0.005
+    symbol_pnl_floor_liquidate: true
+    symbol_pnl_floor_include_unrealized: true

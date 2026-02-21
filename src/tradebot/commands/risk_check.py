@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import uuid
 
 from rich import print
 from alpaca.trading.enums import OrderSide, TimeInForce
@@ -16,10 +17,13 @@ from tradebot.util.env import load_env
 from tradebot.util.state import load_state, save_state
 from tradebot.util.artifacts import write_artifact
 from tradebot.util.equity_curve import append_equity_point
+from tradebot.util.market_hours import get_market_status
+from tradebot.util.live_ledger import append_live_run, append_live_events
 
 
 def cmd_risk_check(args: argparse.Namespace) -> int:
     cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
+    run_id = str(uuid.uuid4())
     run_asset_mode = str(getattr(args, "asset_mode", None) or "both").lower()
     if run_asset_mode not in ("both", "equities", "crypto"):
         run_asset_mode = "both"
@@ -28,6 +32,7 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
 
     acct = clients.trading.get_account()
     equity = float(acct.equity)
+    market_status = get_market_status(clients.trading)
 
     state = load_state()
     dd_trigger = cfg.risk.portfolio_dd_stop if cfg.risk.portfolio_dd_stop is not None else cfg.risk.max_drawdown_freeze
@@ -163,6 +168,15 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                 qty = 0.0
             if qty <= 0:
                 continue
+            if "/" not in sym and not bool(market_status.get("can_place_equity_orders", False)):
+                executed_liquidations.append({
+                    "symbol": sym,
+                    "qty": qty,
+                    "side": "sell",
+                    "status": "skipped_market_closed",
+                    "reason": e.get("reason"),
+                })
+                continue
             if bool(getattr(cfg, "dry_run", False)):
                 executed_liquidations.append({
                     "symbol": sym,
@@ -196,17 +210,50 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                 })
                 print(f"[red]Failed SELL[/red] {sym}: {ex}")
 
-    write_artifact(
-        "last_risk_check.json",
-        {
+    risk_payload = {
+        "run_id": run_id,
+        "equity": equity,
+        "peak_equity": dd_state.peak_equity,
+        "drawdown": dd_state.drawdown,
+        "frozen": dd_state.frozen,
+        "exit_signals": exit_plans,
+        "execute_exit_liquidations": bool(getattr(cfg.risk, "execute_exit_liquidations", False)),
+        "executed_liquidations": executed_liquidations,
+        "market_status": market_status,
+    }
+    write_artifact("last_risk_check.json", risk_payload)
+    append_live_run(
+        run_id=run_id,
+        kind="risk_check",
+        payload={
+            "paper": bool(env.paper),
+            "asset_mode": run_asset_mode,
             "equity": equity,
-            "peak_equity": dd_state.peak_equity,
             "drawdown": dd_state.drawdown,
+            "peak_equity": dd_state.peak_equity,
             "frozen": dd_state.frozen,
-            "exit_signals": exit_plans,
-            "execute_exit_liquidations": bool(getattr(cfg.risk, "execute_exit_liquidations", False)),
-            "executed_liquidations": executed_liquidations,
+            "exit_signal_count": len(exit_plans),
+            "liquidation_count": len(executed_liquidations),
+            "market_status": market_status,
         },
+    )
+    append_live_events(
+        run_id=run_id,
+        kind="risk_check",
+        events=[
+            {
+                "event_type": "exit_signal",
+                **e,
+            }
+            for e in exit_plans
+        ]
+        + [
+            {
+                "event_type": "liquidation",
+                **e,
+            }
+            for e in executed_liquidations
+        ],
     )
     append_equity_point(equity=equity, cash=float(getattr(acct, "cash", 0.0) or 0.0))
 

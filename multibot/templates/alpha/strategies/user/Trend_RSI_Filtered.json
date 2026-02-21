@@ -1,0 +1,26 @@
+{
+  "id": "Trend_RSI_Filtered",
+  "name": "Trend RSI Filtered",
+  "entry": {
+    "all": [
+      {"left": {"kind": "close"}, "op": ">", "right": {"kind": "sma", "n": 200}},
+      {"left": {"kind": "sma", "n": 50}, "op": ">", "right": {"kind": "sma", "n": 200}},
+      {"left": {"kind": "rsi", "n": 14}, "op": "<", "right": 62},
+      {"left": {"kind": "ann_vol", "n": 20}, "op": "<", "right": 0.95}
+    ]
+  },
+  "exit": {
+    "any": [
+      {"left": {"kind": "close"}, "op": "<", "right": {"kind": "sma", "n": 200}},
+      {"left": {"kind": "rsi", "n": 14}, "op": ">", "right": 74},
+      {"left": {"kind": "roc", "n": 20}, "op": "<", "right": -0.08}
+    ]
+  },
+  "score_factors": [
+    {"weight": 0.9, "value": {"kind": "roc", "n": 20}},
+    {"weight": 0.6, "value": {"kind": "sma_slope", "n": 50, "lookback": 10}},
+    {"weight": -0.45, "value": {"kind": "ann_vol", "n": 20}},
+    {"weight": 0.35, "value": {"kind": "dist_sma", "n": 200}},
+    {"weight": -0.15, "value": {"kind": "rsi", "n": 14}}
+  ]
+}

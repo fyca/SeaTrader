@@ -1,0 +1,60 @@
+{
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "sma",
+          "n": 50
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "sma",
+          "n": 50
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      }
+    ]
+  },
+  "id": "Golden_cross",
+  "name": "Golden Cross",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "close"
+      },
+      "weight": 1
+    },
+    {
+      "value": {
+        "kind": "ann_vol",
+        "n": 20
+      },
+      "weight": -0.5
+    },
+    {
+      "value": {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 30
+      },
+      "weight": 0.2
+    }
+  ]
+}

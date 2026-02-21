@@ -8,9 +8,9 @@
   <script>
     (function(){
       try {
-        var t = localStorage.getItem('ui_theme') || 'classic';
+        var t = localStorage.getItem('ui_theme') || 'pro';
         document.documentElement.dataset.theme = t;
-      } catch(e) { document.documentElement.dataset.theme = 'classic'; }
+      } catch(e) { document.documentElement.dataset.theme = 'pro'; }
       try {
         var d = localStorage.getItem('ui_density') || 'comfortable';
         document.documentElement.dataset.density = d;
@@ -23,6 +23,7 @@
     h1 { margin: 0 0 8px 0; }
     *, *::before, *::after { box-sizing: border-box; }
     .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+    .row { display: flex; }
     .card h2 { font-size: 14px; margin: 0 0 8px 0; }
     .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; }
     .accountBlocks { display:grid; grid-template-columns: repeat(12, 1fr); gap:10px; }
@@ -56,6 +57,7 @@
       .col-6 { grid-column: span 12; }
       .accountBlock { grid-column: span 12; }
       .accountKvs { grid-template-columns: 140px 1fr !important; }
+      #kpiGrid { grid-template-columns: 1fr 1fr !important; }
     }
   </style>
 </head>
@@ -75,6 +77,7 @@
         <div class="pill">
           <span class="muted" style="font-size:12px;">Theme</span>
           <select id="themeSel" style="padding:6px 8px;">
+            <option value="pro">Pro</option>
             <option value="classic">Classic</option>
             <option value="fun">Fun</option>
             <option value="dark">Dark</option>
@@ -91,15 +94,54 @@
     </div>
   </div>
   <div class="container">
+    <div class="card" style="padding:10px 12px; margin-top: 12px;">
+      <div class="row" id="mainTabs" style="gap:8px; flex-wrap:wrap;">
+        <a href="#overview" class="pill tabLink" data-view="overview">Overview</a>
+        <a href="#ops" class="pill tabLink" data-view="ops">Trade Ops</a>
+        <a href="#backtests" class="pill tabLink" data-view="backtests">Backtests</a>
+        <a href="/builder" class="pill">Strategy Builder</a>
+        <a href="#settings" class="pill tabLink" data-view="settings">Settings</a>
+      </div>
+    </div>
 
+  <section class="viewSection" data-view="overview">
   <div class="grid" style="margin-top: 16px;">
+    <div class="card col-12" id="statusStrip" style="padding:10px 12px;">
+      <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center;">
+        <span class="pill"><span class="muted">Mode</span><b id="statusMode">—</b></span>
+        <span class="pill"><span class="muted">Risk</span><b id="statusRisk">—</b></span>
+        <span class="pill"><span class="muted">Last rebalance</span><b id="statusRebalance">—</b></span>
+        <span class="pill"><span class="muted">Last risk-check</span><b id="statusRiskCheck">—</b></span>
+        <span class="pill"><span class="muted">Freshness</span><b id="statusFreshness">—</b></span>
+      </div>
+    </div>
+
+    <div class="card col-12" style="padding:10px 12px;">
+      <div class="grid" id="kpiGrid" style="grid-template-columns: repeat(5, minmax(0,1fr)); gap:10px;">
+        <div class="subcard"><div class="muted" style="font-size:12px;">Equity</div><div id="kpiEquity" style="font-weight:700; font-size:20px;">—</div></div>
+        <div class="subcard"><div class="muted" style="font-size:12px;">Daily P/L</div><div id="kpiDay" style="font-weight:700; font-size:20px;">—</div></div>
+        <div class="subcard"><div class="muted" style="font-size:12px;">Drawdown</div><div id="kpiDd" style="font-weight:700; font-size:20px;">—</div></div>
+        <div class="subcard"><div class="muted" style="font-size:12px;">Risk alerts</div><div id="kpiAlerts" style="font-weight:700; font-size:20px;">—</div></div>
+        <div class="subcard"><div class="muted" style="font-size:12px;">Open orders</div><div id="kpiOpenOrders" style="font-weight:700; font-size:20px;">—</div></div>
+      </div>
+    </div>
+
     <div class="card col-12">
       <h2>Account</h2>
       <div class="kvs" id="account"></div>
     </div>
-    <div class="card col-12">
+    <div class="card col-12" id="card-bot-state">
       <h2>Bot state</h2>
       <div class="kvs" id="state"></div>
+      <div class="row" style="justify-content:space-between; align-items:center; margin-top:10px; gap:10px; flex-wrap:wrap;">
+        <div class="pill"><span class="muted">Settings mode</span>
+          <select id="settingsModeSel" style="padding:4px 8px;">
+            <option value="basic">Basic</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </div>
+        <div id="settingsDirtyInline" class="muted">No unsaved changes</div>
+      </div>
       <div style="margin-top:10px;">
         <div class="row" style="justify-content: space-between; align-items: center;">
           <div class="muted" style="margin-bottom:6px;">Strategy (applies to live + rebalance selection)</div>
@@ -126,8 +168,8 @@
         <div class="muted" style="margin: 10px 0 6px 0;">Execution options (paper/live)</div>
         <div class="muted" style="font-size:12px; margin-bottom:8px;">Global fallback controls removed. Configure stocks and crypto independently below.</div>
         <!-- legacy/global fallback controls removed -->
-        <div class="muted" style="margin: 10px 0 6px 0;">Per-asset order settings (live/paper)</div>
-        <div class="assetSplit" style="margin-bottom:8px;">
+        <div class="muted advancedOnly" style="margin: 10px 0 6px 0;">Per-asset order settings (live/paper)</div>
+        <div class="assetSplit advancedOnly" style="margin-bottom:8px;">
           <div class="subcard" style="padding:10px;">
             <div style="font-weight:700; margin-bottom:8px;">Stocks controls</div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
@@ -150,8 +192,8 @@
           </div>
         </div>
 
-        <div class="muted" style="margin: 10px 0 6px 0;">Per-asset schedules (live/paper)</div>
-        <div class="assetSplit" style="margin-bottom:8px;">
+        <div class="muted advancedOnly" style="margin: 10px 0 6px 0;">Per-asset schedules (live/paper)</div>
+        <div class="assetSplit advancedOnly" style="margin-bottom:8px;">
           <div class="subcard" style="padding:10px;">
             <div style="font-weight:700; margin-bottom:8px;">Stocks schedule</div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
@@ -176,7 +218,7 @@
           </div>
         </div>
 
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap:8px;">
+        <div class="advancedOnly" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap:8px;">
           <div>
             <div class="muted" style="font-size:12px;">Min crypto price (live)</div>
             <input id="minCryptoPriceInput" placeholder="e.g. 1.0 or none" />
@@ -209,14 +251,14 @@
         </div>
         <div id="liveScheduleSummary" class="muted" style="margin-top:8px;"></div>
 
-        <div class="muted" style="margin: 10px 0 6px 0;">Config (JSON) — edit and save</div>
-        <textarea id="configEditor" style="width:100%; height:160px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px;"></textarea>
-        <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+        <div class="muted advancedOnly" style="margin: 10px 0 6px 0;">Config (JSON) — edit and save</div>
+        <textarea id="configEditor" class="advancedOnly" style="width:100%; height:160px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px;"></textarea>
+        <div class="advancedOnly" style="display:flex; gap:8px; margin-top:8px; align-items:center;">
           <input id="token" placeholder="token (optional)" style="flex:1;" />
           <button id="saveBtn" class="primary">Save</button>
           <span id="saveStatus" class="muted"></span>
         </div>
-        <div style="display:flex; gap:8px; margin-top:10px; align-items:center; flex-wrap:wrap;">
+        <div class="actionRow" style="margin-top:10px;">
           <button id="runPaperRebalanceBtn" class="primary">Run paper rebalance</button>
           <button id="runScheduledRebalanceBtn" class="secondary">Run at configured time</button>
           <button id="runRiskCheckBtn" class="secondary">Run risk-check</button>
@@ -226,11 +268,29 @@
           <div class="muted" style="font-size:12px; margin-bottom:4px;">Run log</div>
           <textarea id="runActionLog" readonly style="width:100%; min-height:120px; max-height:220px; resize:vertical; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:12px;"></textarea>
         </div>
-        <div style="display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">
+        <div class="actionRow" style="margin-top:8px;">
           <button id="cronSetupBtn" class="secondary">Setup cron</button>
           <button id="cronRestartBtn" class="secondary">Restart cron</button>
           <button id="cronStopBtn" class="danger">Stop cron</button>
           <span id="cronStatusText" class="muted"></span>
+        </div>
+
+        <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+          <div class="row" style="justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:700;">Symbol exclusions</div>
+              <div id="exclusionsMeta" class="muted" style="font-size:12px;">loading…</div>
+            </div>
+            <button id="refreshExclusionsBtn" class="secondary">Refresh</button>
+          </div>
+          <div class="tableWrap" style="margin-top:8px;">
+            <table>
+              <thead>
+                <tr><th>Symbol</th><th>Held</th><th>Last trade</th><th>Qty</th><th>Mkt value</th><th>Avg entry</th><th>Unreal P/L</th><th>Unreal %</th><th>Reason</th><th>Action</th></tr>
+              </thead>
+              <tbody id="exclusionsTable"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -240,7 +300,7 @@
       <div id="equityChart" class="muted">loading…</div>
     </div>
 
-    <div class="card col-12">
+    <div class="card col-12" id="card-backtest">
       <h2>Backtest</h2>
       <div class="muted">These dates are the evaluation window (the backtest will only score performance within this range; it may fetch earlier data as warmup for indicators).</div>
 
@@ -253,13 +313,18 @@
               <button id="btPreset5y" class="secondary">Last 5y</button>
               <input id="btSymbol" placeholder="Single symbol (optional)" style="min-width:260px;" />
               <button id="btRun" class="primary">Run backtest</button>
-              <button id="btRunIter" class="secondary">Run iteration (strict)</button>
-              <select id="btIterAxis" style="min-width:170px;">
-                <option value="execution_time_local">Iterate buy time</option>
-                <option value="risk_check_time_local">Iterate risk-check time</option>
-              </select>
-              <input id="btIterTimes" placeholder="06:30,07:30,08:30" value="06:30,07:30,08:30,09:30,10:30,11:30,12:30" style="min-width:320px;" />
-              <label class="muted" style="display:flex; align-items:center; gap:6px;"><input id="btIterNotifyTg" type="checkbox" /> Telegram notify on completion</label>
+              <details style="display:inline-block;">
+                <summary class="pill" style="cursor:pointer; user-select:none;">Optimization</summary>
+                <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding:8px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2);">
+                  <button id="btRunIter" class="secondary">Run iteration (strict)</button>
+                  <select id="btIterAxis" style="min-width:170px;">
+                    <option value="execution_time_local">Iterate buy time</option>
+                    <option value="risk_check_time_local">Iterate risk-check time</option>
+                  </select>
+                  <input id="btIterTimes" placeholder="06:30,07:30,08:30" value="06:30,07:30,08:30,09:30,10:30,11:30,12:30" style="min-width:320px;" />
+                  <label class="muted" style="display:flex; align-items:center; gap:6px;"><input id="btIterNotifyTg" type="checkbox" /> Telegram notify on completion</label>
+                </div>
+              </details>
               <button id="btClearCache" class="secondary">Clear cache</button>
               <span id="btStatus" class="muted"></span>
             </div>
@@ -488,6 +553,15 @@
         <button id="btIterReportLoad" class="secondary">Load saved report</button>
       </div>
       <div id="btChart" class="muted" style="margin-top:8px;">(no results yet)</div>
+      <div class="row" id="btDetailTabs" style="gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button class="secondary btTabBtn" data-panel="positions">Positions</button>
+        <button class="secondary btTabBtn" data-panel="symbol">Symbol P/L</button>
+        <button class="secondary btTabBtn" data-panel="trades">Trades</button>
+        <button class="secondary btTabBtn" data-panel="ledger">Ledger</button>
+        <button class="secondary btTabBtn" data-panel="jobs">Jobs</button>
+      </div>
+
+      <div id="btPanel-positions" class="btDetailPanel">
       <div class="subcard" style="margin-top:10px; padding:10px;">
         <h2>Open positions at end (unrealized)</h2>
         <div class="tableWrap">
@@ -499,7 +573,9 @@
           </table>
         </div>
       </div>
+      </div>
 
+      <div id="btPanel-symbol" class="btDetailPanel" style="display:none;">
       <div class="subcard" style="margin-top:10px; padding:10px;">
         <h2>P/L by symbol (realized)</h2>
         <div class="muted" style="margin-top:4px;">Click the P/L header to sort ascending/descending.</div>
@@ -519,7 +595,9 @@
         </div>
         <div id="btSymDetail" class="muted" style="margin-top:8px;">(click a symbol to view its chart + trades)</div>
       </div>
+      </div>
 
+      <div id="btPanel-trades" class="btDetailPanel" style="display:none;">
       <div style="margin-top:10px;">
         <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
           <h2 style="margin:0;">Trades (realized)</h2>
@@ -534,8 +612,10 @@
           </table>
         </div>
       </div>
+      </div>
       <!-- backtest presets moved to top -->
 
+      <div id="btPanel-ledger" class="btDetailPanel" style="display:none;">
       <div class="subcard" style="margin-top:10px; padding:10px;">
         <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
           <h2 style="margin:0;">Daily ledger (by date)</h2>
@@ -564,7 +644,9 @@
           </table>
         </div>
       </div>
+      </div>
 
+      <div id="btPanel-jobs" class="btDetailPanel" style="display:none;">
       <div class="muted" style="margin-top:6px;">Note: backtest runs in the background and uses daily prices; it can take a bit.</div>
       <div class="subcard" style="margin-top:10px; padding:10px;">
         <h2>Backtest history</h2>
@@ -576,6 +658,7 @@
             <tbody id="btJobs"></tbody>
           </table>
         </div>
+      </div>
       </div>
     </div>
 
@@ -604,7 +687,7 @@
       <div class="muted" style="margin-top:8px;">Click a row to expand open orders for that symbol.</div>
     </div>
 
-    <div class="card col-12">
+    <div class="card col-12" id="card-last-run">
       <h2>Last run summary</h2>
       <div class="grid">
         <div class="card col-6">
@@ -653,10 +736,10 @@
       </div>
     </div>
 
-    <div class="card col-12">
+    <div class="card col-12" id="card-orders">
       <h2>Orders</h2>
       <div class="muted" id="orderSummary" style="margin: 6px 0 10px 0;">loading…</div>
-      <div style="display:flex; gap:8px; margin-bottom:10px; align-items:center;">
+      <div class="actionRow" style="margin-bottom:10px;">
         <button id="cancelAllBtn" class="danger">Cancel all open orders (paper)</button>
         <span id="cancelStatus" class="muted"></span>
       </div>
@@ -666,7 +749,7 @@
           <div class="tableWrap">
             <table>
               <thead>
-                <tr><th>Symbol</th><th>Side</th><th>Status</th><th>Type</th><th>Notional</th><th>Qty</th><th>Limit</th><th>Stop</th><th>Created</th></tr>
+                <tr><th>Symbol</th><th>Side</th><th>Status</th><th>Type</th><th>Notional</th><th>Qty</th><th>Current Px</th><th>Limit</th><th>Stop</th><th>Created</th></tr>
               </thead>
               <tbody id="openOrders"></tbody>
             </table>
@@ -686,7 +769,7 @@
       </div>
     </div>
 
-    <div class="card col-12">
+    <div class="card col-12" id="card-last-placed">
       <h2>Last placed orders</h2>
       <table>
         <thead>
@@ -695,10 +778,217 @@
         <tbody id="lastPlaced"></tbody>
       </table>
     </div>
+
+    <div class="card col-12" id="card-live-ledger">
+      <h2>Paper/Live ledger (Phase 1.5)</h2>
+      <div class="muted" id="liveLedgerSummary" style="margin: 6px 0 10px 0;">loading…</div>
+      <div class="actionRow" style="margin-bottom:10px; gap:8px; flex-wrap:wrap; align-items:center;">
+        <label>Kind
+          <select id="liveLedgerKindFilter">
+            <option value="">All</option>
+            <option value="rebalance_plan">rebalance_plan</option>
+            <option value="rebalance_execution">rebalance_execution</option>
+            <option value="risk_check">risk_check</option>
+          </select>
+        </label>
+        <label>Symbol
+          <input id="liveLedgerSymbolFilter" type="text" placeholder="AAPL / BTC/USD" style="width:140px;" />
+        </label>
+        <label>From (UTC)
+          <input id="liveLedgerFromFilter" type="date" />
+        </label>
+        <label>To (UTC)
+          <input id="liveLedgerToFilter" type="date" />
+        </label>
+        <button id="liveLedgerApplyFilterBtn" class="secondary">Apply</button>
+        <button id="liveLedgerClearFilterBtn" class="secondary">Clear</button>
+        <button id="liveLedgerExportRunsBtn" class="secondary">Export runs CSV</button>
+        <button id="liveLedgerExportEventsBtn" class="secondary">Export events CSV</button>
+      </div>
+      <div class="subcard" style="margin-bottom:10px; padding:10px;">
+        <h2>Derived metrics</h2>
+        <div class="kvs" id="liveMetricsKvs"></div>
+        <div id="liveMetricsChart" style="height:280px; margin-top:8px;"></div>
+      </div>
+      <div class="subcard" style="margin-bottom:10px; padding:10px;">
+        <h2>Daily summary</h2>
+        <div class="tableWrap" style="max-height:220px;">
+          <table>
+            <thead>
+              <tr><th>Day (UTC)</th><th>Equity</th><th>Δ Equity</th><th>Cash</th><th>Orders</th><th>Buys $</th><th>Sells $</th><th>Exit signals</th><th>Liquidations</th></tr>
+            </thead>
+            <tbody id="liveDailySummary"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="col-6">
+          <h2>Recent runs</h2>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr><th>Time (UTC)</th><th>Run ID</th><th>Kind</th><th>State/Counts</th><th>Equity</th><th>DD</th></tr>
+              </thead>
+              <tbody id="liveRuns"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="col-6">
+          <h2>Recent events</h2>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr><th>Time (UTC)</th><th>Run ID</th><th>Kind</th><th>Type</th><th>Symbol</th><th>Detail</th></tr>
+              </thead>
+              <tbody id="liveEvents"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </section>
+
+  <section class="viewSection" data-view="ops" style="display:none; margin-top:16px;">
+    <div class="grid" id="opsGrid"></div>
+  </section>
+
+  <section class="viewSection" data-view="backtests" style="display:none; margin-top:16px;">
+    <div class="grid" id="backtestsGrid"></div>
+  </section>
+
+  <section class="viewSection" data-view="settings" style="display:none; margin-top:16px;">
+    <div class="grid" id="settingsGrid"></div>
+  </section>
+
+  <div id="settingsStickyBar" class="card" style="display:none; position:sticky; bottom:8px; margin-top:10px; padding:10px 12px; z-index:20;">
+    <div class="row" style="justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div id="settingsDirtyText" class="muted">No unsaved changes</div>
+      <div class="row" style="gap:8px; align-items:center;">
+        <button id="settingsRevertBtn" class="secondary">Revert</button>
+        <button id="settingsSaveBtn" class="primary">Save changes</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
+(function(){
+  const valid = new Set(['overview','ops','backtests','settings']);
+  function currentViewFromHash(){
+    const h = (location.hash || '#overview').replace('#','').trim().toLowerCase();
+    return valid.has(h) ? h : 'overview';
+  }
+  function renderView(){
+    const view = currentViewFromHash();
+    document.querySelectorAll('.viewSection').forEach(sec => {
+      sec.style.display = (sec.dataset.view === view) ? '' : 'none';
+    });
+    document.querySelectorAll('.tabLink').forEach(a => {
+      const on = a.dataset.view === view;
+      a.classList.toggle('tab-active', on);
+    });
+  }
+  function relocateCards(){
+    const opsGrid = document.getElementById('opsGrid');
+    const btGrid = document.getElementById('backtestsGrid');
+    const settingsGrid = document.getElementById('settingsGrid');
+    const map = [
+      ['card-backtest', btGrid],
+      ['card-orders', opsGrid],
+      ['card-last-placed', opsGrid],
+      ['card-last-run', opsGrid],
+      ['card-live-ledger', opsGrid],
+      ['card-bot-state', settingsGrid],
+    ];
+    map.forEach(([id, target]) => {
+      const el = document.getElementById(id);
+      if (el && target && el.parentElement !== target) target.appendChild(el);
+    });
+  }
+
+  window.addEventListener('hashchange', renderView);
+  window.addEventListener('DOMContentLoaded', () => {
+    relocateCards();
+    if (!location.hash) location.hash = '#overview';
+    renderView();
+  });
+})();
+
+let settingsDirty = false;
+
+function setSettingsDirty(flag, msg='') {
+  settingsDirty = Boolean(flag);
+  const t = msg || (settingsDirty ? 'Unsaved changes' : 'No unsaved changes');
+  const a = document.getElementById('settingsDirtyText');
+  const b = document.getElementById('settingsDirtyInline');
+  if (a) a.textContent = t;
+  if (b) b.textContent = t;
+}
+
+function refreshSettingsStickyBar() {
+  const bar = document.getElementById('settingsStickyBar');
+  if (!bar) return;
+  const inSettings = (location.hash || '#overview').replace('#','') === 'settings';
+  bar.style.display = (inSettings && settingsDirty) ? '' : 'none';
+}
+
+function applySettingsMode() {
+  const sel = document.getElementById('settingsModeSel');
+  const mode = sel?.value || 'basic';
+  document.querySelectorAll('.advancedOnly').forEach(el => {
+    el.style.display = (mode === 'advanced') ? '' : 'none';
+  });
+  try { localStorage.setItem('settings_mode', mode); } catch(e) {}
+}
+
+function initBacktestDetailTabs() {
+  const tabs = Array.from(document.querySelectorAll('.btTabBtn'));
+  const panels = Array.from(document.querySelectorAll('.btDetailPanel'));
+  if (!tabs.length || !panels.length) return;
+  const set = (name) => {
+    panels.forEach(p => p.style.display = (p.id === `btPanel-${name}`) ? '' : 'none');
+    tabs.forEach(t => {
+      const on = t.dataset.panel === name;
+      t.classList.toggle('primary', on);
+      t.classList.toggle('secondary', !on);
+    });
+  };
+  tabs.forEach(t => t.addEventListener('click', (e)=>{ e.preventDefault(); set(t.dataset.panel); }));
+  set('positions');
+}
+
+function initSettingsUx() {
+  const sel = document.getElementById('settingsModeSel');
+  if (sel) {
+    const saved = (()=>{ try { return localStorage.getItem('settings_mode'); } catch(e){ return null; } })();
+    sel.value = (saved === 'advanced') ? 'advanced' : 'basic';
+    sel.addEventListener('change', applySettingsMode);
+  }
+  applySettingsMode();
+
+  const mark = () => { setSettingsDirty(true); refreshSettingsStickyBar(); };
+  ['configEditor','strategySelect','stopLossSelect','riskExecLiquidationsSelect','minCryptoPriceInput','minCryptoAdvLiveSelect','maxOrdersInput','maxSingleInput','maxTotalInput'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', mark);
+    el.addEventListener('change', mark);
+  });
+
+  document.getElementById('settingsSaveBtn')?.addEventListener('click', (e)=>{
+    e.preventDefault();
+    document.getElementById('saveBtn')?.click();
+  });
+  document.getElementById('settingsRevertBtn')?.addEventListener('click', (e)=>{
+    e.preventDefault();
+    main().catch(()=>{});
+    setSettingsDirty(false);
+    refreshSettingsStickyBar();
+  });
+  window.addEventListener('hashchange', refreshSettingsStickyBar);
+  refreshSettingsStickyBar();
+}
+
 async function getJSON(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(url + " -> " + r.status);
@@ -1626,10 +1916,11 @@ function initThemePicker() {
 async function main() {
   initThemePicker();
 
-  const [health, cfg, acct, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies, btPresets, latestAction, scheduleStatus, cronStatus] = await Promise.all([
+  const [health, cfg, acct, marketStatus, st, exposure, artifacts, curve, openOrders, recentFills, orderSummary, btJobs, strategies, btPresets, latestAction, scheduleStatus, cronStatus, liveRunsRes, liveEventsRes, liveMetricsRes] = await Promise.all([
     getJSON('/api/health'),
     getJSON('/api/config'),
     getJSON('/api/account'),
+    getJSON('/api/market-status').catch(()=>({})),
     getJSON('/api/state'),
     getJSON('/api/exposure'),
     getJSON('/api/artifacts'),
@@ -1642,13 +1933,268 @@ async function main() {
     getJSON('/api/backtest/presets'),
     getJSON('/api/actions/latest?kind=rebalance').catch(()=>({state:'missing'})),
     getJSON('/api/actions/schedule-status').catch(()=>({risk_daily_enabled:false})),
-    getJSON('/api/scheduler/cron-status').catch(()=>({enabled:false, rebalance:[], risk:[]}))
+    getJSON('/api/scheduler/cron-status').catch(()=>({enabled:false, rebalance:[], risk:[]})),
+    getJSON('/api/live-ledger/runs?limit=100').catch(()=>({runs:[]})),
+    getJSON('/api/live-ledger/events?limit=120').catch(()=>({events:[]})),
+    getJSON('/api/live-ledger/metrics?days=120').catch(()=>({summary:{},daily:[],chart:[]}))
   ]);
 
   const frozen = artifacts.last_account?.payload?.frozen;
   const dd = artifacts.last_account?.payload?.drawdown;
   const status = frozen ? 'FROZEN' : 'OK';
   document.getElementById('subtitle').textContent = `paper=${acct.paper} • status=${status}${(dd!==undefined && dd!==null) ? (' • dd=' + pct(dd)) : ''} • updated ${health.ts}`;
+
+  // Overview status strip + KPI tiles
+  const lastRebalanceTs = artifacts.last_rebalance?.ts || artifacts.last_rebalance?.payload?.ts || '—';
+  const lastRiskTs = artifacts.last_risk_check?.ts || artifacts.last_risk_check?.payload?.ts || '—';
+  const riskPayload = artifacts.last_risk_check?.payload || {};
+  const riskAlerts = (Array.isArray(riskPayload.executed_liquidations) ? riskPayload.executed_liquidations.length : 0)
+    + (Array.isArray(riskPayload.exit_signals) ? riskPayload.exit_signals.length : 0);
+  const dayDelta = (acct.day_change_equity==null ? '—' : (money(acct.day_change_equity) + ' (' + pct(acct.day_change_equity_pct) + ')'));
+
+  const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+  setTxt('statusMode', acct.paper ? 'Paper' : 'Live');
+  setTxt('statusRisk', status);
+  setTxt('statusRebalance', lastRebalanceTs);
+  setTxt('statusRiskCheck', lastRiskTs);
+  setTxt('statusFreshness', health.ts || '—');
+
+  setTxt('kpiEquity', money(acct.equity));
+  setTxt('kpiDay', dayDelta);
+  setTxt('kpiDd', dd==null ? '—' : pct(dd));
+  setTxt('kpiAlerts', riskAlerts);
+  setTxt('kpiOpenOrders', Array.isArray(openOrders) ? openOrders.length : 0);
+
+  const liveRuns = Array.isArray(liveRunsRes?.runs) ? liveRunsRes.runs : [];
+  const liveEvents = Array.isArray(liveEventsRes?.events) ? liveEventsRes.events : [];
+  const kindFilterEl = document.getElementById('liveLedgerKindFilter');
+  const symbolFilterEl = document.getElementById('liveLedgerSymbolFilter');
+  const fromFilterEl = document.getElementById('liveLedgerFromFilter');
+  const toFilterEl = document.getElementById('liveLedgerToFilter');
+
+  const lm = liveMetricsRes?.summary || {};
+  const lmKvs = document.getElementById('liveMetricsKvs');
+  if (lmKvs) {
+    lmKvs.innerHTML = '';
+    const addLm = (k,v) => {
+      const d1 = document.createElement('div'); d1.className='muted'; d1.textContent = k;
+      const d2 = document.createElement('div'); d2.textContent = v;
+      lmKvs.appendChild(d1); lmKvs.appendChild(d2);
+    };
+    addLm('Latest equity', lm.latest_equity==null ? '—' : money(lm.latest_equity));
+    addLm('Latest cash', lm.latest_cash==null ? '—' : money(lm.latest_cash));
+    addLm('Total return', lm.total_return==null ? '—' : pct(lm.total_return));
+    addLm('1D / 7D / 30D', `${lm.return_1d==null?'—':pct(lm.return_1d)} / ${lm.return_7d==null?'—':pct(lm.return_7d)} / ${lm.return_30d==null?'—':pct(lm.return_30d)}`);
+    addLm('Current / Max DD', `${lm.current_drawdown==null?'—':pct(lm.current_drawdown)} / ${lm.max_drawdown==null?'—':pct(lm.max_drawdown)}`);
+    addLm('Orders submitted', lm.order_submitted_count==null ? '—' : String(lm.order_submitted_count));
+    addLm('Exit signals / Liquidations', `${lm.exit_signal_count||0} / ${lm.liquidation_count||0}`);
+    addLm('Buy / Sell notional', `${money(lm.buy_notional_usd||0)} / ${money(lm.sell_notional_usd||0)}`);
+    addLm('Turnover vs equity', lm.turnover_vs_equity==null ? '—' : pct(lm.turnover_vs_equity));
+  }
+
+  const ldTb = document.getElementById('liveDailySummary');
+  if (ldTb) {
+    ldTb.innerHTML = '';
+    const rows = Array.isArray(liveMetricsRes?.daily) ? liveMetricsRes.daily.slice().reverse().slice(0,120) : [];
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${r.day||''}</td>`
+        + `<td>${r.equity==null?'—':money(r.equity)}</td>`
+        + `<td>${r.equity_delta==null?'—':money(r.equity_delta)}</td>`
+        + `<td>${r.cash==null?'—':money(r.cash)}</td>`
+        + `<td>${r.order_count??0}</td>`
+        + `<td>${money(r.buy_notional||0)}</td>`
+        + `<td>${money(r.sell_notional||0)}</td>`
+        + `<td>${r.exit_signal_count??0}</td>`
+        + `<td>${r.liquidation_count??0}</td>`;
+      ldTb.appendChild(tr);
+    }
+    if (!ldTb.children.length) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="9" class="muted">(no daily metrics yet)</td>`;
+      ldTb.appendChild(tr);
+    }
+  }
+
+  const lmChart = document.getElementById('liveMetricsChart');
+  const lmPts = Array.isArray(liveMetricsRes?.chart) ? liveMetricsRes.chart : [];
+  if (lmChart && typeof Plotly !== 'undefined') {
+    const xs = lmPts.map(p=>p.ts);
+    const ysEq = lmPts.map(p=>p.equity);
+    const ysDd = lmPts.map(p=> (p.drawdown==null?null:(p.drawdown*100)));
+    Plotly.newPlot('liveMetricsChart', [
+      {x:xs, y:ysEq, type:'scatter', mode:'lines', name:'Equity', line:{color:'#2563eb'}},
+      {x:xs, y:ysDd, type:'scatter', mode:'lines', name:'Drawdown %', yaxis:'y2', line:{color:'#dc2626', dash:'dot'}},
+    ], {
+      margin:{l:50,r:50,t:10,b:36},
+      hovermode:'x unified',
+      xaxis:{title:'Time'},
+      yaxis:{title:'Equity ($)'},
+      yaxis2:{title:'DD %', overlaying:'y', side:'right'},
+      legend:{orientation:'h'}
+    }, {displaylogo:false, responsive:true});
+  }
+
+  const toDay = (s) => {
+    if (!s) return '';
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0,10);
+  };
+
+  let liveLedgerFocusedRunId = '';
+
+  const applyLedgerFilters = () => {
+    const kindVal = String(kindFilterEl?.value || '').trim();
+    const symNeedle = String(symbolFilterEl?.value || '').trim().toUpperCase();
+    const fromDay = String(fromFilterEl?.value || '').trim();
+    const toDayVal = String(toFilterEl?.value || '').trim();
+
+    const runsFiltered = liveRuns.filter(r => {
+      if (kindVal && String(r.kind||'') !== kindVal) return false;
+      const d = toDay(r.ts);
+      if (fromDay && d && d < fromDay) return false;
+      if (toDayVal && d && d > toDayVal) return false;
+      return true;
+    });
+
+    const eventsFiltered = liveEvents.filter(e => {
+      if (kindVal && String(e.kind||'') !== kindVal) return false;
+      if (liveLedgerFocusedRunId && String(e.run_id||'') !== liveLedgerFocusedRunId) return false;
+      if (symNeedle && !String(e.symbol||'').toUpperCase().includes(symNeedle)) return false;
+      const d = toDay(e.ts);
+      if (fromDay && d && d < fromDay) return false;
+      if (toDayVal && d && d > toDayVal) return false;
+      return true;
+    });
+
+    const llSummary = document.getElementById('liveLedgerSummary');
+    if (llSummary) {
+      const focusTxt = liveLedgerFocusedRunId ? ` • focused run: ${liveLedgerFocusedRunId}` : '';
+      llSummary.textContent = `runs: ${runsFiltered.length}/${liveRuns.length} • events: ${eventsFiltered.length}/${liveEvents.length}${focusTxt}`;
+    }
+
+    const lrTb = document.getElementById('liveRuns');
+    if (lrTb) {
+      lrTb.innerHTML = '';
+      for (const r of runsFiltered.slice(0, 200)) {
+        const p = r.payload || {};
+        const tr = document.createElement('tr');
+        const stateTxt = (p.state || '')
+          || ((p.plan_count!=null) ? (`plans ${p.plan_count}`) : '')
+          || ((p.exit_signal_count!=null) ? (`exits ${p.exit_signal_count}`) : '');
+        tr.innerHTML = `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${r.ts||''}</td>`
+          + `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${r.run_id||''}</td>`
+          + `<td>${r.kind||''}</td>`
+          + `<td>${stateTxt||'—'}</td>`
+          + `<td>${p.equity==null ? '—' : money(p.equity)}</td>`
+          + `<td>${p.drawdown==null ? '—' : pct(p.drawdown)}</td>`;
+        tr.style.cursor = 'pointer';
+        if (liveLedgerFocusedRunId && String(r.run_id||'') === liveLedgerFocusedRunId) {
+          tr.style.outline = '1px solid var(--accent, #2563eb)';
+          tr.style.outlineOffset = '-1px';
+        }
+        tr.title = 'Click to focus events on this run id';
+        tr.addEventListener('click', () => {
+          const rid = String(r.run_id || '');
+          liveLedgerFocusedRunId = (liveLedgerFocusedRunId === rid) ? '' : rid;
+          applyLedgerFilters();
+        });
+        lrTb.appendChild(tr);
+      }
+      if (!lrTb.children.length) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="6" class="muted">(no ledger runs for filter)</td>`;
+        lrTb.appendChild(tr);
+      }
+    }
+
+    const leTb = document.getElementById('liveEvents');
+    if (leTb) {
+      leTb.innerHTML = '';
+      for (const e of eventsFiltered.slice(0, 300)) {
+        const tr = document.createElement('tr');
+        const detail = (e.reason || e.status || e.error || (e.notional_usd!=null ? money(e.notional_usd) : ''));
+        tr.innerHTML = `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${e.ts||''}</td>`
+          + `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${e.run_id||''}</td>`
+          + `<td>${e.kind||''}</td>`
+          + `<td>${e.event_type||''}</td>`
+          + `<td>${e.symbol||'—'}</td>`
+          + `<td>${detail||'—'}</td>`;
+        leTb.appendChild(tr);
+      }
+      if (!leTb.children.length) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="6" class="muted">(no ledger events for filter)</td>`;
+        leTb.appendChild(tr);
+      }
+    }
+
+    return { runsFiltered, eventsFiltered };
+  };
+
+  const rowsToCsv = (rows, cols) => {
+    const esc = (v) => {
+      const s = String(v == null ? '' : v);
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    const lines = [cols.join(',')];
+    for (const r of rows) lines.push(cols.map(c => esc(r[c])).join(','));
+    return lines.join('\n');
+  };
+
+  const downloadCsv = (filename, content) => {
+    const blob = new Blob([content], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ try { a.remove(); } catch(e){} URL.revokeObjectURL(url); }, 0);
+  };
+
+  const bindBtn = (id, fn) => {
+    const b = document.getElementById(id);
+    if (!b || b.dataset.bound === '1') return;
+    b.dataset.bound = '1';
+    b.addEventListener('click', fn);
+  };
+
+  bindBtn('liveLedgerApplyFilterBtn', () => { applyLedgerFilters(); });
+  bindBtn('liveLedgerClearFilterBtn', () => {
+    if (kindFilterEl) kindFilterEl.value = '';
+    if (symbolFilterEl) symbolFilterEl.value = '';
+    if (fromFilterEl) fromFilterEl.value = '';
+    if (toFilterEl) toFilterEl.value = '';
+    liveLedgerFocusedRunId = '';
+    applyLedgerFilters();
+  });
+  bindBtn('liveLedgerExportRunsBtn', () => {
+    const { runsFiltered } = applyLedgerFilters();
+    const rows = runsFiltered.map(r => {
+      const p = r.payload || {};
+      return {
+        ts: r.ts || '', run_id: r.run_id || '', kind: r.kind || '',
+        state: p.state || '', equity: p.equity ?? '', drawdown: p.drawdown ?? '',
+        plan_count: p.plan_count ?? '', buy_count: p.buy_count ?? '', sell_count: p.sell_count ?? '',
+        placed_count: p.placed_count ?? '', exit_signal_count: p.exit_signal_count ?? '', liquidation_count: p.liquidation_count ?? ''
+      };
+    });
+    downloadCsv('live_ledger_runs.csv', rowsToCsv(rows, ['ts','run_id','kind','state','equity','drawdown','plan_count','buy_count','sell_count','placed_count','exit_signal_count','liquidation_count']));
+  });
+  bindBtn('liveLedgerExportEventsBtn', () => {
+    const { eventsFiltered } = applyLedgerFilters();
+    const rows = eventsFiltered.map(e => ({
+      ts: e.ts || '', run_id: e.run_id || '', kind: e.kind || '', event_type: e.event_type || '',
+      symbol: e.symbol || '', side: e.side || '', reason: e.reason || '', status: e.status || '',
+      notional_usd: e.notional_usd ?? '', qty: e.qty ?? '', order_id: e.order_id || '', error: e.error || ''
+    }));
+    downloadCsv('live_ledger_events.csv', rowsToCsv(rows, ['ts','run_id','kind','event_type','symbol','side','reason','status','notional_usd','qty','order_id','error']));
+  });
+
+  applyLedgerFilters();
 
   const accountEl = document.getElementById('account');
   accountEl.innerHTML = '';
@@ -1675,6 +2221,17 @@ async function main() {
     ['Status', (acct.status || '—') + (acct.paper ? ' (paper)' : '')],
     ['Currency', acct.currency || 'USD'],
     ['Crypto status', acct.crypto_status || '—'],
+  ]);
+
+  const phase = String(marketStatus?.market_phase || '—');
+  mkBlock('Market (Equities)', [
+    ['Trading day', String(Boolean(marketStatus?.is_trading_day))],
+    ['Phase', phase],
+    ['Regular open now', String(Boolean(marketStatus?.clock_is_open))],
+    ['In pre/post window', String(Boolean(marketStatus?.in_extended_window))],
+    ['Can place equity orders', String(Boolean(marketStatus?.can_place_equity_orders))],
+    ['Next open', marketStatus?.next_open || '—'],
+    ['Next close', marketStatus?.next_close || '—'],
   ]);
 
   mkBlock('Cash & Equity (Today)', [
@@ -1715,25 +2272,40 @@ async function main() {
   // If cron is enabled, treat queue flags as true and show cron schedule.
   const queued = cronReb || Boolean(scheduleStatus?.rebalance_weekly_enabled);
   kv(stateEl, 'Run-at-time queued', queued ? 'YES' : 'NO');
-  if (cronReb && cronStatus?.rebalance_schedule) {
-    kv(stateEl, 'Rebalance schedule', `${cronStatus.rebalance_schedule.day} ${cronStatus.rebalance_schedule.hhmm} (cron)`);
-  } else if (queued) {
+
+  const eqRebCfg = Boolean(cronStatus?.rebalance_equities_enabled);
+  const crRebCfg = Boolean(cronStatus?.rebalance_crypto_enabled);
+  const eqRiskCfg = Boolean(cronStatus?.risk_equities_enabled);
+  const crRiskCfg = Boolean(cronStatus?.risk_crypto_enabled);
+
+  const fmtSched = (s) => s ? `${s.day} ${s.hhmm}` : '—';
+  kv(stateEl, 'Cron: Stocks rebalance', eqRebCfg ? `YES • ${fmtSched(cronStatus?.rebalance_schedule_equities)}` : 'NO');
+  kv(stateEl, 'Cron: Crypto rebalance', crRebCfg ? `YES • ${fmtSched(cronStatus?.rebalance_schedule_crypto)}` : 'NO');
+  kv(stateEl, 'Cron: Stocks risk-check', eqRiskCfg ? `YES • ${fmtSched(cronStatus?.risk_schedule_equities)}` : 'NO');
+  kv(stateEl, 'Cron: Crypto risk-check', crRiskCfg ? `YES • ${fmtSched(cronStatus?.risk_schedule_crypto)}` : 'NO');
+
+  kv(stateEl, 'Last run: Stocks rebalance', cronStatus?.rebalance_last_run_equities || '—');
+  kv(stateEl, 'Last run: Crypto rebalance', cronStatus?.rebalance_last_run_crypto || '—');
+  kv(stateEl, 'Last run: Stocks risk-check', cronStatus?.risk_last_run_equities || '—');
+  kv(stateEl, 'Last run: Crypto risk-check', cronStatus?.risk_last_run_crypto || '—');
+
+  if (!cronReb && queued) {
     kv(stateEl, 'Rebalance next run', scheduleStatus?.rebalance_next_run || '—');
+    if (scheduleStatus?.rebalance_next_run_reason_equities) {
+      kv(stateEl, 'Rebalance equities schedule note', String(scheduleStatus.rebalance_next_run_reason_equities));
+    }
     kv(stateEl, 'Rebalance scheduler', (scheduleStatus?.rebalance_last_state || 'running') + (scheduleStatus?.rebalance_last_error ? (' • ' + scheduleStatus.rebalance_last_error) : ''));
-  } else {
+  } else if (!queued) {
     kv(stateEl, 'Run-at-time', 'Click "Run at configured time" to queue');
   }
 
   const riskQueued = cronRisk || Boolean(scheduleStatus?.risk_daily_enabled);
   kv(stateEl, 'Daily risk-check queued', riskQueued ? 'YES' : 'NO');
-  if (cronRisk && cronStatus?.risk_schedule) {
-    kv(stateEl, 'Risk schedule', `${cronStatus.risk_schedule.hhmm} daily (cron)`);
-  } else if (scheduleStatus?.risk_daily_enabled) {
+  if (!cronRisk && scheduleStatus?.risk_daily_enabled) {
     kv(stateEl, 'Risk next run', scheduleStatus?.risk_next_run || '—');
     kv(stateEl, 'Risk scheduler', (scheduleStatus?.risk_last_state || 'running') + (scheduleStatus?.risk_last_error ? (' • ' + scheduleStatus.risk_last_error) : ''));
   }
   kv(stateEl, 'Cron scheduler enabled', cronStatus?.enabled ? 'YES' : 'NO');
-
   // Strategy dropdown (live)
   const stratSel = document.getElementById('strategySelect');
   if (stratSel && strategies) {
@@ -2172,7 +2744,8 @@ async function main() {
     const tr = document.createElement('tr');
     const lim = (o.limit_price!==null && o.limit_price!==undefined) ? ('$' + Number(o.limit_price).toFixed(2)) : '—';
     const stp = (o.stop_price!==null && o.stop_price!==undefined) ? ('$' + Number(o.stop_price).toFixed(2)) : '—';
-    tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${o.status}</td><td>${o.type||''}</td><td>${o.notional_usd ? money(o.notional_usd) : '—'}</td><td>${o.qty || '—'}</td><td>${lim}</td><td>${stp}</td><td>${o.created_at || ''}</td>`;
+    const cur = (o.current_price!==null && o.current_price!==undefined) ? ('$' + Number(o.current_price).toFixed(4)) : '—';
+    tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${o.status}</td><td>${o.type||''}</td><td>${o.notional_usd ? money(o.notional_usd) : '—'}</td><td>${o.qty || '—'}</td><td>${cur}</td><td>${lim}</td><td>${stp}</td><td>${o.created_at || ''}</td>`;
     oo.appendChild(tr);
   }
 
@@ -2204,10 +2777,24 @@ async function main() {
   // Last placed orders
   const lp = document.getElementById('lastPlaced');
   lp.innerHTML = '';
-  const placed = artifacts.last_placed_orders?.payload?.orders || [];
+  const lastRebTs = String(artifacts.last_rebalance?.ts || '');
+  const lastPlacedTs = String(artifacts.last_placed_orders?.ts || '');
+  const placedStale = Boolean(lastRebTs && lastPlacedTs && (lastPlacedTs < lastRebTs));
+  const placedState = String(artifacts.last_placed_orders?.payload?.state || '');
+  const placedErr = artifacts.last_placed_orders?.payload?.error;
+  const placed = placedStale ? [] : (artifacts.last_placed_orders?.payload?.orders || []);
   for (const o of placed) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${o.symbol}</td><td>${o.side}</td><td>${money(o.notional_usd)}</td><td style="font-family: ui-monospace, monospace; font-size: 11px;">${o.id}</td>`;
+    lp.appendChild(tr);
+  }
+  if (lp.children.length === 0) {
+    const tr = document.createElement('tr');
+    let msg = '(none)';
+    if (placedStale) msg = 'No placed-orders snapshot for latest rebalance yet (older snapshot hidden).';
+    if (placedState === 'error') msg = `Order submit error: ${placedErr || 'unknown error'}`;
+    if (placedState === 'submitting') msg = 'Submitting orders…';
+    tr.innerHTML = `<td colspan="4" class="muted">${msg}</td>`;
     lp.appendChild(tr);
   }
 
@@ -2317,10 +2904,46 @@ async function main() {
 
   document.getElementById('rebalance').textContent = artifacts.last_rebalance ? JSON.stringify(artifacts.last_rebalance, null, 2) : '(none yet)';
   document.getElementById('risk').textContent = artifacts.last_risk_check ? JSON.stringify(artifacts.last_risk_check, null, 2) : '(none yet)';
+
+  await renderExclusions();
+}
+
+async function renderExclusions() {
+  const meta = document.getElementById('exclusionsMeta');
+  const body = document.getElementById('exclusionsTable');
+  if (!meta || !body) return;
+  try {
+    const ex = await getJSON('/api/exclusions');
+    const floor = ex?.floor_pct;
+    const floorTxt = (floor===null || floor===undefined) ? 'none' : `${(Number(floor)*100).toFixed(2)}%`;
+    meta.textContent = `${Number(ex?.count||0)} symbol(s) excluded • floor=${floorTxt}`;
+    body.innerHTML = '';
+    for (const r of (ex?.symbols || [])) {
+      const tr = document.createElement('tr');
+      const pl = (r.unrealized_pl!==null && r.unrealized_pl!==undefined) ? money(r.unrealized_pl) : '—';
+      const plp = (r.unrealized_plpc!==null && r.unrealized_plpc!==undefined) ? pct(r.unrealized_plpc) : '—';
+      const last = (r.last_trade_price!==null && r.last_trade_price!==undefined) ? money(r.last_trade_price) : '—';
+      const qty = (r.qty!==null && r.qty!==undefined) ? Number(r.qty).toFixed(6) : '—';
+      const mv = (r.market_value!==null && r.market_value!==undefined) ? money(r.market_value) : '—';
+      const avg = (r.avg_entry_price!==null && r.avg_entry_price!==undefined) ? money(r.avg_entry_price) : '—';
+      tr.innerHTML = `<td>${r.symbol||'—'}</td><td>${String(Boolean(r.held))}</td><td>${last}</td><td>${qty}</td><td>${mv}</td><td>${avg}</td><td>${pl}</td><td>${plp}</td><td>${r.reason||'—'}</td><td><button class="secondary" data-remove-excl="${r.symbol||''}">Remove</button></td>`;
+      body.appendChild(tr);
+    }
+    if (body.children.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="10" class="muted">(none)</td>';
+      body.appendChild(tr);
+    }
+  } catch (e) {
+    meta.textContent = 'error loading exclusions';
+    body.innerHTML = '<tr><td colspan="10" class="muted">failed to load exclusions</td></tr>';
+  }
 }
 
 setDefaultBacktestDates();
 refreshIterationReportsList().catch(()=>{});
+initBacktestDetailTabs();
+initSettingsUx();
 
 main().catch(err => {
   document.getElementById('subtitle').textContent = 'error: ' + err;
@@ -2405,8 +3028,12 @@ async function saveConfig() {
       ed.dataset.loaded = '1';
     }
     status.textContent = 'saved';
+    setSettingsDirty(false);
+    refreshSettingsStickyBar();
   } catch (e) {
     status.textContent = 'error: ' + e;
+    setSettingsDirty(true, 'Unsaved changes (save failed)');
+    refreshSettingsStickyBar();
   }
 }
 
@@ -2537,6 +3164,31 @@ async function doCron(action) {
 document.getElementById('cronSetupBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); doCron('setup'); });
 document.getElementById('cronRestartBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); doCron('restart'); });
 document.getElementById('cronStopBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); if(confirm('Disable SeaTrader cron schedules?')) doCron('stop'); });
+
+document.getElementById('refreshExclusionsBtn')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  await renderExclusions();
+});
+
+document.getElementById('exclusionsTable')?.addEventListener('click', async (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest('button[data-remove-excl]') : null;
+  if (!btn) return;
+  const symbol = String(btn.getAttribute('data-remove-excl') || '').trim().toUpperCase();
+  if (!symbol) return;
+  if (!confirm(`Remove ${symbol} from exclusions?`)) return;
+  const token = document.getElementById('token')?.value || '';
+  try {
+    const r = await fetch('/api/exclusions/remove' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({symbol})
+    });
+    if (!r.ok) throw new Error(await r.text());
+    await renderExclusions();
+  } catch (err) {
+    alert('Failed to remove exclusion: ' + err);
+  }
+});
 
 document.getElementById('btRun')?.addEventListener('click', (e) => {
   e.preventDefault();

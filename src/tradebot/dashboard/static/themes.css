@@ -42,24 +42,46 @@ Keep this file small and variable-driven so we can add themes without touching H
 
 :root[data-theme="classic"] {
   color-scheme: light;
-  --bg: #ffffff;
+  --bg: #f8fafc;
   --panel: #ffffff;
-  --panel-2: #ffffff;
-  --text: #111111;
-  --muted: #666666;
-  --border: #e5e7eb;
+  --panel-2: #f8fafc;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
 
   --accent: #2563eb;
   --accent-2: #16a34a;
-  --danger: #7f1d1d;
+  --danger: #b91c1c;
 
-  --btn-bg: #111827;
+  --btn-bg: #0f172a;
   --btn-text: #ffffff;
   --btn-bg-2: #ffffff;
-  --btn-text-2: #111827;
+  --btn-text-2: #0f172a;
 
-  --shadow-sm: none;
-  --shadow-md: none;
+  --shadow-sm: 0 2px 10px rgba(2,6,23,.05);
+  --shadow-md: 0 14px 40px rgba(2,6,23,.12);
+}
+
+:root[data-theme="pro"] {
+  color-scheme: dark;
+  --bg: #0a0f1a;
+  --panel: #0f172a;
+  --panel-2: #111b31;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --border: rgba(148,163,184,.22);
+
+  --accent: #3b82f6;
+  --accent-2: #22c55e;
+  --danger: #f87171;
+
+  --btn-bg: #1d4ed8;
+  --btn-text: #eff6ff;
+  --btn-bg-2: #0b1220;
+  --btn-text-2: #e5e7eb;
+
+  --shadow-sm: 0 2px 10px rgba(0,0,0,.35);
+  --shadow-md: 0 16px 44px rgba(0,0,0,.45);
 }
 
 :root[data-theme="fun"] {
@@ -187,6 +209,11 @@ a:hover { opacity: .92; }
   box-shadow: var(--shadow-sm);
 }
 
+:root[data-theme="pro"] .card {
+  border-color: rgba(148,163,184,.20);
+  box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, var(--shadow-sm);
+}
+
 /* Controls */
 
 input, select, textarea, button {
@@ -226,6 +253,8 @@ input:focus, select:focus, textarea:focus, button:focus {
 
 button {
   transition: transform .06s ease, opacity .12s ease, box-shadow .12s ease;
+  min-height: 34px;
+  font-weight: 600;
 }
 
 button:active {
@@ -242,6 +271,7 @@ button.primary {
 button.secondary {
   background: var(--btn-bg-2);
   color: var(--btn-text-2);
+  border-color: color-mix(in srgb, var(--border) 88%, transparent);
 }
 
 button.danger {
@@ -258,6 +288,18 @@ button.danger {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--panel);
+  font-size: 12px;
+}
+
+.pill.tab-active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text);
+}
+
+:root[data-theme="pro"] .pill {
+  background: #0b1220;
+  border-color: rgba(148,163,184,.25);
 }
 
 .sectionHeader {
@@ -281,7 +323,22 @@ button.danger {
   flex-wrap: wrap;
 }
 
+.actionRow {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.actionRow .danger {
+  margin-left: 4px;
+}
+
 .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+
+/* Backtest detail tabs */
+.btDetailPanel { margin-top: 8px; }
+#btDetailTabs .btTabBtn { min-width: 96px; }
 
 /* Tables */
 
@@ -337,4 +394,10 @@ tbody tr:hover {
   background: var(--code-bg);
   border: 1px solid var(--code-border);
   border-radius: var(--radius-sm);
+}
+
+@media (max-width: 900px) {
+  #statusStrip .pill { width: 100%; justify-content: space-between; }
+  #btDetailTabs .btTabBtn { min-width: 0; flex: 1 1 calc(50% - 8px); }
+  .actionRow button { flex: 1 1 180px; }
 }

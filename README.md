@@ -37,6 +37,8 @@ Open: `http://127.0.0.1:8008`
 ## Operator docs
 
 - **Step-by-step usage guide:** [`docs/INSTRUCTIONS.md`](docs/INSTRUCTIONS.md)
+- **Autonomy policy:** [`docs/autonomy_policy.md`](docs/autonomy_policy.md)
+- Updated UI screenshots: [`docs/screenshots/`](docs/screenshots)
 - Screenshot callouts were removed for clarity; instructions are text-first.
 
 ---
@@ -47,6 +49,7 @@ Open: `http://127.0.0.1:8008`
 - No margin/shorts
 - Per-asset stop loss support
 - Drawdown freeze controls
+- Market-hours guard for equities (uses Alpaca clock/calendar + pre/post window checks)
 - Order guardrails (`max_orders_per_run`, `max_single_order_notional_usd`, `max_total_notional_usd`)
 - Paper-first workflow encouraged
 
@@ -101,6 +104,8 @@ tradebot risk-check --config config/config.yaml
 
 - Live/paper controls with per-asset settings
 - Per-asset schedules (rebalance + risk-check)
+- **Market status panel** (trading day, phase, next open/close, equity-order eligibility)
+- **Symbol exclusions manager** (view excluded symbols with position/P&L context and remove from UI)
 - Backtest runner + iteration sweeps
 - Daily ledger, trade history, open positions at end
 - Strategy Builder integration
@@ -122,7 +127,12 @@ Useful runtime artifacts:
 - `data/last_rebalance.json`
 - `data/last_risk_check.json`
 - `data/last_placed_orders.json`
+- `data/last_account.json`
 - `data/state.json`
+
+Notes:
+- `last_rebalance` / `last_account` include `market_status` and `run_id`
+- `last_placed_orders` includes `state` (`submitting`/`ok`/`error`) and `run_id`
 
 ---
 

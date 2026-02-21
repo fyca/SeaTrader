@@ -1,0 +1,23 @@
+{
+  "id": "LowVol_Momentum_Rotation",
+  "name": "LowVol Momentum Rotation",
+  "entry": {
+    "all": [
+      {"left": {"kind": "close"}, "op": ">", "right": {"kind": "sma", "n": 150}},
+      {"left": {"kind": "roc", "n": 63}, "op": ">", "right": 0.05},
+      {"left": {"kind": "ann_vol", "n": 20}, "op": "<", "right": 0.75}
+    ]
+  },
+  "exit": {
+    "any": [
+      {"left": {"kind": "roc", "n": 20}, "op": "<", "right": -0.05},
+      {"left": {"kind": "close"}, "op": "<", "right": {"kind": "sma", "n": 100}}
+    ]
+  },
+  "score_factors": [
+    {"weight": 1.05, "value": {"kind": "roc", "n": 63}},
+    {"weight": 0.45, "value": {"kind": "roc", "n": 20}},
+    {"weight": -0.7, "value": {"kind": "ann_vol", "n": 20}},
+    {"weight": 0.2, "value": {"kind": "sma_slope", "n": 100, "lookback": 10}}
+  ]
+}

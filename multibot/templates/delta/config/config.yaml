@@ -1,0 +1,86 @@
+active_preset: Morning-Breakout-Both-Intra-LimitToMarket-0600
+mode: paper
+strategy_id: Breakout_Confirmation_Trend
+dry_run: false
+allocation:
+  equities: 0.5
+  crypto: 0.5
+limits:
+  max_equity_positions: 9
+  max_crypto_positions: 4
+  min_stock_price: 5.0
+  min_crypto_price: null
+  min_avg_dollar_volume_20d: 25000000.0
+  min_avg_crypto_dollar_volume_20d: 200000.0
+risk:
+  max_drawdown_freeze: 0.2
+  warn_drawdown: 0.1
+  per_asset_stop_loss_pct: 0.05
+  portfolio_dd_stop: 0.2
+  dd_stop_behavior: freeze
+  execute_exit_liquidations: true
+signals:
+  timeframe: 1D
+  lookback_days: 420
+  equity:
+    ma_long: 200
+    ma_short: 50
+    vol_lookback: 20
+    max_ann_vol: 0.7
+  crypto:
+    ma_long: 120
+    ma_short: 30
+    vol_lookback: 20
+    max_ann_vol: 2.1
+execution:
+  use_limit_orders: false
+  limit_offset_bps: 10
+  equities:
+    order_type: limit
+    limit_offset_bps: 10.0
+    fallback_to_market_at_open: true
+    fallback_time_local: 06:30
+  crypto:
+    order_type: market
+    limit_offset_bps: 10.0
+    fallback_to_market_at_open: false
+    fallback_time_local: 00:00
+  extended_hours: true
+  fallback_to_market_at_open: true
+  fallback_time_local: 06:30
+  fallback_grace_seconds: 20
+  extended_hours_start_time_local: 06:05
+  max_orders_per_run: 25
+  max_single_order_notional_usd: null
+  max_total_notional_usd: null
+scheduling:
+  weekly_rebalance_day: MON
+  weekly_rebalance_time_local: 06:30
+  daily_risk_check_time_local: '12:30'
+  timezone: America/Los_Angeles
+  equities:
+    rebalance_frequency: weekly
+    rebalance_day: MON
+    rebalance_time_local: 06:34
+    risk_check_frequency: daily
+    risk_check_day: MON
+    risk_check_time_local: 06:30
+  crypto:
+    rebalance_frequency: daily
+    rebalance_day: MON
+    rebalance_time_local: 00:10
+    risk_check_frequency: daily
+    risk_check_day: MON
+    risk_check_time_local: 00:10
+universe:
+  equity_benchmark_symbols:
+  - SPY
+  - QQQ
+  crypto_symbols_allowlist: []
+  exclude_leveraged_etfs: true
+rebalance:
+  rebalance_mode: target_notional
+  liquidation_mode: liquidate_non_selected
+  symbol_pnl_floor_pct: -0.5
+  symbol_pnl_floor_liquidate: true
+  symbol_pnl_floor_include_unrealized: true

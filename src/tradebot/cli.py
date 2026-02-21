@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import json
+import uuid
 
 from rich import print
 
@@ -25,9 +26,12 @@ from tradebot.commands.risk_check import cmd_risk_check
 from tradebot.commands.dashboard import cmd_dashboard
 from tradebot.util.artifacts import write_artifact
 from tradebot.util.equity_curve import append_equity_point
+from tradebot.util.market_hours import get_market_status
+from tradebot.util.live_ledger import append_live_run, append_live_events
 
 
 def cmd_rebalance(args: argparse.Namespace) -> int:
+    run_id = str(uuid.uuid4())
     # Optional preset override
     cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
     run_asset_mode = str(getattr(args, "asset_mode", None) or "both").lower()
@@ -60,6 +64,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     acct = clients.trading.get_account()
     equity = float(acct.equity)
     cash = float(acct.cash)
+    market_status = get_market_status(clients.trading)
 
     print(f"Mode: [bold]{cfg.mode}[/bold]  Paper(env): {env.paper}  DRY_RUN: {dry_run}")
     print(f"Account: {acct.account_number}  Equity: {equity:.2f}  Cash: {cash:.2f}")
@@ -86,6 +91,8 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
             "dry_run": dry_run,
             "drawdown": dd_state.drawdown,
             "frozen": dd_state.frozen,
+            "market_status": market_status,
+            "run_id": run_id,
         },
     )
     append_equity_point(equity=equity, cash=cash)
@@ -265,6 +272,19 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
             except Exception:
                 pass
 
+    # Strict asset-mode isolation: ignore out-of-scope holdings entirely.
+    # crypto mode only sees crypto symbols; equities mode only sees equity symbols.
+    if run_asset_mode == "equities":
+        current_map = {k: v for k, v in current_map.items() if "/" not in str(k)}
+        avg_entry_map = {k: v for k, v in avg_entry_map.items() if "/" not in str(k)}
+        cur_price_map = {k: v for k, v in cur_price_map.items() if "/" not in str(k)}
+        sell_qty_by_symbol = {k: v for k, v in sell_qty_by_symbol.items() if "/" not in str(k)}
+    elif run_asset_mode == "crypto":
+        current_map = {k: v for k, v in current_map.items() if "/" in str(k)}
+        avg_entry_map = {k: v for k, v in avg_entry_map.items() if "/" in str(k)}
+        cur_price_map = {k: v for k, v in cur_price_map.items() if "/" in str(k)}
+        sell_qty_by_symbol = {k: v for k, v in sell_qty_by_symbol.items() if "/" in str(k)}
+
     # liquidation_mode parity
     if cfg.rebalance.liquidation_mode == "hold_until_exit":
         for sym, cur in current_map.items():
@@ -348,32 +368,80 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         for k, v in sorted(sell_cause_counts.items(), key=lambda kv: (-kv[1], kv[0])):
             print(f"  - {k}: {v}")
 
-    write_artifact(
-        "last_rebalance.json",
-        {
-            "universe": {"equities": len(eq_symbols), "crypto": len(cr_symbols)},
-            "selected": {"equities": eq_sel, "crypto": cr_sel},
-            "entry_signals": {
-                "equities": {s: eq_sig_details.get(s) for s in eq_sel},
-                "crypto": {s: cr_sig_details.get(s) for s in cr_sel},
-            },
-            "held_not_selected_diagnostics": held_not_selected_diag,
-            "plans": [
-                {
-                    "symbol": p.symbol,
-                    "side": p.side,
-                    "notional_usd": p.notional_usd,
-                    "asset_class": p.asset_class,
-                    "reason": (_sell_cause(p.symbol, float(current_map.get(p.symbol, 0.0) or 0.0), float(target_map.get(p.symbol, 0.0) or 0.0)) if p.side == "sell" else p.reason),
-                    "current_notional_usd": float(current_map.get(p.symbol, 0.0) or 0.0),
-                    "target_notional_usd": float(target_map.get(p.symbol, 0.0) or 0.0),
-                    "delta_notional_usd": float(target_map.get(p.symbol, 0.0) or 0.0) - float(current_map.get(p.symbol, 0.0) or 0.0),
-                }
-                for p in plans
-            ],
-            "sell_cause_counts": sell_cause_counts,
-            "frozen": dd_state.frozen,
+    payload_eq_sel = eq_sel if run_asset_mode != "crypto" else []
+    payload_cr_sel = cr_sel if run_asset_mode != "equities" else []
+    payload_eq_signals = ({s: eq_sig_details.get(s) for s in eq_sel} if run_asset_mode != "crypto" else {})
+    payload_cr_signals = ({s: cr_sig_details.get(s) for s in cr_sel} if run_asset_mode != "equities" else {})
+    payload_held_not_selected_diag = held_not_selected_diag if run_asset_mode != "crypto" else {}
+
+    rebalance_payload = {
+        "universe": {"equities": len(eq_symbols), "crypto": len(cr_symbols)},
+        "selected": {"equities": payload_eq_sel, "crypto": payload_cr_sel},
+        "entry_signals": {
+            "equities": payload_eq_signals,
+            "crypto": payload_cr_signals,
         },
+        "held_not_selected_diagnostics": payload_held_not_selected_diag,
+        "plans": [
+            {
+                "symbol": p.symbol,
+                "side": p.side,
+                "notional_usd": p.notional_usd,
+                "asset_class": p.asset_class,
+                "reason": (_sell_cause(p.symbol, float(current_map.get(p.symbol, 0.0) or 0.0), float(target_map.get(p.symbol, 0.0) or 0.0)) if p.side == "sell" else p.reason),
+                "current_notional_usd": float(current_map.get(p.symbol, 0.0) or 0.0),
+                "target_notional_usd": float(target_map.get(p.symbol, 0.0) or 0.0),
+                "delta_notional_usd": float(target_map.get(p.symbol, 0.0) or 0.0) - float(current_map.get(p.symbol, 0.0) or 0.0),
+            }
+            for p in plans
+        ],
+        "sell_cause_counts": sell_cause_counts,
+        "frozen": dd_state.frozen,
+        "market_status": market_status,
+        "run_id": run_id,
+    }
+    write_artifact("last_rebalance.json", rebalance_payload)
+
+    buy_notional = sum(float(p.notional_usd or 0.0) for p in plans if str(p.side).lower() == "buy")
+    sell_notional = sum(float(p.notional_usd or 0.0) for p in plans if str(p.side).lower() == "sell")
+    append_live_run(
+        run_id=run_id,
+        kind="rebalance_plan",
+        payload={
+            "paper": bool(env.paper),
+            "dry_run": bool(dry_run),
+            "mode": str(cfg.mode),
+            "asset_mode": run_asset_mode,
+            "equity": equity,
+            "cash": cash,
+            "drawdown": dd_state.drawdown,
+            "frozen": dd_state.frozen,
+            "plan_count": len(plans),
+            "buy_count": sum(1 for p in plans if str(p.side).lower() == "buy"),
+            "sell_count": sum(1 for p in plans if str(p.side).lower() == "sell"),
+            "buy_notional_usd": buy_notional,
+            "sell_notional_usd": sell_notional,
+            "market_status": market_status,
+            "selected": rebalance_payload.get("selected"),
+            "sell_cause_counts": sell_cause_counts,
+        },
+    )
+    append_live_events(
+        run_id=run_id,
+        kind="rebalance_plan",
+        events=[
+            {
+                "event_type": f"plan_{str(p.side).lower()}",
+                "symbol": p.symbol,
+                "asset_class": p.asset_class,
+                "notional_usd": float(p.notional_usd or 0.0),
+                "reason": (_sell_cause(p.symbol, float(current_map.get(p.symbol, 0.0) or 0.0), float(target_map.get(p.symbol, 0.0) or 0.0)) if p.side == "sell" else p.reason),
+                "current_notional_usd": float(current_map.get(p.symbol, 0.0) or 0.0),
+                "target_notional_usd": float(target_map.get(p.symbol, 0.0) or 0.0),
+                "delta_notional_usd": float(target_map.get(p.symbol, 0.0) or 0.0) - float(current_map.get(p.symbol, 0.0) or 0.0),
+            }
+            for p in plans
+        ],
     )
 
     if dd_state.frozen:
@@ -400,11 +468,43 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
 
     if dry_run or not args.place_orders:
         print("\nNo orders placed (dry-run or --place-orders not set).")
+        append_live_run(
+            run_id=run_id,
+            kind="rebalance_execution",
+            payload={
+                "state": "skipped",
+                "reason": "dry_run_or_place_orders_disabled",
+                "paper": bool(env.paper),
+                "dry_run": bool(dry_run),
+            },
+        )
         return 0
 
     # Hard safety: only allow placing when both config + env indicate paper
     if cfg.mode != "paper" or not env.paper:
         raise RuntimeError("Refusing to place orders unless cfg.mode=paper and APCA_PAPER=true")
+
+    if not bool(market_status.get("can_place_equity_orders", False)):
+        kept: list[OrderPlan] = []
+        skipped = 0
+        for p in plans:
+            if "/" in str(p.symbol):
+                kept.append(p)
+            else:
+                skipped += 1
+        plans = kept
+        if skipped:
+            phase = str(market_status.get("market_phase") or "closed")
+            print(f"[yellow]Market-hours guard:[/yellow] skipped {skipped} equity order(s); market phase={phase}.")
+
+    if not plans:
+        print("\nNo orders placed after market-hours guard.")
+        append_live_run(
+            run_id=run_id,
+            kind="rebalance_execution",
+            payload={"state": "skipped", "reason": "no_plans_after_market_hours_guard", "paper": bool(env.paper), "dry_run": bool(dry_run)},
+        )
+        return 0
 
     gr = check_order_guardrails(
         plans,
@@ -462,18 +562,46 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
             f"fallback_to_market={sym_fallback_enabled[pl.symbol]} at {sym_fallback_time[pl.symbol]}"
         )
 
-    print("[rebalance] Phase 6/6: submitting orders to Alpaca… 🚀")
-    placed = place_notional_market_orders(
-        clients.trading,
-        plans,
-        use_limit_orders=bool(cfg.execution.use_limit_orders),
-        limit_offset_bps=float(cfg.execution.limit_offset_bps),
-        ref_price_by_symbol=ref_px,
-        extended_hours=bool(getattr(cfg.execution, "extended_hours", False)),
-        symbol_order_type=sym_order_type,
-        symbol_limit_offset_bps=sym_limit_offset,
-        symbol_sell_qty=sell_qty_by_symbol,
+    write_artifact(
+        "last_placed_orders.json",
+        {
+            "run_id": run_id,
+            "state": "submitting",
+            "count": 0,
+            "orders": [],
+        },
     )
+
+    print("[rebalance] Phase 6/6: submitting orders to Alpaca… 🚀")
+    try:
+        placed = place_notional_market_orders(
+            clients.trading,
+            plans,
+            use_limit_orders=bool(cfg.execution.use_limit_orders),
+            limit_offset_bps=float(cfg.execution.limit_offset_bps),
+            ref_price_by_symbol=ref_px,
+            extended_hours=bool(getattr(cfg.execution, "extended_hours", False)),
+            symbol_order_type=sym_order_type,
+            symbol_limit_offset_bps=sym_limit_offset,
+            symbol_sell_qty=sell_qty_by_symbol,
+        )
+    except Exception as e:
+        write_artifact(
+            "last_placed_orders.json",
+            {
+                "run_id": run_id,
+                "state": "error",
+                "count": 0,
+                "orders": [],
+                "error": str(e),
+            },
+        )
+        append_live_run(
+            run_id=run_id,
+            kind="rebalance_execution",
+            payload={"state": "error", "paper": bool(env.paper), "dry_run": bool(dry_run), "error": str(e)},
+        )
+        raise
 
     # Optional premarket fallback: if unfilled LIMITs remain by configured open time, resend as market.
     if any(sym_fallback_enabled.values()):
@@ -520,13 +648,24 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                 try:
                     o = clients.trading.get_order_by_id(po.id)
                     st = str(getattr(o, "status", "")).upper()
-                    if st in ("FILLED", "CANCELED", "EXPIRED", "REJECTED"):
-                        continue
                     filled_qty = float(getattr(o, "filled_qty", 0.0) or 0.0)
+
+                    if st == "FILLED":
+                        print(f"Fallback skip {po.symbol}: already filled (status={st}).")
+                        continue
                     if filled_qty > 0:
                         # Partial fill: skip auto-fallback to avoid oversizing on notional orders.
+                        print(f"Fallback skip {po.symbol}: partially filled qty={filled_qty} (status={st}).")
                         continue
-                    clients.trading.cancel_order_by_id(po.id)
+
+                    # If order is still working, cancel first; if Alpaca already canceled/expired/rejected,
+                    # proceed directly to market fallback.
+                    if st not in ("CANCELED", "EXPIRED", "REJECTED"):
+                        print(f"Fallback {po.symbol}: canceling working limit (status={st}) before market retry.")
+                        clients.trading.cancel_order_by_id(po.id)
+                    else:
+                        print(f"Fallback {po.symbol}: limit ended with status={st}; retrying as market.")
+
                     req_kwargs = dict(
                         symbol=po.symbol,
                         side=OrderSide.BUY if po.side == "buy" else OrderSide.SELL,
@@ -538,8 +677,10 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                         req_kwargs["notional"] = round(float(po.notional_usd), 2)
                     req = MarketOrderRequest(**req_kwargs)
                     clients.trading.submit_order(req)
+                    print(f"Fallback submitted market order for {po.symbol} (side={po.side}).")
                     fallback_count += 1
-                except Exception:
+                except Exception as ex:
+                    print(f"Fallback error {po.symbol}: {ex}")
                     continue
 
             if fallback_count:
@@ -550,9 +691,40 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     write_artifact(
         "last_placed_orders.json",
         {
+            "run_id": run_id,
+            "state": "ok",
             "count": len(placed),
             "orders": [o.__dict__ for o in placed],
         },
+    )
+    append_live_run(
+        run_id=run_id,
+        kind="rebalance_execution",
+        payload={
+            "state": "ok",
+            "paper": bool(env.paper),
+            "dry_run": bool(dry_run),
+            "placed_count": len(placed),
+            "placed_notional_usd": sum(float(getattr(o, "notional_usd", 0.0) or 0.0) for o in placed),
+        },
+    )
+    append_live_events(
+        run_id=run_id,
+        kind="rebalance_execution",
+        events=[
+            {
+                "event_type": "order_submitted",
+                "symbol": o.symbol,
+                "side": o.side,
+                "asset_class": o.asset_class,
+                "order_type": o.order_type,
+                "notional_usd": float(getattr(o, "notional_usd", 0.0) or 0.0),
+                "qty": (None if getattr(o, "qty", None) is None else float(getattr(o, "qty"))),
+                "limit_price": (None if getattr(o, "limit_price", None) is None else float(getattr(o, "limit_price"))),
+                "order_id": getattr(o, "id", ""),
+            }
+            for o in placed
+        ],
     )
 
     print("\nPlaced orders:")

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tradebot Multi-Bot Hub</title>
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b1020; color:#e8ecff; margin:0; }
+    .wrap { max-width:980px; margin:32px auto; padding:0 16px; }
+    h1 { margin:0 0 6px; font-size:30px; }
+    p { color:#a9b4d0; margin:0 0 18px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; margin: 0 0 16px; }
+    .pill { background:#141b34; border:1px solid #253056; border-radius:999px; padding:8px 12px; color:#b7c4ea; font-size:13px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
+    .card { background:#141b34; border:1px solid #253056; border-radius:14px; padding:16px; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .name { font-size:18px; font-weight:700; }
+    .meta { color:#9fb0dd; font-size:13px; margin:8px 0 12px; }
+    .status { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#9fb0dd; }
+    .dot { width:10px; height:10px; border-radius:999px; display:inline-block; background:#666; box-shadow:0 0 0 2px rgba(255,255,255,.06) inset; }
+    .up { background:#22c55e; }
+    .down { background:#ef4444; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    button.btn, a.btn { border:0; cursor:pointer; display:inline-block; text-decoration:none; background:#4f7cff; color:white; padding:9px 11px; border-radius:10px; font-weight:600; font-size:13px; }
+    .btn.secondary { background:#27345f; }
+    button.warn { background:#b91c1c; }
+    .note { margin-top:16px; color:#8fa0cd; font-size:12px; }
+    code { background:#0f152b; padding:2px 6px; border-radius:6px; }
+    .assets { margin-top:10px; font-size:12px; color:#b9c7ee; }
+    .asset-row { display:grid; grid-template-columns: 68px 1fr 86px; gap:8px; padding:3px 0; border-bottom:1px dashed #26345e; }
+    .asset-row:last-child { border-bottom:none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🧭 Tradebot Hub</h1>
+    <p>Pick a bot dashboard. Includes account+local wipe per bot.</p>
+
+    <div class="toolbar">
+      <span class="pill">Alpha: 8008</span>
+      <span class="pill">Beta: 8009</span>
+      <span class="pill">Gamma: 8010</span>
+      <span class="pill">Delta: 8011</span>
+      <span class="pill">Epsilon: 8012</span>
+      <span class="pill">Zeta: 8013</span>
+      <span class="pill">Eta: 8014</span>
+      <span class="pill">Theta: 8015</span>
+      <span class="pill">Iota: 8016</span>
+      <button class="btn" onclick="startAll()">Start All Dashboards</button>
+      <button class="btn secondary" onclick="stopAll()">Stop All Dashboards</button>
+      <span class="pill" id="lastCheck">status: checking…</span>
+    </div>
+
+    <div class="grid" id="cards"></div>
+
+    <div class="note">
+      Start hub server: <code>python3 multibot/hub_server.py</code><br/>
+      Then open: <code>http://127.0.0.1:8099</code><br/>
+      Wipe action: cancels open orders, requests close-all positions, and clears bot local data/logs.
+    </div>
+  </div>
+
+  <script>
+    const bots = [
+      { id:'alpha', name:'Bot Alpha', account:'Account A', port:8008 },
+      { id:'beta', name:'Bot Beta', account:'Account B', port:8009 },
+      { id:'gamma', name:'Bot Gamma', account:'Account C', port:8010 },
+      { id:'delta', name:'Bot Delta', account:'Account D', port:8011 },
+      { id:'epsilon', name:'Bot Epsilon', account:'Account E', port:8012 },
+      { id:'zeta', name:'Bot Zeta', account:'Account F', port:8013 },
+      { id:'eta', name:'Bot Eta', account:'Account G', port:8014 },
+      { id:'theta', name:'Bot Theta', account:'Account H', port:8015 },
+      { id:'iota', name:'Bot Iota', account:'Account I', port:8016 },
+    ];
+
+    const cards = document.getElementById('cards');
+    const lastCheck = document.getElementById('lastCheck');
+
+    const money = (v) => (v===null || v===undefined || Number.isNaN(Number(v))) ? '—' : ('$' + Number(v).toLocaleString(undefined,{maximumFractionDigits:2}));
+    const pct = (v) => (v===null || v===undefined || Number.isNaN(Number(v))) ? '—' : ((Number(v)*100).toFixed(2) + '%');
+    const num = (v, d=2) => (v===null || v===undefined || Number.isNaN(Number(v))) ? '—' : Number(v).toFixed(d);
+
+    function cardHtml(b, o) {
+      const up = !!(o && o.up);
+      const url = `http://127.0.0.1:${b.port}`;
+      const best = o?.best_asset ? `${o.best_asset.symbol} (${money(o.best_asset.unrealized_pl)}, ${pct(o.best_asset.unrealized_plpc)})` : '—';
+      const worst = o?.worst_asset ? `${o.worst_asset.symbol} (${money(o.worst_asset.unrealized_pl)}, ${pct(o.worst_asset.unrealized_plpc)})` : '—';
+      const l = o?.selection_logic || {};
+      const logic = `
+        • Equities: ${l.max_equity_positions ?? '—'}<br/>
+        • Crypto: ${l.max_crypto_positions ?? '—'}<br/>
+        • Equities ADV20 min: ${money(l.min_avg_dollar_volume_20d)}<br/>
+        • Crypto ADV20 min: ${money(l.min_avg_crypto_dollar_volume_20d)}<br/>
+        • Equity max ann vol: ${num(l.equity_max_ann_vol,2)}<br/>
+        • Crypto max ann vol: ${num(l.crypto_max_ann_vol,2)}<br/>
+        • Equity rebalance time: ${l.equity_rebalance_time_local || '—'}<br/>
+        • Crypto rebalance time: ${l.crypto_rebalance_time_local || '—'}<br/>
+        • Crypto risk-check: ${l.crypto_risk_check_time_local || '—'}<br/>
+        • Extended-hours start: ${l.extended_hours_start_time_local || '—'}
+      `;
+      return `
+        <div class="card">
+          <div class="row">
+            <div class="name">${b.name}</div>
+            <div class="status"><span class="dot ${up ? 'up':'down'}"></span>${up ? 'UP':'DOWN'}</div>
+          </div>
+          <div class="meta">${b.account} • Port ${b.port}</div>
+          <div class="meta">
+            Value: <b>${money(o?.equity)}</b><br/>
+            Day P/L: <b>${money(o?.day_pl)}</b> (${pct(o?.day_pl_pct)})<br/>
+            Open positions: <b>${o?.open_positions ?? '—'}</b><br/>
+            Gross exposure: <b>${money(o?.gross_exposure)}</b><br/>
+            Sharpe ratio: <b>${num(o?.sharpe, 2)}</b><br/>
+            Selection strategy: <b>${o?.selection_strategy || '—'}</b><br/>
+            Best asset: <b>${best}</b><br/>
+            Worst asset: <b>${worst}</b>
+          </div>
+          <details class="assets" open>
+            <summary>Selection logic</summary>
+            <div>${logic}</div>
+          </details>
+          <div class="actions">
+            <a class="btn" href="${url}" target="_blank" rel="noopener">Open Dashboard</a>
+            <a class="btn secondary" href="${url}/api/live-ledger/runs?limit=30" target="_blank" rel="noopener">Open API</a>
+            <button class="btn" onclick="startBot('${b.id}')">Start</button>
+            <button class="btn secondary" onclick="stopBot('${b.id}')">Stop</button>
+            <button class="btn warn" onclick="wipeBot('${b.id}')">Wipe Bot Data</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function refresh() {
+      try {
+        const r = await fetch('/api/overview');
+        const j = await r.json();
+        const m = (j && j.bots) || {};
+        cards.innerHTML = bots.map(b => cardHtml(b, m[b.id] || {up:false})).join('');
+      } catch (_e) {
+        cards.innerHTML = bots.map(b => cardHtml(b, {up:false})).join('');
+      }
+      lastCheck.textContent = `status: ${new Date().toLocaleTimeString()}`;
+    }
+
+    async function startAll() {
+      const r = await fetch('/api/dashboards/start-all', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok || !j.ok) alert(`Start-all failed: ${j.error || j.message || 'unknown error'}`);
+      await refresh();
+    }
+
+    async function stopAll() {
+      const r = await fetch('/api/dashboards/stop-all', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok || !j.ok) alert(`Stop-all failed: ${j.error || j.message || 'unknown error'}`);
+      await refresh();
+    }
+
+    async function startBot(bot) {
+      const r = await fetch(`/api/dashboards/start/${bot}`, { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok || !j.ok) alert(`Start failed (${bot}): ${j.error || j.message || 'unknown error'}`);
+      await refresh();
+    }
+
+    async function stopBot(bot) {
+      const r = await fetch(`/api/dashboards/stop/${bot}`, { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok || !j.ok) alert(`Stop failed (${bot}): ${j.error || j.message || 'unknown error'}`);
+      await refresh();
+    }
+
+    async function wipeBot(bot) {
+      const ok = confirm(`Wipe ${bot}?\n\nThis will:\n- cancel open orders\n- request close-all positions\n- delete local bot data/logs`);
+      if (!ok) return;
+      try {
+        const r = await fetch(`/api/wipe/${bot}`, { method: 'POST' });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.error || 'wipe failed');
+        alert(`Wipe complete for ${bot}.`);
+      } catch (e) {
+        alert(`Wipe failed for ${bot}: ${e.message || e}`);
+      }
+      refresh();
+    }
+
+    refresh();
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>

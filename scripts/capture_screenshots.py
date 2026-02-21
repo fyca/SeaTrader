@@ -33,8 +33,8 @@ def main() -> None:
                         }""",
                         [theme, dens],
                     )
-                    page.reload(wait_until="networkidle")
-                    page.wait_for_timeout(800)
+                    page.reload(wait_until="domcontentloaded")
+                    page.wait_for_timeout(1400)
                     page.screenshot(
                         path=str(OUT / f"{name}-{theme}-{dens}.png"),
                         full_page=True,

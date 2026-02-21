@@ -1,0 +1,23 @@
+{
+  "id": "Fast_Momentum_Aggressive",
+  "name": "Fast Momentum Aggressive",
+  "entry": {
+    "all": [
+      {"left": {"kind": "close"}, "op": ">", "right": {"kind": "sma", "n": 100}},
+      {"left": {"kind": "roc", "n": 20}, "op": ">", "right": 0.06},
+      {"left": {"kind": "ann_vol", "n": 20}, "op": "<", "right": 1.25}
+    ]
+  },
+  "exit": {
+    "any": [
+      {"left": {"kind": "roc", "n": 5}, "op": "<", "right": -0.03},
+      {"left": {"kind": "close"}, "op": "<", "right": {"kind": "sma", "n": 50}}
+    ]
+  },
+  "score_factors": [
+    {"weight": 1.25, "value": {"kind": "roc", "n": 20}},
+    {"weight": 0.65, "value": {"kind": "roc", "n": 10}},
+    {"weight": -0.35, "value": {"kind": "ann_vol", "n": 20}},
+    {"weight": 0.15, "value": {"kind": "dist_sma", "n": 100}}
+  ]
+}

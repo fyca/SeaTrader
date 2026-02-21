@@ -14,6 +14,7 @@ Notes:
 
 from __future__ import annotations
 
+import argparse
 import itertools
 import json
 from copy import deepcopy
@@ -134,13 +135,21 @@ def _benchmark_metrics(spy_close: pd.Series, *, start: str, end: str) -> dict[st
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description="Sweep strategies vs SPY using cached data")
+    ap.add_argument("--max-stock-symbols", type=int, default=15)
+    ap.add_argument("--max-crypto-symbols", type=int, default=8)
+    ap.add_argument("--target-per-strategy", type=int, default=30)
+    ap.add_argument("--dd-constraint", type=float, default=0.25)
+    ap.add_argument("--strategy-id", action="append", default=[])
+    args = ap.parse_args()
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     cfg0 = load_config(str(BASE / "config" / "config.yaml"))
 
     # Universe caps for runtime
-    stock_bars, stock_universe = load_cache_frames("stocks", max_symbols=15)
-    crypto_bars, crypto_universe = load_cache_frames("crypto", max_symbols=8)
+    stock_bars, stock_universe = load_cache_frames("stocks", max_symbols=args.max_stock_symbols)
+    crypto_bars, crypto_universe = load_cache_frames("crypto", max_symbols=args.max_crypto_symbols)
 
     any_df = next(df for df in stock_bars.values() if len(df))
     last_ts = pd.to_datetime(any_df.index.max()).tz_convert(None).date()
@@ -154,10 +163,15 @@ def main() -> None:
     base_params = BacktestParams(start=start, end=end, slippage_bps=10.0, rebalance="weekly")
 
     # Drawdown constraint used for ranking report
-    dd_constraint = 0.25
+    dd_constraint = float(args.dd_constraint)
 
     # Strategy sweep list (builtin + user)
     strats = list_strategies()
+    if args.strategy_id:
+        allow = {s.strip() for s in args.strategy_id if s and s.strip()}
+        strats = [s for s in strats if s.get("id") in allow]
+        if not strats:
+            raise SystemExit(f"No strategies matched --strategy-id values: {sorted(allow)}")
 
     # Parameter grid (kept modest; deterministic sample below)
     ma_long = [150, 200, 250]
@@ -194,7 +208,7 @@ def main() -> None:
 
     # Deterministic downsample for runtime
     # Keep a small number of configs per strategy (runtime-friendly)
-    target_per_strategy = 30
+    target_per_strategy = int(args.target_per_strategy)
 
     def keep_cfg(tup: tuple) -> bool:
         h = hash(tup)

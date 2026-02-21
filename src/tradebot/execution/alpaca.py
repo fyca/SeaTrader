@@ -76,13 +76,18 @@ def place_notional_market_orders(
                 except Exception as e:
                     msg = str(e).lower()
                     if pl.side == "sell" and qty_override > 0 and ("insufficient qty" in msg or "insufficient" in msg):
-                        retry_qty = qty_override * 0.999
-                        req_kwargs["qty"] = retry_qty
-                        req = LimitOrderRequest(**req_kwargs)
-                        o = trading_client.submit_order(req)
-                        used_qty = retry_qty
+                        try:
+                            retry_qty = qty_override * 0.999
+                            req_kwargs["qty"] = retry_qty
+                            req = LimitOrderRequest(**req_kwargs)
+                            o = trading_client.submit_order(req)
+                            used_qty = retry_qty
+                        except Exception as ex2:
+                            print(f"[order-skip] {pl.symbol} {pl.side} limit failed after qty retry: {ex2}")
+                            continue
                     else:
-                        raise
+                        print(f"[order-skip] {pl.symbol} {pl.side} limit failed: {e}")
+                        continue
                 out.append(
                     PlacedOrder(
                         symbol=pl.symbol,
@@ -114,13 +119,18 @@ def place_notional_market_orders(
         except Exception as e:
             msg = str(e).lower()
             if pl.side == "sell" and qty_override > 0 and ("insufficient qty" in msg or "insufficient" in msg):
-                retry_qty = qty_override * 0.999
-                req_kwargs["qty"] = retry_qty
-                req = MarketOrderRequest(**req_kwargs)
-                o = trading_client.submit_order(req)
-                used_qty = retry_qty
+                try:
+                    retry_qty = qty_override * 0.999
+                    req_kwargs["qty"] = retry_qty
+                    req = MarketOrderRequest(**req_kwargs)
+                    o = trading_client.submit_order(req)
+                    used_qty = retry_qty
+                except Exception as ex2:
+                    print(f"[order-skip] {pl.symbol} {pl.side} market failed after qty retry: {ex2}")
+                    continue
             else:
-                raise
+                print(f"[order-skip] {pl.symbol} {pl.side} market failed: {e}")
+                continue
         out.append(
             PlacedOrder(
                 symbol=pl.symbol,
