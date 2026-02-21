@@ -38,8 +38,42 @@ Open: `http://127.0.0.1:8008`
 
 - **Step-by-step usage guide:** [`docs/INSTRUCTIONS.md`](docs/INSTRUCTIONS.md)
 - **Autonomy policy:** [`docs/autonomy_policy.md`](docs/autonomy_policy.md)
+- **Multi-bot docs:** [`docs/multibot.md`](docs/multibot.md)
 - Updated UI screenshots: [`docs/screenshots/`](docs/screenshots)
 - Screenshot callouts were removed for clarity; instructions are text-first.
+
+---
+
+## Unified multi-bot hub
+
+SeaTrader includes a unified hub for Alpha..Iota bot dashboards.
+
+Start the hub server:
+
+```bash
+python3 multibot/hub_server.py
+```
+
+Open:
+
+- Hub: `http://127.0.0.1:8099`
+- Individual dashboards: ports `8008..8016`
+
+From the Hub you can:
+- Start/stop all dashboards
+- Start/stop one bot dashboard
+- Open each bot dashboard/API
+- Run per-bot wipe (cancel open orders, request close-all positions, clear local bot data/logs)
+
+Useful scripts:
+
+```bash
+multibot/scripts/start_dashboards.sh
+multibot/scripts/stop_dashboards.sh
+multibot/scripts/start_one.sh <bot>
+multibot/scripts/stop_one.sh <bot>
+multibot/scripts/wipe_bot.sh <bot>
+```
 
 ---
 
