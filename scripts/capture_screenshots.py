@@ -16,7 +16,7 @@ PAGES = [
 ]
 
 HUB_PAGES = [
-    ("hub", "http://127.0.0.1:8099/"),
+    ("hub", "http://127.0.0.1:8099/", 30000),
 ]
 
 
@@ -45,9 +45,9 @@ def main() -> None:
                     )
 
         # Hub screenshots (single style)
-        for name, url in HUB_PAGES:
+        for name, url, wait_ms in HUB_PAGES:
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_timeout(1000)
+            page.wait_for_timeout(wait_ms)
             page.screenshot(
                 path=str(OUT / f"{name}.png"),
                 full_page=True,
