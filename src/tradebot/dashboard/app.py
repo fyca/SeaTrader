@@ -930,8 +930,43 @@ def create_app(*, config_path: str) -> FastAPI:
     @app.get("/api/scheduler/cron-status")
     def cron_status():
         lines = _cron_get_lines()
+
+        # Legacy single-dashboard tags
         reb = [ln for ln in lines if (CRON_TAG_REB in ln or CRON_TAG_REB_EQ in ln or CRON_TAG_REB_CR in ln)]
         risk = [ln for ln in lines if (CRON_TAG_RISK in ln or CRON_TAG_RISK_EQ in ln or CRON_TAG_RISK_CR in ln)]
+
+        # Multibot managed tags (STMB_<BOT>_...) and run_bot.sh matching this bot
+        bot_name = None
+        try:
+            cp = Path(config_path).resolve()
+            # .../multibot/bots/<bot>/config/config.yaml
+            if cp.parent.name == "config" and cp.parent.parent.name:
+                bot_name = cp.parent.parent.name.lower()
+        except Exception:
+            bot_name = None
+
+        stmb_reb: list[str] = []
+        stmb_risk: list[str] = []
+        stmb_eq_reb_line = None
+        stmb_cr_reb_line = None
+        stmb_eq_risk_line = None
+        stmb_cr_risk_line = None
+
+        if bot_name:
+            tag_prefix = f"STMB_{bot_name.upper()}_"
+            runbot_hint = f"run_bot.sh {bot_name} "
+            bot_lines = [ln for ln in lines if (tag_prefix in ln or runbot_hint in ln)]
+            stmb_reb = [ln for ln in bot_lines if ("_REB_" in ln or " rebalance " in ln)]
+            stmb_risk = [ln for ln in bot_lines if ("_RISK_" in ln or " risk-check " in ln)]
+            for ln in bot_lines:
+                if ("_REB_EQ" in ln) or (" rebalance " in ln and "--asset-mode equities" in ln):
+                    stmb_eq_reb_line = stmb_eq_reb_line or ln
+                if ("_REB_CR" in ln) or (" rebalance " in ln and "--asset-mode crypto" in ln):
+                    stmb_cr_reb_line = stmb_cr_reb_line or ln
+                if ("_RISK_EQ" in ln) or (" risk-check " in ln and "--asset-mode equities" in ln):
+                    stmb_eq_risk_line = stmb_eq_risk_line or ln
+                if ("_RISK_CR" in ln) or (" risk-check " in ln and "--asset-mode crypto" in ln):
+                    stmb_cr_risk_line = stmb_cr_risk_line or ln
 
         def _sched(line: str):
             try:
@@ -959,13 +994,16 @@ def create_app(*, config_path: str) -> FastAPI:
                 return None
             return None
 
-        reb_s = _sched(reb[0]) if reb else None
-        risk_s = _sched(risk[0]) if risk else None
+        # Prefer exact per-asset lines; allow either legacy tags or multibot lines
+        reb_eq_line = _line_for_tag(CRON_TAG_REB_EQ) or stmb_eq_reb_line
+        reb_cr_line = _line_for_tag(CRON_TAG_REB_CR) or stmb_cr_reb_line
+        risk_eq_line = _line_for_tag(CRON_TAG_RISK_EQ) or stmb_eq_risk_line
+        risk_cr_line = _line_for_tag(CRON_TAG_RISK_CR) or stmb_cr_risk_line
 
-        reb_eq_line = _line_for_tag(CRON_TAG_REB_EQ)
-        reb_cr_line = _line_for_tag(CRON_TAG_REB_CR)
-        risk_eq_line = _line_for_tag(CRON_TAG_RISK_EQ)
-        risk_cr_line = _line_for_tag(CRON_TAG_RISK_CR)
+        reb_union = [x for x in [reb_eq_line, reb_cr_line] if x]
+        risk_union = [x for x in [risk_eq_line, risk_cr_line] if x]
+        reb_s = _sched(reb_union[0]) if reb_union else (_sched(reb[0]) if reb else None)
+        risk_s = _sched(risk_union[0]) if risk_union else (_sched(risk[0]) if risk else None)
 
         repo = Path(config_path).resolve().parent.parent
         stamp_reb_eq = _read_text(repo / "data" / "cron_last_run_rebalance_equities.txt")
@@ -973,13 +1011,16 @@ def create_app(*, config_path: str) -> FastAPI:
         stamp_risk_eq = _read_text(repo / "data" / "cron_last_run_risk_equities.txt")
         stamp_risk_cr = _read_text(repo / "data" / "cron_last_run_risk_crypto.txt")
 
+        reb_enabled = bool(reb or stmb_reb or reb_union)
+        risk_enabled = bool(risk or stmb_risk or risk_union)
+
         return {
             "ok": True,
-            "enabled": bool(reb or risk),
-            "rebalance": reb,
-            "risk": risk,
-            "rebalance_enabled": bool(reb),
-            "risk_enabled": bool(risk),
+            "enabled": bool(reb_enabled or risk_enabled),
+            "rebalance": reb_union if reb_union else reb,
+            "risk": risk_union if risk_union else risk,
+            "rebalance_enabled": reb_enabled,
+            "risk_enabled": risk_enabled,
             "rebalance_schedule": reb_s,
             "risk_schedule": risk_s,
             "rebalance_equities_enabled": bool(reb_eq_line),

@@ -48,6 +48,9 @@
       <span class="pill">Iota: 8016</span>
       <button class="btn" onclick="startAll()">Start All Dashboards</button>
       <button class="btn secondary" onclick="stopAll()">Stop All Dashboards</button>
+      <button class="btn" onclick="installCron()">Install Per-Bot Cron</button>
+      <button class="btn secondary" onclick="showCron()">Show Cron Block</button>
+      <button class="btn warn" onclick="removeCron()">Remove Per-Bot Cron</button>
       <span class="pill" id="lastCheck">status: checking…</span>
     </div>
 
@@ -182,6 +185,38 @@
         alert(`Wipe failed for ${bot}: ${e.message || e}`);
       }
       refresh();
+    }
+
+    async function installCron() {
+      const r = await fetch('/api/cron/install', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        alert(`Cron install failed: ${j.error || j.message || 'unknown error'}`);
+        return;
+      }
+      alert('Per-bot cron installed.');
+    }
+
+    async function showCron() {
+      const r = await fetch('/api/cron/show', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        alert(`Show cron failed: ${j.error || j.message || 'unknown error'}`);
+        return;
+      }
+      alert(j.message || '(no cron block)');
+    }
+
+    async function removeCron() {
+      const ok = confirm('Remove the per-bot cron block from crontab?');
+      if (!ok) return;
+      const r = await fetch('/api/cron/remove', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        alert(`Cron remove failed: ${j.error || j.message || 'unknown error'}`);
+        return;
+      }
+      alert('Per-bot cron removed.');
     }
 
     refresh();

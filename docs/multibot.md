@@ -52,6 +52,12 @@ Hub preview:
 ./multibot/scripts/stop_one.sh beta
 ./multibot/scripts/wipe_bot.sh beta
 ./multibot/scripts/sync_shared.sh
+
+# per-bot cron install/remove (from each bot config schedule)
+python3 ./multibot/scripts/manage_cron.py preview
+python3 ./multibot/scripts/manage_cron.py install
+python3 ./multibot/scripts/manage_cron.py show
+python3 ./multibot/scripts/manage_cron.py remove
 ```
 
 ## Notes

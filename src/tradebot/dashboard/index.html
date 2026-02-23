@@ -916,6 +916,7 @@
 })();
 
 let settingsDirty = false;
+let backtestDirty = false;
 
 function setSettingsDirty(flag, msg='') {
   settingsDirty = Boolean(flag);
@@ -931,6 +932,10 @@ function refreshSettingsStickyBar() {
   if (!bar) return;
   const inSettings = (location.hash || '#overview').replace('#','') === 'settings';
   bar.style.display = (inSettings && settingsDirty) ? '' : 'none';
+}
+
+function setBacktestDirty(flag) {
+  backtestDirty = Boolean(flag);
 }
 
 function applySettingsMode() {
@@ -968,11 +973,17 @@ function initSettingsUx() {
   applySettingsMode();
 
   const mark = () => { setSettingsDirty(true); refreshSettingsStickyBar(); };
-  ['configEditor','strategySelect','stopLossSelect','riskExecLiquidationsSelect','minCryptoPriceInput','minCryptoAdvLiveSelect','maxOrdersInput','maxSingleInput','maxTotalInput'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
+  // Mark settings dirty for any configurable control in the settings card.
+  document.querySelectorAll('#card-bot-state input, #card-bot-state select, #card-bot-state textarea').forEach(el => {
     el.addEventListener('input', mark);
     el.addEventListener('change', mark);
+  });
+
+  // Backtest configurables should also not be overwritten while editing.
+  const markBacktest = () => setBacktestDirty(true);
+  document.querySelectorAll('#card-backtest input, #card-backtest select, #card-backtest textarea').forEach(el => {
+    el.addEventListener('input', markBacktest);
+    el.addEventListener('change', markBacktest);
   });
 
   document.getElementById('settingsSaveBtn')?.addEventListener('click', (e)=>{
@@ -2306,6 +2317,9 @@ async function main() {
     kv(stateEl, 'Risk scheduler', (scheduleStatus?.risk_last_state || 'running') + (scheduleStatus?.risk_last_error ? (' • ' + scheduleStatus.risk_last_error) : ''));
   }
   kv(stateEl, 'Cron scheduler enabled', cronStatus?.enabled ? 'YES' : 'NO');
+  const freezeConfigInputs = settingsDirty;
+  const freezeBacktestInputs = backtestDirty;
+
   // Strategy dropdown (live)
   const stratSel = document.getElementById('strategySelect');
   if (stratSel && strategies) {
@@ -2319,7 +2333,9 @@ async function main() {
       }
       stratSel.dataset.loaded = '1';
     }
-    stratSel.value = cfg.strategy_id || 'baseline_trendvol';
+    if (!freezeConfigInputs) {
+      stratSel.value = cfg.strategy_id || 'baseline_trendvol';
+    }
   }
 
   // Strategy dropdown (backtest) - do NOT overwrite user selection on refresh
@@ -2334,28 +2350,28 @@ async function main() {
         btStrat.appendChild(opt);
       }
       btStrat.dataset.loaded = '1';
-      btStrat.value = cfg.strategy_id || 'baseline_trendvol';
+      if (!freezeBacktestInputs) btStrat.value = cfg.strategy_id || 'baseline_trendvol';
     }
   }
 
   // Stop loss dropdown
   const slSel = document.getElementById('stopLossSelect');
-  if (slSel) {
+  if (slSel && !freezeConfigInputs) {
     const v = cfg.risk?.per_asset_stop_loss_pct;
     slSel.value = (v===null || v===undefined) ? '' : String(v);
   }
   const rlSel = document.getElementById('riskExecLiquidationsSelect');
-  if (rlSel) rlSel.value = String(Boolean(cfg.risk?.execute_exit_liquidations));
+  if (rlSel && !freezeConfigInputs) rlSel.value = String(Boolean(cfg.risk?.execute_exit_liquidations));
 
   // Guardrail inputs
   const setGuard = (id, v) => {
     const el = document.getElementById(id);
-    if (!el) return;
+    if (!el || freezeConfigInputs) return;
     el.value = (v===null || v===undefined) ? 'none' : String(v);
   };
   setGuard('minCryptoPriceInput', cfg.limits?.min_crypto_price);
   const minCrAdvSel = document.getElementById('minCryptoAdvLiveSelect');
-  if (minCrAdvSel) {
+  if (minCrAdvSel && !freezeConfigInputs) {
     const v = Number(cfg.limits?.min_avg_crypto_dollar_volume_20d ?? 5000000);
     const vals = Array.from(minCrAdvSel.options).map(o => Number(o.value)).filter(Number.isFinite);
     const nearest = vals.reduce((a,b)=> Math.abs(b-v) < Math.abs(a-v) ? b : a, vals[0] ?? 5000000);
@@ -2365,22 +2381,22 @@ async function main() {
   setGuard('maxSingleInput', cfg.execution?.max_single_order_notional_usd);
   setGuard('maxTotalInput', cfg.execution?.max_total_notional_usd);
   const ulo = document.getElementById('useLimitOrdersSelect');
-  if (ulo) ulo.value = String(Boolean(cfg.execution?.use_limit_orders));
+  if (ulo && !freezeConfigInputs) ulo.value = String(Boolean(cfg.execution?.use_limit_orders));
   const loi = document.getElementById('limitOffsetInput');
-  if (loi) loi.value = String(cfg.execution?.limit_offset_bps ?? 10);
+  if (loi && !freezeConfigInputs) loi.value = String(cfg.execution?.limit_offset_bps ?? 10);
   const ehe = document.getElementById('extendedHoursSelect');
-  if (ehe) ehe.value = String(Boolean(cfg.execution?.extended_hours));
+  if (ehe && !freezeConfigInputs) ehe.value = String(Boolean(cfg.execution?.extended_hours));
   const est = document.getElementById('extendedStartTimeInput');
-  if (est) est.value = String(cfg.execution?.extended_hours_start_time_local ?? '06:00');
+  if (est && !freezeConfigInputs) est.value = String(cfg.execution?.extended_hours_start_time_local ?? '06:00');
   const wrd = document.getElementById('weeklyRebalanceDaySelect');
-  if (wrd) wrd.value = String(cfg.scheduling?.weekly_rebalance_day || 'MON');
+  if (wrd && !freezeConfigInputs) wrd.value = String(cfg.scheduling?.weekly_rebalance_day || 'MON');
 
   const exEq = cfg.execution?.equities || {};
   const exCr = cfg.execution?.crypto || {};
   const schEq = cfg.scheduling?.equities || {};
   const schCr = cfg.scheduling?.crypto || {};
 
-  const setv = (id, v, d='') => { const el=document.getElementById(id); if (el) el.value = String(v ?? d); };
+  const setv = (id, v, d='') => { const el=document.getElementById(id); if (el && !freezeConfigInputs) el.value = String(v ?? d); };
   setv('eqOrderTypeSelect', exEq.order_type, 'market');
   setv('eqLimitOffsetInput', exEq.limit_offset_bps, cfg.execution?.limit_offset_bps ?? 10);
   setv('eqFallbackEnableSelect', Boolean(exEq.fallback_to_market_at_open), 'false');
@@ -2418,7 +2434,7 @@ async function main() {
 
   // Config editor
   const editor = document.getElementById('configEditor');
-  if (editor && (!editor.value || editor.dataset.loaded !== '1')) {
+  if (editor && !freezeConfigInputs && (!editor.value || editor.dataset.loaded !== '1')) {
     editor.value = JSON.stringify(cfg, null, 2);
     editor.dataset.loaded = '1';
   }

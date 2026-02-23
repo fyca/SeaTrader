@@ -55,23 +55,23 @@ execution:
   max_total_notional_usd: null
 scheduling:
   weekly_rebalance_day: MON
-  weekly_rebalance_time_local: 06:30
-  daily_risk_check_time_local: '12:30'
+  weekly_rebalance_time_local: 06:32
+  daily_risk_check_time_local: 06:33
   timezone: America/Los_Angeles
   equities:
     rebalance_frequency: weekly
     rebalance_day: MON
-    rebalance_time_local: 06:35
+    rebalance_time_local: 06:32
     risk_check_frequency: daily
     risk_check_day: MON
-    risk_check_time_local: 06:30
+    risk_check_time_local: 06:33
   crypto:
     rebalance_frequency: daily
     rebalance_day: MON
-    rebalance_time_local: 00:15
+    rebalance_time_local: 00:05
     risk_check_frequency: daily
     risk_check_day: MON
-    risk_check_time_local: 00:15
+    risk_check_time_local: 00:06
 universe:
   equity_benchmark_symbols:
   - SPY

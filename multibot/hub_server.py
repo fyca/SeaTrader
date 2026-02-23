@@ -284,6 +284,21 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
             return
 
+        if self.path == "/api/cron/install":
+            ok, out = run_cmd(["python3", str(ROOT / "scripts" / "manage_cron.py"), "install"])
+            self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
+            return
+
+        if self.path == "/api/cron/remove":
+            ok, out = run_cmd(["python3", str(ROOT / "scripts" / "manage_cron.py"), "remove"])
+            self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
+            return
+
+        if self.path == "/api/cron/show":
+            ok, out = run_cmd(["python3", str(ROOT / "scripts" / "manage_cron.py"), "show"])
+            self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
+            return
+
         if self.path == "/api/dashboards/stop-all":
             ok, out = run_cmd([str(ROOT / "scripts" / "stop_dashboards.sh")])
             self._send_json({"ok": ok, "message": out}, 200 if ok else 500)

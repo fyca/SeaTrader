@@ -11,7 +11,7 @@ limits:
   min_stock_price: 5.0
   min_crypto_price: null
   min_avg_dollar_volume_20d: 18000000.0
-  min_avg_crypto_dollar_volume_20d: 120000.0
+  min_avg_crypto_dollar_volume_20d: 100000.0
 risk:
   max_drawdown_freeze: 0.2
   warn_drawdown: 0.1
@@ -44,34 +44,34 @@ execution:
     order_type: market
     limit_offset_bps: 10.0
     fallback_to_market_at_open: false
-    fallback_time_local: 00:00
+    fallback_time_local: 00:02
   extended_hours: true
   fallback_to_market_at_open: true
   fallback_time_local: 06:30
   fallback_grace_seconds: 20
-  extended_hours_start_time_local: 06:03
+  extended_hours_start_time_local: 06:00
   max_orders_per_run: 25
   max_single_order_notional_usd: null
   max_total_notional_usd: null
 scheduling:
   weekly_rebalance_day: MON
-  weekly_rebalance_time_local: 06:30
-  daily_risk_check_time_local: '12:30'
+  weekly_rebalance_time_local: 06:40
+  daily_risk_check_time_local: 06:41
   timezone: America/Los_Angeles
   equities:
     rebalance_frequency: weekly
     rebalance_day: MON
-    rebalance_time_local: 06:32
+    rebalance_time_local: 06:00
     risk_check_frequency: daily
     risk_check_day: MON
     risk_check_time_local: 06:30
   crypto:
     rebalance_frequency: daily
     rebalance_day: MON
-    rebalance_time_local: 00:12
+    rebalance_time_local: 00:02
     risk_check_frequency: daily
     risk_check_day: MON
-    risk_check_time_local: 00:12
+    risk_check_time_local: 00:00
 universe:
   equity_benchmark_symbols:
   - SPY

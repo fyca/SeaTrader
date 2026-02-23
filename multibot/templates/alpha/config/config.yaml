@@ -56,7 +56,7 @@ execution:
 scheduling:
   weekly_rebalance_day: MON
   weekly_rebalance_time_local: 06:30
-  daily_risk_check_time_local: '12:30'
+  daily_risk_check_time_local: 06:31
   timezone: America/Los_Angeles
   equities:
     rebalance_frequency: weekly
@@ -64,14 +64,14 @@ scheduling:
     rebalance_time_local: 06:30
     risk_check_frequency: daily
     risk_check_day: MON
-    risk_check_time_local: 06:30
+    risk_check_time_local: 06:31
   crypto:
     rebalance_frequency: daily
     rebalance_day: MON
     rebalance_time_local: 00:00
     risk_check_frequency: daily
     risk_check_day: MON
-    risk_check_time_local: 00:00
+    risk_check_time_local: 00:01
 universe:
   equity_benchmark_symbols:
   - SPY
