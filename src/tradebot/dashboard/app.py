@@ -798,8 +798,8 @@ def create_app(*, config_path: str) -> FastAPI:
         queue_daily_risk_check = bool(body.get("queue_daily_risk_check", True))
         asset_mode = str(body.get("asset_mode") or "both")
 
-        if kind not in ("rebalance", "risk-check"):
-            raise HTTPException(status_code=400, detail="kind must be rebalance or risk-check")
+        if kind not in ("rebalance", "risk-check", "fallback-check"):
+            raise HTTPException(status_code=400, detail="kind must be rebalance, risk-check, or fallback-check")
 
         job_id = str(uuid.uuid4())
         repo_dir = Path(config_path).resolve().parent.parent
@@ -809,6 +809,7 @@ def create_app(*, config_path: str) -> FastAPI:
         action_jobs[job_id] = {
             "state": "starting",
             "kind": kind,
+            "asset_mode": asset_mode,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "wait_until_configured": wait_until_configured,
             "place_orders": place_orders,
@@ -871,7 +872,11 @@ def create_app(*, config_path: str) -> FastAPI:
                         else:
                             ns = argparse.Namespace(config=config_path, place_orders=place_orders, wait_until=None, preset=preset, asset_mode=asset_mode)
                             rc = int(cmd_rebalance(ns))
-                    else:
+                    elif kind == "risk-check":
+                        ns = argparse.Namespace(config=config_path, preset=preset, asset_mode=asset_mode)
+                        rc = int(cmd_risk_check(ns))
+                    else:  # fallback-check
+                        # Reuse risk-check command path; it now includes fallback conversion logic.
                         ns = argparse.Namespace(config=config_path, preset=preset, asset_mode=asset_mode)
                         rc = int(cmd_risk_check(ns))
                 w.flush()
@@ -937,13 +942,18 @@ def create_app(*, config_path: str) -> FastAPI:
 
         # Multibot managed tags (STMB_<BOT>_...) and run_bot.sh matching this bot
         bot_name = None
+        bot_folder = None
         try:
             cp = Path(config_path).resolve()
             # .../multibot/bots/<bot>/config/config.yaml
             if cp.parent.name == "config" and cp.parent.parent.name:
-                bot_name = cp.parent.parent.name.lower()
+                bot_folder = cp.parent.parent.name.lower()
+            cfg_obj = load_config(config_path)
+            cfg_name = str(getattr(getattr(cfg_obj, "scheduling", None), "bot_name", "") or "").strip().lower()
+            bot_name = cfg_name or bot_folder
         except Exception:
             bot_name = None
+            bot_folder = None
 
         stmb_reb: list[str] = []
         stmb_risk: list[str] = []
@@ -954,7 +964,7 @@ def create_app(*, config_path: str) -> FastAPI:
 
         if bot_name:
             tag_prefix = f"STMB_{bot_name.upper()}_"
-            runbot_hint = f"run_bot.sh {bot_name} "
+            runbot_hint = f"run_bot.sh {(bot_folder or bot_name)} "
             bot_lines = [ln for ln in lines if (tag_prefix in ln or runbot_hint in ln)]
             stmb_reb = [ln for ln in bot_lines if ("_REB_" in ln or " rebalance " in ln)]
             stmb_risk = [ln for ln in bot_lines if ("_RISK_" in ln or " risk-check " in ln)]
@@ -1041,6 +1051,20 @@ def create_app(*, config_path: str) -> FastAPI:
     async def cron_setup(req: Request):
         require_token(req)
         cfg = load_config(config_path)
+
+        cp = Path(config_path).resolve()
+        if "/multibot/bots/" in str(cp):
+            bot_folder = cp.parent.parent.name.lower()
+            bot_alias = str(getattr(cfg.scheduling, "bot_name", "") or "").strip() or bot_folder
+            script = cp.parents[2] / "scripts" / "manage_cron.py"
+            subprocess.run([
+                "python3", str(script), "install-bot",
+                "--bot", bot_folder,
+                "--alias", bot_alias,
+                "--config", str(cp),
+            ], check=True)
+            return {"ok": True, "mode": "multibot", "bot": bot_folder, "alias": bot_alias}
+
         tags = (CRON_TAG_REB, CRON_TAG_RISK, CRON_TAG_REB_EQ, CRON_TAG_REB_CR, CRON_TAG_RISK_EQ, CRON_TAG_RISK_CR)
         lines = [ln for ln in _cron_get_lines() if not any(t in ln for t in tags)]
 
@@ -1091,6 +1115,20 @@ def create_app(*, config_path: str) -> FastAPI:
     @app.post("/api/scheduler/cron/stop")
     async def cron_stop(req: Request):
         require_token(req)
+
+        cp = Path(config_path).resolve()
+        if "/multibot/bots/" in str(cp):
+            cfg = load_config(config_path)
+            bot_folder = cp.parent.parent.name.lower()
+            bot_alias = str(getattr(cfg.scheduling, "bot_name", "") or "").strip() or bot_folder
+            script = cp.parents[2] / "scripts" / "manage_cron.py"
+            subprocess.run([
+                "python3", str(script), "remove-bot",
+                "--bot", bot_folder,
+                "--alias", bot_alias,
+            ], check=True)
+            return {"ok": True, "mode": "multibot", "bot": bot_folder, "alias": bot_alias}
+
         tags = (CRON_TAG_REB, CRON_TAG_RISK, CRON_TAG_REB_EQ, CRON_TAG_REB_CR, CRON_TAG_RISK_EQ, CRON_TAG_RISK_CR)
         lines = [ln for ln in _cron_get_lines() if not any(t in ln for t in tags)]
         _cron_write_lines(lines)

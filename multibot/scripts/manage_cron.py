@@ -62,8 +62,13 @@ def cron_time(freq: str, day: str | None, hhmm: str) -> str:
     raise ValueError(f"Unsupported frequency: {freq!r} (supported: daily, weekly)")
 
 
-def bot_cron_lines(bot: str) -> list[str]:
-    cfg_p = BOTS_DIR / bot / "config" / "config.yaml"
+def _daily_hhmm_cron(hhmm: str) -> str:
+    m, h = hhmm_to_min_hour(hhmm)
+    return f"{m} {h} * * *"
+
+
+def bot_cron_lines(bot: str, alias: str | None = None, config_path: Path | None = None) -> list[str]:
+    cfg_p = config_path or (BOTS_DIR / bot / "config" / "config.yaml")
     if not cfg_p.exists():
         raise FileNotFoundError(f"Missing config: {cfg_p}")
 
@@ -71,9 +76,13 @@ def bot_cron_lines(bot: str) -> list[str]:
     sched = cfg.get("scheduling") or {}
     eq = sched.get("equities") or {}
     cr = sched.get("crypto") or {}
+    ex = cfg.get("execution") or {}
+    ex_eq = ex.get("equities") or {}
+    ex_cr = ex.get("crypto") or {}
 
     lines: list[str] = []
     prefix = f"cd {REPO} && source .venv/bin/activate"
+    tag_bot = (alias or bot).upper()
 
     eq_reb = cron_time(eq.get("rebalance_frequency", "weekly"), eq.get("rebalance_day", "MON"), eq.get("rebalance_time_local", "06:30"))
     eq_risk = cron_time(eq.get("risk_check_frequency", "daily"), eq.get("risk_check_day", "MON"), eq.get("risk_check_time_local", "06:31"))
@@ -81,18 +90,46 @@ def bot_cron_lines(bot: str) -> list[str]:
     cr_risk = cron_time(cr.get("risk_check_frequency", "daily"), cr.get("risk_check_day", "MON"), cr.get("risk_check_time_local", "00:01"))
 
     lines.append(
-        f"{eq_reb} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} rebalance --place-orders --asset-mode equities' # STMB_{bot.upper()}_REB_EQ"
+        f"{eq_reb} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} rebalance --place-orders --asset-mode equities' # STMB_{tag_bot}_REB_EQ"
     )
     lines.append(
-        f"{eq_risk} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} risk-check --asset-mode equities' # STMB_{bot.upper()}_RISK_EQ"
+        f"{eq_risk} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} risk-check --asset-mode equities' # STMB_{tag_bot}_RISK_EQ"
     )
     lines.append(
-        f"{cr_reb} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} rebalance --place-orders --asset-mode crypto' # STMB_{bot.upper()}_REB_CR"
+        f"{cr_reb} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} rebalance --place-orders --asset-mode crypto' # STMB_{tag_bot}_REB_CR"
     )
     lines.append(
-        f"{cr_risk} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} risk-check --asset-mode crypto' # STMB_{bot.upper()}_RISK_CR"
+        f"{cr_risk} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} risk-check --asset-mode crypto' # STMB_{tag_bot}_RISK_CR"
     )
+
+    # Dedicated fallback sweeps: ensure stale limit orders can still convert even when
+    # rebalance/risk-check timing does not align with fallback window.
+    try:
+        if bool(ex_eq.get("fallback_to_market_at_open", False)):
+            t = str(ex_eq.get("fallback_time_local", "06:30"))
+            lines.append(
+                f"{_daily_hhmm_cron(t)} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} risk-check --asset-mode equities' # STMB_{tag_bot}_FALL_EQ"
+            )
+    except Exception:
+        pass
+
+    try:
+        if bool(ex_cr.get("fallback_to_market_at_open", False)):
+            t = str(ex_cr.get("fallback_time_local", "00:02"))
+            lines.append(
+                f"{_daily_hhmm_cron(t)} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} risk-check --asset-mode crypto' # STMB_{tag_bot}_FALL_CR"
+            )
+    except Exception:
+        pass
+
     return lines
+
+
+def _clean_alias(name: str | None) -> str | None:
+    if not name:
+        return None
+    s = re.sub(r"[^A-Za-z0-9_\-]", "_", str(name).strip())
+    return s[:40] if s else None
 
 
 def build_block() -> str:
@@ -102,6 +139,49 @@ def build_block() -> str:
         lines.extend(bot_cron_lines(bot))
     lines.append(MARK_END)
     return "\n".join(lines) + "\n"
+
+
+def install_bot(bot: str, alias: str | None = None, config_path: str | None = None) -> list[str]:
+    bot = bot.lower().strip()
+    alias = _clean_alias(alias)
+    cpath = Path(config_path).resolve() if config_path else None
+    new_lines = bot_cron_lines(bot, alias=alias, config_path=cpath)
+
+    existing = read_crontab().splitlines()
+    tag = (alias or bot).upper()
+    runbot_hint = f"run_bot.sh {bot} "
+
+    filtered = []
+    for ln in existing:
+        if f"STMB_{tag}_" in ln:
+            continue
+        if runbot_hint in ln and "STMB_" in ln:
+            continue
+        filtered.append(ln)
+
+    filtered.extend(new_lines)
+    payload = "\n".join(x for x in filtered if x is not None).strip("\n") + "\n"
+    write_crontab(payload)
+    return new_lines
+
+
+def remove_bot(bot: str, alias: str | None = None) -> int:
+    bot = bot.lower().strip()
+    alias = _clean_alias(alias)
+    existing = read_crontab().splitlines()
+    tag = (alias or bot).upper()
+    runbot_hint = f"run_bot.sh {bot} "
+
+    kept = []
+    removed = 0
+    for ln in existing:
+        if f"STMB_{tag}_" in ln or (runbot_hint in ln and "STMB_" in ln):
+            removed += 1
+            continue
+        kept.append(ln)
+    payload = "\n".join(kept).strip("\n")
+    write_crontab((payload + "\n") if payload else "")
+    return removed
 
 
 def install() -> str:
@@ -135,7 +215,10 @@ def current_block() -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Manage per-bot SeaTrader cron entries")
-    ap.add_argument("action", choices=["install", "remove", "preview", "show"])
+    ap.add_argument("action", choices=["install", "remove", "preview", "show", "install-bot", "remove-bot"])
+    ap.add_argument("--bot", help="bot folder name (alpha..iota)")
+    ap.add_argument("--alias", help="optional selectable bot label used in STMB tags")
+    ap.add_argument("--config", help="optional explicit config.yaml path for install-bot")
     args = ap.parse_args()
 
     if args.action == "install":
@@ -152,6 +235,19 @@ def main() -> int:
         return 0
     if args.action == "show":
         print(current_block() or "(no per-bot cron block installed)")
+        return 0
+    if args.action == "install-bot":
+        if not args.bot:
+            raise SystemExit("--bot is required for install-bot")
+        lines = install_bot(args.bot, alias=args.alias, config_path=args.config)
+        print("Installed cron lines for bot:\n")
+        print("\n".join(lines))
+        return 0
+    if args.action == "remove-bot":
+        if not args.bot:
+            raise SystemExit("--bot is required for remove-bot")
+        n = remove_bot(args.bot, alias=args.alias)
+        print(f"Removed {n} cron line(s) for bot {args.bot}")
         return 0
     return 1
 

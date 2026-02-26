@@ -9,13 +9,14 @@ limits:
   max_equity_positions: 10
   max_crypto_positions: 5
   min_stock_price: 5.0
-  min_crypto_price: null
+  min_crypto_price: 1.0
   min_avg_dollar_volume_20d: 22000000.0
   min_avg_crypto_dollar_volume_20d: 100000.0
 risk:
   max_drawdown_freeze: 0.2
   warn_drawdown: 0.1
   per_asset_stop_loss_pct: 0.05
+  block_same_day_roundtrip: true
   portfolio_dd_stop: 0.2
   dd_stop_behavior: freeze
   execute_exit_liquidations: true
@@ -43,7 +44,7 @@ execution:
   crypto:
     order_type: market
     limit_offset_bps: 10.0
-    fallback_to_market_at_open: false
+    fallback_to_market_at_open: true
     fallback_time_local: 00:02
   extended_hours: true
   fallback_to_market_at_open: true
@@ -54,6 +55,7 @@ execution:
   max_single_order_notional_usd: null
   max_total_notional_usd: null
 scheduling:
+  bot_name: epsilon
   weekly_rebalance_day: MON
   weekly_rebalance_time_local: 06:38
   daily_risk_check_time_local: 06:39

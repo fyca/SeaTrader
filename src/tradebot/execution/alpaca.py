@@ -61,7 +61,7 @@ def place_notional_market_orders(
                     symbol=pl.symbol,
                     side=side,
                     type=OrderType.LIMIT,
-                    time_in_force=TimeInForce.DAY,
+                    time_in_force=(TimeInForce.GTC if ("/" in pl.symbol) else TimeInForce.DAY),
                     limit_price=lim,
                     extended_hours=(extended_hours and ("/" not in pl.symbol)),
                 )
@@ -106,7 +106,7 @@ def place_notional_market_orders(
         req_kwargs = dict(
             symbol=pl.symbol,
             side=side,
-            time_in_force=TimeInForce.DAY,
+            time_in_force=(TimeInForce.GTC if ("/" in pl.symbol) else TimeInForce.DAY),
         )
         if pl.side == "sell" and qty_override > 0:
             req_kwargs["qty"] = qty_override

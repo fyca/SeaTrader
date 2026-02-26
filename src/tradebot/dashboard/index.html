@@ -23,6 +23,23 @@
     h1 { margin: 0 0 8px 0; }
     *, *::before, *::after { box-sizing: border-box; }
     .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+    .topbarInner { position: relative; }
+    #topBotLabel {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      opacity: 0.95;
+      pointer-events: none;
+      text-align: center;
+      max-width: 46vw;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .row { display: flex; }
     .card h2 { font-size: 14px; margin: 0 0 8px 0; }
     .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; font-size: 14px; }
@@ -58,6 +75,7 @@
       .accountBlock { grid-column: span 12; }
       .accountKvs { grid-template-columns: 140px 1fr !important; }
       #kpiGrid { grid-template-columns: 1fr 1fr !important; }
+      #topBotLabel { font-size: 18px; max-width: 40vw; }
     }
   </style>
 </head>
@@ -71,6 +89,7 @@
           <div class="muted" id="subtitle" style="font-size:12px; margin-top:2px;">loading…</div>
         </div>
       </div>
+      <div id="topBotLabel">—</div>
       <div class="row" style="align-items:center; gap:10px;">
         <a href="/" class="muted" style="text-decoration:none;" title="Dashboard"><span class="pill">Dashboard</span></a>
         <a href="/builder" class="muted" style="text-decoration:none;" title="Strategy Builder"><span class="pill">Builder</span></a>
@@ -132,6 +151,10 @@
     </div>
     <div class="card col-12" id="card-bot-state">
       <h2>Bot state</h2>
+      <div class="kvs" style="margin-top:6px; margin-bottom:4px;">
+        <div class="muted" style="font-size:12px;">Bot Label</div>
+        <div><input id="botNameInput" placeholder="alpha" style="max-width:240px;" /></div>
+      </div>
       <div class="kvs" id="state"></div>
       <div class="row" style="justify-content:space-between; align-items:center; margin-top:10px; gap:10px; flex-wrap:wrap;">
         <div class="pill"><span class="muted">Settings mode</span>
@@ -259,9 +282,12 @@
           <span id="saveStatus" class="muted"></span>
         </div>
         <div class="actionRow" style="margin-top:10px;">
-          <button id="runPaperRebalanceBtn" class="primary">Run paper rebalance</button>
+          <button id="runPaperRebalanceBtn" class="primary">Run paper rebalance (both)</button>
+          <button id="runPaperRebalanceEqBtn" class="secondary">Rebalance stocks now</button>
+          <button id="runPaperRebalanceCrBtn" class="secondary">Rebalance crypto now</button>
           <button id="runScheduledRebalanceBtn" class="secondary">Run at configured time</button>
           <button id="runRiskCheckBtn" class="secondary">Run risk-check</button>
+          <button id="runFallbackSweepBtn" class="secondary">Run fallback sweep</button>
           <span id="runActionStatus" class="muted"></span>
         </div>
         <div style="margin-top:8px;">
@@ -307,12 +333,17 @@
       <div class="grid" style="margin-top:10px; grid-template-columns: repeat(12, 1fr); gap:12px;">
         <div class="card col-12" style="padding:12px 14px;">
           <div class="row" style="justify-content:space-between; align-items:center;">
-            <h2 style="margin:0;">Run settings</h2>
+            <div>
+              <h2 style="margin:0;">Run settings</h2>
+              <div id="btParityMeta" class="muted" style="font-size:12px; margin-top:2px;">bot: loading…</div>
+            </div>
             <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap;">
               <button id="btPreset1y" class="secondary">Last 1y</button>
               <button id="btPreset5y" class="secondary">Last 5y</button>
               <input id="btSymbol" placeholder="Single symbol (optional)" style="min-width:260px;" />
               <button id="btRun" class="primary">Run backtest</button>
+              <button id="btLoadLive" class="secondary">Load live parity</button>
+              <button id="btRunLive" class="secondary">Backtest live now</button>
               <details style="display:inline-block;">
                 <summary class="pill" style="cursor:pointer; user-select:none;">Optimization</summary>
                 <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding:8px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2);">
@@ -812,13 +843,16 @@
       </div>
       <div class="subcard" style="margin-bottom:10px; padding:10px;">
         <h2>Daily summary</h2>
-        <div class="tableWrap" style="max-height:220px;">
+        <div class="tableWrap" style="max-height:220px; overflow:auto;">
           <table>
             <thead>
-              <tr><th>Day (UTC)</th><th>Equity</th><th>Δ Equity</th><th>Cash</th><th>Orders</th><th>Buys $</th><th>Sells $</th><th>Exit signals</th><th>Liquidations</th></tr>
+              <tr><th>Day (UTC)</th><th>Equity</th><th>Δ Equity</th><th>Cash</th><th>Orders</th><th>Buys #</th><th>Sells #</th><th>Buys $</th><th>Sells $</th><th>Exit signals</th><th>Liquidations</th></tr>
             </thead>
             <tbody id="liveDailySummary"></tbody>
           </table>
+        </div>
+        <div id="liveDailyActivityPanel" class="subcard" style="margin-top:8px; padding:8px;">
+          <div class="muted">Select a day to view activity details</div>
         </div>
       </div>
       <div class="grid">
@@ -1075,6 +1109,25 @@ function fmtDate(d) {
 }
 
 let btJobId = null;
+
+let openExposureSymbols = new Set();
+let openLiveDailyDays = new Set();
+
+function _loadOpenUiState() {
+  try {
+    const s1 = JSON.parse(localStorage.getItem('open_exposure_symbols') || '[]');
+    if (Array.isArray(s1)) openExposureSymbols = new Set(s1.map(x => String(x)));
+  } catch(e) {}
+  try {
+    const s2 = JSON.parse(localStorage.getItem('open_live_daily_days') || '[]');
+    if (Array.isArray(s2)) openLiveDailyDays = new Set(s2.map(x => String(x)));
+  } catch(e) {}
+}
+
+function _saveOpenUiState() {
+  try { localStorage.setItem('open_exposure_symbols', JSON.stringify([...openExposureSymbols])); } catch(e) {}
+  try { localStorage.setItem('open_live_daily_days', JSON.stringify([...openLiveDailyDays])); } catch(e) {}
+}
 
 function setBacktestDatesYears(years) {
   const end = new Date();
@@ -1964,7 +2017,9 @@ async function main() {
   const dayDelta = (acct.day_change_equity==null ? '—' : (money(acct.day_change_equity) + ' (' + pct(acct.day_change_equity_pct) + ')'));
 
   const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+  const botLabelTxt = (cfg?.scheduling?.bot_name || '').trim() || '—';
   setTxt('statusMode', acct.paper ? 'Paper' : 'Live');
+  setTxt('topBotLabel', botLabelTxt);
   setTxt('statusRisk', status);
   setTxt('statusRebalance', lastRebalanceTs);
   setTxt('statusRiskCheck', lastRiskTs);
@@ -2004,26 +2059,96 @@ async function main() {
   }
 
   const ldTb = document.getElementById('liveDailySummary');
+  const dailyPanel = document.getElementById('liveDailyActivityPanel');
   if (ldTb) {
     ldTb.innerHTML = '';
     const rows = Array.isArray(liveMetricsRes?.daily) ? liveMetricsRes.daily.slice().reverse().slice(0,120) : [];
+
+    const priceFor = (e) => {
+      const cands = [e?.price, e?.filled_avg_price, e?.limit_price, e?.stop_price];
+      for (const v of cands) {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) return `$${n.toFixed(4)}`;
+      }
+      return '—';
+    };
+    const activityFor = (arr) => (arr || []).filter(e => {
+      const t = String(e?.event_type || '').toLowerCase();
+      if (t.includes('order') || t.includes('buy') || t.includes('sell') || t.includes('liquidation') || t.includes('fallback') || t.includes('rebalance')) return true;
+      return Boolean(e?.symbol);
+    });
+    const renderActivityRows = (arr) => (arr || []).slice(0,280).map(e => {
+      const detail = (e.reason || e.status || e.error || (e.notional_usd!=null ? money(e.notional_usd) : ''));
+      const qtyTxt = (e.qty!=null && e.qty!=='' ? String(e.qty) : '—');
+      return `<tr>`
+        + `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${e.ts||''}</td>`
+        + `<td>${e.symbol||'—'}</td>`
+        + `<td>${e.side||'—'}</td>`
+        + `<td>${e.event_type||''}</td>`
+        + `<td>${e.notional_usd!=null ? money(e.notional_usd) : '—'}</td>`
+        + `<td>${qtyTxt}</td>`
+        + `<td>${priceFor(e)}</td>`
+        + `<td>${detail||'—'}</td>`
+        + `</tr>`;
+    }).join('');
+
+    const setPanelForDay = (day, dayEvents) => {
+      if (!dailyPanel) return;
+      const act = activityFor(dayEvents);
+      dailyPanel.innerHTML = `<div class="muted" style="margin-bottom:6px;">Activity for ${day} (${act.length})</div>
+        <div class="tableWrap" style="max-height:260px; overflow:auto;">
+          <table>
+            <thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Type</th><th>Notional</th><th>Qty</th><th>Price</th><th>Detail</th></tr></thead>
+            <tbody>${renderActivityRows(act) || '<tr><td colspan="8" class="muted">(no buy/sell/rebalance activity)</td></tr>'}</tbody>
+          </table>
+        </div>`;
+    };
+
     for (const r of rows) {
+      const day = String(r.day || '').trim();
+      const dayEvents = liveEvents.filter(x => String(x?.ts || '').slice(0,10) === day);
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${r.day||''}</td>`
+      tr.style.cursor = 'pointer';
+      tr.title = 'Click to show activity below';
+      const evDay = activityFor(dayEvents);
+      const isOrderEvent = (e) => {
+        const t = String(e?.event_type || '').toLowerCase();
+        return t.includes('order') || t.includes('buy') || t.includes('sell') || t.includes('rebalance') || t.includes('liquidation') || t.includes('fallback');
+      };
+      const toNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+      const orderCount = evDay.filter(isOrderEvent).length;
+      const buyCount = evDay.filter(e => String(e?.side || '').toLowerCase() === 'buy').length;
+      const sellCount = evDay.filter(e => String(e?.side || '').toLowerCase() === 'sell').length;
+      const buyNotional = evDay.filter(e => String(e?.side || '').toLowerCase() === 'buy').reduce((a,e)=>a + toNum(e?.notional_usd), 0);
+      const sellNotional = evDay.filter(e => String(e?.side || '').toLowerCase() === 'sell').reduce((a,e)=>a + toNum(e?.notional_usd), 0);
+      const exitCount = dayEvents.filter(e => String(e?.event_type || '').toLowerCase().includes('exit')).length;
+      const liqCount = dayEvents.filter(e => String(e?.event_type || '').toLowerCase().includes('liquidation')).length;
+
+      tr.innerHTML = `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${day||''}</td>`
         + `<td>${r.equity==null?'—':money(r.equity)}</td>`
         + `<td>${r.equity_delta==null?'—':money(r.equity_delta)}</td>`
         + `<td>${r.cash==null?'—':money(r.cash)}</td>`
-        + `<td>${r.order_count??0}</td>`
-        + `<td>${money(r.buy_notional||0)}</td>`
-        + `<td>${money(r.sell_notional||0)}</td>`
-        + `<td>${r.exit_signal_count??0}</td>`
-        + `<td>${r.liquidation_count??0}</td>`;
+        + `<td>${orderCount}</td>`
+        + `<td>${buyCount}</td>`
+        + `<td>${sellCount}</td>`
+        + `<td>${money(buyNotional)}</td>`
+        + `<td>${money(sellNotional)}</td>`
+        + `<td>${exitCount}</td>`
+        + `<td>${liqCount}</td>`;
+      tr.addEventListener('click', () => setPanelForDay(day, dayEvents));
       ldTb.appendChild(tr);
     }
+
     if (!ldTb.children.length) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="9" class="muted">(no daily metrics yet)</td>`;
+      tr.innerHTML = `<td colspan="11" class="muted">(no daily metrics yet)</td>`;
       ldTb.appendChild(tr);
+    } else {
+      const firstDay = String(rows[0]?.day || '');
+      if (firstDay) {
+        const firstEvents = liveEvents.filter(x => String(x?.ts || '').slice(0,10) === firstDay);
+        setPanelForDay(firstDay, firstEvents);
+      }
     }
   }
 
@@ -2320,6 +2445,13 @@ async function main() {
   const freezeConfigInputs = settingsDirty;
   const freezeBacktestInputs = backtestDirty;
 
+  const btParityMeta = document.getElementById('btParityMeta');
+  if (btParityMeta) {
+    const botName = String(cfg?.scheduling?.bot_name || '').trim() || 'default';
+    const strat = String(cfg?.strategy_id || '—');
+    btParityMeta.textContent = `bot: ${botName} • strategy: ${strat} • source: this dashboard instance config`;
+  }
+
   // Strategy dropdown (live)
   const stratSel = document.getElementById('strategySelect');
   if (stratSel && strategies) {
@@ -2407,6 +2539,7 @@ async function main() {
   setv('crFallbackEnableSelect', Boolean(exCr.fallback_to_market_at_open), 'false');
   setv('crFallbackTimeInput', exCr.fallback_time_local, cfg.execution?.fallback_time_local ?? '06:30');
 
+  setv('botNameInput', cfg.scheduling?.bot_name, '');
   setv('eqRebFreqSelect', schEq.rebalance_frequency, 'weekly');
   setv('eqRebDaySelect', schEq.rebalance_day, cfg.scheduling?.weekly_rebalance_day || 'MON');
   setv('eqRebTimeInput', schEq.rebalance_time_local, cfg.scheduling?.weekly_rebalance_time_local || '06:35');
@@ -2467,7 +2600,7 @@ async function main() {
     const estQty = (p.est_pending_buy_qty!==null && p.est_pending_buy_qty!==undefined) ? Number(p.est_pending_buy_qty).toFixed(4) : '—';
 
     const hasOrders = (p.open_orders && p.open_orders.length);
-    const caret = hasOrders ? '▸' : '';
+    const caret = hasOrders ? (openExposureSymbols.has(String(p.symbol || '')) ? '▾' : '▸') : '';
 
     const tr = document.createElement('tr');
     tr.style.cursor = hasOrders ? 'pointer' : 'default';
@@ -2476,7 +2609,8 @@ async function main() {
 
     if (hasOrders) {
       const detail = document.createElement('tr');
-      detail.style.display = 'none';
+      const isOpen = openExposureSymbols.has(String(p.symbol || ''));
+      detail.style.display = isOpen ? '' : 'none';
       const ordersHtml = p.open_orders.map(o => {
         const lim = (o.limit_price!==null && o.limit_price!==undefined) ? ('$' + Number(o.limit_price).toFixed(2)) : '—';
         const stp = (o.stop_price!==null && o.stop_price!==undefined) ? ('$' + Number(o.stop_price).toFixed(2)) : '—';
@@ -2502,8 +2636,13 @@ async function main() {
 
       tr.addEventListener('click', () => {
         const open = detail.style.display !== 'none';
-        detail.style.display = open ? 'none' : '';
-        tr.querySelector('td').textContent = open ? '▸' : '▾';
+        const nextOpen = !open;
+        detail.style.display = nextOpen ? '' : 'none';
+        tr.querySelector('td').textContent = nextOpen ? '▾' : '▸';
+        const sym = String(p.symbol || '');
+        if (nextOpen) openExposureSymbols.add(sym);
+        else openExposureSymbols.delete(sym);
+        _saveOpenUiState();
       });
     }
   }
@@ -2623,6 +2762,86 @@ async function main() {
     if (liq && p.symbol_pnl_floor_liquidate!==undefined) liq.checked = Boolean(p.symbol_pnl_floor_liquidate);
     const iu = document.getElementById('btSymFloorInclUnreal');
     if (iu && p.symbol_pnl_floor_include_unrealized!==undefined) iu.checked = Boolean(p.symbol_pnl_floor_include_unrealized);
+  }
+
+  function btParamsFromLiveConfig(cfg) {
+    const exEq = cfg?.execution?.equities || {};
+    const exCr = cfg?.execution?.crypto || {};
+    const schEq = cfg?.scheduling?.equities || {};
+    const schCr = cfg?.scheduling?.crypto || {};
+    const risk = cfg?.risk || {};
+    const reb = cfg?.rebalance || {};
+    const lim = cfg?.limits || {};
+
+    return {
+      strategy_id: cfg?.strategy_id || 'baseline_trendvol',
+      execution_time_mode: 'intraday',
+      execution_time: 'close',
+      // Keep buy-time parity with live rebalance schedule, not fallback conversion time.
+      execution_time_local: schEq.rebalance_time_local || cfg?.scheduling?.weekly_rebalance_time_local || '06:35',
+      execution_time_local_equities: schEq.rebalance_time_local || cfg?.scheduling?.weekly_rebalance_time_local || '06:35',
+      execution_time_local_crypto: schCr.rebalance_time_local || cfg?.scheduling?.weekly_rebalance_time_local || '06:35',
+      risk_check_time_local: schEq.risk_check_time_local || cfg?.scheduling?.daily_risk_check_time_local || '18:05',
+      risk_check_time_local_equities: schEq.risk_check_time_local || cfg?.scheduling?.daily_risk_check_time_local || '18:05',
+      risk_check_time_local_crypto: schCr.risk_check_time_local || cfg?.scheduling?.daily_risk_check_time_local || '18:05',
+      asset_mode: 'both',
+      rebalance: schEq.rebalance_frequency || 'weekly',
+      rebalance_day: schEq.rebalance_day || cfg?.scheduling?.weekly_rebalance_day || 'MON',
+      rebalance_frequency_equities: schEq.rebalance_frequency || 'weekly',
+      rebalance_day_equities: schEq.rebalance_day || cfg?.scheduling?.weekly_rebalance_day || 'MON',
+      rebalance_frequency_crypto: schCr.rebalance_frequency || 'weekly',
+      rebalance_day_crypto: schCr.rebalance_day || cfg?.scheduling?.weekly_rebalance_day || 'MON',
+      risk_check_frequency_equities: schEq.risk_check_frequency || 'daily',
+      risk_check_day_equities: schEq.risk_check_day || cfg?.scheduling?.weekly_rebalance_day || 'MON',
+      risk_check_frequency_crypto: schCr.risk_check_frequency || 'daily',
+      risk_check_day_crypto: schCr.risk_check_day || cfg?.scheduling?.weekly_rebalance_day || 'MON',
+      rebalance_mode: reb?.rebalance_mode || 'target_notional',
+      liquidation_mode: reb?.liquidation_mode || 'liquidate_non_selected',
+      // slippage is backtest-only; preserve current backtest control value.
+      slippage_bps: Number(document.getElementById('btSlip')?.value || '10'),
+      order_type_equities: exEq.order_type || (cfg?.execution?.use_limit_orders ? 'limit' : 'market'),
+      order_type_crypto: exCr.order_type || (cfg?.execution?.use_limit_orders ? 'limit' : 'market'),
+      limit_offset_bps_equities: Number(exEq.limit_offset_bps ?? cfg?.execution?.limit_offset_bps ?? 10),
+      limit_offset_bps_crypto: Number(exCr.limit_offset_bps ?? cfg?.execution?.limit_offset_bps ?? 10),
+      limit_fallback_to_market_open_equities: Boolean(exEq.fallback_to_market_at_open),
+      limit_fallback_to_market_open_crypto: Boolean(exCr.fallback_to_market_at_open),
+      per_asset_stop_loss_pct: risk?.per_asset_stop_loss_pct ?? null,
+      portfolio_dd_stop: risk?.portfolio_dd_stop ?? null,
+      symbol_pnl_floor_pct: reb?.symbol_pnl_floor_pct ?? null,
+      min_crypto_price: lim?.min_crypto_price ?? null,
+      min_avg_crypto_dollar_volume_20d: Number(lim?.min_avg_crypto_dollar_volume_20d ?? 5000000),
+      symbol_pnl_floor_liquidate: Boolean(reb?.symbol_pnl_floor_liquidate),
+      symbol_pnl_floor_include_unrealized: Boolean(reb?.symbol_pnl_floor_include_unrealized),
+    };
+  }
+
+  const btnLoadLive = document.getElementById('btLoadLive');
+  if (btnLoadLive && !btnLoadLive.dataset.wired) {
+    btnLoadLive.dataset.wired = '1';
+    btnLoadLive.addEventListener('click', (e) => {
+      e.preventDefault();
+      applyBTParamsToUI(btParamsFromLiveConfig(cfg || {}));
+      setBacktestDirty(true);
+      if (presetStatus) presetStatus.textContent = 'loaded live shared settings into backtest';
+      toast('ok', 'Live parity loaded', 'Backtest controls synced to live config');
+    });
+  }
+
+  const btnRunLive = document.getElementById('btRunLive');
+  if (btnRunLive && !btnRunLive.dataset.wired) {
+    btnRunLive.dataset.wired = '1';
+    btnRunLive.addEventListener('click', async (e) => {
+      e.preventDefault();
+      applyBTParamsToUI(btParamsFromLiveConfig(cfg || {}));
+      setBacktestDirty(true);
+      if (presetStatus) presetStatus.textContent = 'running backtest with live parity settings…';
+      try {
+        await runBacktest();
+      } catch (err) {
+        const st = document.getElementById('btStatus');
+        if (st) st.textContent = 'error: ' + (err?.message || err);
+      }
+    });
   }
 
   const btnLoad = document.getElementById('btPresetLoad');
@@ -2960,6 +3179,7 @@ setDefaultBacktestDates();
 refreshIterationReportsList().catch(()=>{});
 initBacktestDetailTabs();
 initSettingsUx();
+_loadOpenUiState();
 
 main().catch(err => {
   document.getElementById('subtitle').textContent = 'error: ' + err;
@@ -3009,6 +3229,7 @@ async function saveConfig() {
     body.execution.crypto.fallback_time_local = String(document.getElementById('crFallbackTimeInput')?.value || '06:30');
 
     body.scheduling = body.scheduling || {};
+    body.scheduling.bot_name = String(document.getElementById('botNameInput')?.value || '').trim() || null;
 
     body.scheduling.equities = body.scheduling.equities || {};
     body.scheduling.equities.rebalance_frequency = String(document.getElementById('eqRebFreqSelect')?.value || 'weekly');
@@ -3091,8 +3312,10 @@ async function runDashboardAction(kind, extraBody={}) {
   const token = document.getElementById('token')?.value || '';
   try {
     actionLastLogCount = 0;
-    el.textContent = 'starting ' + kind + '…';
-    if (logEl) logEl.value = `[${new Date().toLocaleTimeString()}] starting ${kind}...\n`;
+    const mode = String(extraBody?.asset_mode || 'both');
+    const label = `${kind}${(kind==='rebalance' || kind==='risk-check' || kind==='fallback-check') ? ` (${mode})` : ''}`;
+    el.textContent = 'starting ' + label + '…';
+    if (logEl) logEl.value = `[${new Date().toLocaleTimeString()}] starting ${label}...\n`;
     const r = await fetch('/api/actions/run' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -3101,9 +3324,9 @@ async function runDashboardAction(kind, extraBody={}) {
     if (!r.ok) throw new Error(await r.text());
     const j = await r.json();
     actionJobId = j.job_id;
-    el.textContent = kind + ' started: ' + actionJobId.slice(0,8);
+    el.textContent = label + ' started: ' + actionJobId.slice(0,8);
     if (logEl) {
-      logEl.value += `[${new Date().toLocaleTimeString()}] job ${actionJobId.slice(0,8)} started\n`;
+      logEl.value += `[${new Date().toLocaleTimeString()}] ${label} job ${actionJobId.slice(0,8)} started\n`;
       logEl.scrollTop = logEl.scrollHeight;
     }
   } catch (e) {
@@ -3124,13 +3347,14 @@ async function pollActionJob() {
       logEl.scrollTop = logEl.scrollHeight;
       actionLastLogCount = logs.length;
     }
+    const kindLabel = `${st.kind||'action'}${st.asset_mode ? ` (${st.asset_mode})` : ''}`;
     if (st.state === 'running' || st.state === 'starting') {
       const msg = (st.message || '').trim();
-      el.textContent = msg ? `${st.kind||'action'}: ${msg}` : `${st.kind||'action'} ${st.state}…`;
+      el.textContent = msg ? `${kindLabel}: ${msg}` : `${kindLabel} ${st.state}…`;
       return;
     }
     if (st.state === 'done') {
-      el.textContent = `${st.kind||'action'} done`;
+      el.textContent = `${kindLabel} done`;
       actionJobId = null;
       actionLastLogCount = 0;
       main().catch(()=>{});
@@ -3147,8 +3371,20 @@ async function pollActionJob() {
 
 document.getElementById('runPaperRebalanceBtn')?.addEventListener('click', (e) => {
   e.preventDefault();
-  if (!confirm('Run paper rebalance now and place orders?')) return;
-  runDashboardAction('rebalance');
+  if (!confirm('Run paper rebalance now for both stocks + crypto and place orders?')) return;
+  runDashboardAction('rebalance', {asset_mode:'both'});
+});
+
+document.getElementById('runPaperRebalanceEqBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!confirm('Run paper rebalance now for stocks only and place orders?')) return;
+  runDashboardAction('rebalance', {asset_mode:'equities'});
+});
+
+document.getElementById('runPaperRebalanceCrBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!confirm('Run paper rebalance now for crypto only and place orders?')) return;
+  runDashboardAction('rebalance', {asset_mode:'crypto'});
 });
 
 document.getElementById('runScheduledRebalanceBtn')?.addEventListener('click', (e) => {
@@ -3160,6 +3396,12 @@ document.getElementById('runScheduledRebalanceBtn')?.addEventListener('click', (
 document.getElementById('runRiskCheckBtn')?.addEventListener('click', (e) => {
   e.preventDefault();
   runDashboardAction('risk-check');
+});
+
+document.getElementById('runFallbackSweepBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!confirm('Run fallback sweep now? This will check open limit orders and convert eligible stale ones to market orders.')) return;
+  runDashboardAction('fallback-check');
 });
 
 async function doCron(action) {

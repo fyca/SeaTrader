@@ -542,6 +542,40 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
 
     plans = adjusted_plans
 
+    # Cap CRYPTO BUY notional to currently available cash (with safety buffer)
+    # to avoid broker rejects like: insufficient balance for USD.
+    # For crypto, broker rejects are based on *available* USD (often lower than cash
+    # when funds are reserved by open orders). Prefer non-marginable buying power when present.
+    candidates: list[float] = []
+    for fld in ("non_marginable_buying_power", "cash", "buying_power"):
+        try:
+            v = float(getattr(acct, fld, 0.0) or 0.0)
+            if v > 0:
+                candidates.append(v)
+        except Exception:
+            pass
+    avail_usd = min(candidates) if candidates else 0.0
+    crypto_buys = [p for p in plans if str(p.side).lower() == "buy" and "/" in str(p.symbol)]
+    crypto_buy_total = sum(float(p.notional_usd or 0.0) for p in crypto_buys)
+    # Keep 1% headroom for rounding/price movement between plan and submit.
+    crypto_budget = max(0.0, avail_usd * 0.99)
+    if crypto_buys and crypto_buy_total > crypto_budget and crypto_budget > 0:
+        scale = crypto_budget / crypto_buy_total
+        print(
+            f"[yellow]Crypto buy cap[/yellow]: requested ${crypto_buy_total:,.2f} > budget ${crypto_budget:,.2f}; "
+            f"scaling crypto buys by {scale:.4f}"
+        )
+        scaled_plans: list[OrderPlan] = []
+        for p in plans:
+            if str(p.side).lower() == "buy" and "/" in str(p.symbol):
+                n = float(p.notional_usd or 0.0) * scale
+                if n <= 0:
+                    continue
+                scaled_plans.append(OrderPlan(symbol=p.symbol, side=p.side, notional_usd=n, asset_class=p.asset_class, reason=p.reason))
+            else:
+                scaled_plans.append(p)
+        plans = scaled_plans
+
     sym_order_type: dict[str, str] = {}
     sym_limit_offset: dict[str, float] = {}
     sym_fallback_enabled: dict[str, bool] = {}

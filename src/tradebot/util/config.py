@@ -25,6 +25,9 @@ class Risk(BaseModel):
     max_drawdown_freeze: float = 0.20
     warn_drawdown: float = 0.10
     per_asset_stop_loss_pct: float | None = None
+    # Prevent same-day roundtrip churn: do not allow risk-check to sell symbols
+    # that had a BUY fill today (in scheduling.timezone).
+    block_same_day_roundtrip: bool = True
     # Optional parity knob with backtest portfolio_dd_stop.
     # If set, this overrides max_drawdown_freeze as the trigger in live/paper.
     portfolio_dd_stop: float | None = None
@@ -86,6 +89,9 @@ class AssetSchedule(BaseModel):
 
 
 class Scheduling(BaseModel):
+    # Optional label used to tag per-bot cron entries (STMB_<BOT_NAME>_*).
+    # Defaults to bot folder name when omitted.
+    bot_name: str | None = None
     weekly_rebalance_day: str = "MON"
     weekly_rebalance_time_local: str = "06:35"  # PT by default (near US market open)
     daily_risk_check_time_local: str = "18:05"

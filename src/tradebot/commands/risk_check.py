@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import uuid
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from rich import print
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.enums import OrderSide, TimeInForce, QueryOrderStatus, OrderType
+from alpaca.trading.requests import MarketOrderRequest, GetOrdersRequest
 
 from tradebot.adapters.alpaca_client import make_alpaca_clients
 from tradebot.adapters.bars import fetch_stock_bars, fetch_crypto_bars
@@ -19,6 +21,169 @@ from tradebot.util.artifacts import write_artifact
 from tradebot.util.equity_curve import append_equity_point
 from tradebot.util.market_hours import get_market_status
 from tradebot.util.live_ledger import append_live_run, append_live_events
+
+
+def _fallback_convert_open_limits(cfg, clients, market_status: dict) -> list[dict]:
+    """Convert stale OPEN limit orders to market orders when fallback window is reached.
+
+    This runs during risk-check so fallback still happens even if rebalance process exits
+    before/while waiting for fallback time.
+    """
+    converted: list[dict] = []
+    try:
+        tz = ZoneInfo(getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
+    except Exception:
+        tz = ZoneInfo("America/Los_Angeles")
+    now = datetime.now(tz)
+    grace = int(getattr(cfg.execution, "fallback_grace_seconds", 20) or 20)
+
+    try:
+        req = GetOrdersRequest(status=QueryOrderStatus.OPEN, limit=500)
+        orders = clients.trading.get_orders(filter=req)
+    except Exception as ex:
+        print(f"[yellow]Fallback scan warning[/yellow]: {ex}")
+        return converted
+
+    for o in orders:
+        try:
+            typ = str(getattr(o, "type", "") or "").upper()
+            if "LIMIT" not in typ:
+                continue
+            symbol = str(getattr(o, "symbol", "") or "").strip()
+            if not symbol:
+                continue
+
+            is_crypto = "/" in symbol
+            ex_cfg = cfg.execution.crypto if is_crypto else cfg.execution.equities
+            enabled = bool(getattr(ex_cfg, "fallback_to_market_at_open", False))
+            if not enabled:
+                continue
+
+            t_local = str(getattr(ex_cfg, "fallback_time_local", "06:30") or "06:30")
+            try:
+                hh, mm = [int(x) for x in t_local.split(":")]
+                target = now.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(seconds=grace)
+            except Exception:
+                continue
+            if now < target:
+                continue
+
+            # Respect equity market-hours guard for market orders.
+            if (not is_crypto) and (not bool(market_status.get("can_place_equity_orders", False))):
+                converted.append({
+                    "symbol": symbol,
+                    "status": "skipped_market_closed",
+                    "reason": "fallback_window_reached_but_market_closed",
+                })
+                continue
+
+            side = str(getattr(o, "side", "") or "").upper()
+            qty = getattr(o, "qty", None)
+            notional = getattr(o, "notional", None)
+            filled_qty = float(getattr(o, "filled_qty", 0.0) or 0.0)
+            if filled_qty > 0:
+                converted.append({
+                    "symbol": symbol,
+                    "status": "skipped_partial_fill",
+                    "reason": "partial_fill_present",
+                    "filled_qty": filled_qty,
+                    "order_id": str(getattr(o, "id", "")),
+                })
+                continue
+
+            order_id = str(getattr(o, "id", ""))
+            if order_id:
+                try:
+                    clients.trading.cancel_order_by_id(order_id)
+                except Exception:
+                    pass
+
+            req_kwargs = dict(
+                symbol=symbol,
+                side=OrderSide.BUY if side.endswith("BUY") else OrderSide.SELL,
+                time_in_force=TimeInForce.GTC if is_crypto else TimeInForce.DAY,
+            )
+            try:
+                q = float(qty) if qty is not None else 0.0
+            except Exception:
+                q = 0.0
+            try:
+                n = float(notional) if notional is not None else 0.0
+            except Exception:
+                n = 0.0
+
+            if q > 0:
+                req_kwargs["qty"] = q
+            elif n > 0:
+                req_kwargs["notional"] = round(n, 2)
+            else:
+                converted.append({
+                    "symbol": symbol,
+                    "status": "skipped_missing_size",
+                    "reason": "open_limit_has_no_qty_or_notional",
+                    "order_id": order_id,
+                })
+                continue
+
+            mo = clients.trading.submit_order(MarketOrderRequest(**req_kwargs))
+            converted.append({
+                "symbol": symbol,
+                "status": "submitted",
+                "reason": "fallback_convert_open_limit",
+                "from_order_id": order_id,
+                "to_order_id": str(getattr(mo, "id", "")),
+                "side": "buy" if side.endswith("BUY") else "sell",
+                "qty": q if q > 0 else None,
+                "notional": n if (q <= 0 and n > 0) else None,
+            })
+        except Exception as ex:
+            converted.append({
+                "symbol": str(getattr(o, "symbol", "") or ""),
+                "status": "error",
+                "reason": "fallback_conversion_error",
+                "error": str(ex),
+            })
+    return converted
+
+
+def _symbols_bought_today(clients, tz_name: str) -> set[str]:
+    out: set[str] = set()
+    try:
+        tz = ZoneInfo(tz_name or "America/Los_Angeles")
+    except Exception:
+        tz = ZoneInfo("America/Los_Angeles")
+    today = datetime.now(tz).date()
+    try:
+        req = GetOrdersRequest(status=QueryOrderStatus.CLOSED, limit=500)
+        orders = clients.trading.get_orders(filter=req)
+    except Exception:
+        return out
+
+    for o in orders:
+        try:
+            sym = str(getattr(o, "symbol", "") or "").strip()
+            if not sym:
+                continue
+            side = str(getattr(o, "side", "") or "").upper()
+            if not side.endswith("BUY"):
+                continue
+            st = str(getattr(o, "status", "") or "").upper()
+            if "FILLED" not in st:
+                continue
+            fa = getattr(o, "filled_at", None)
+            if fa is None:
+                continue
+            if isinstance(fa, datetime):
+                dt = fa
+            else:
+                dt = datetime.fromisoformat(str(fa).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=tz)
+            if dt.astimezone(tz).date() == today:
+                out.add(sym)
+        except Exception:
+            continue
+    return out
 
 
 def cmd_risk_check(args: argparse.Namespace) -> int:
@@ -144,10 +309,36 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
             if should:
                 exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": reason, "last_close": last, "ma_long": maL})
 
+    blocked_same_day: list[dict] = []
+    if bool(getattr(cfg.risk, "block_same_day_roundtrip", True)) and exit_plans:
+        bought_today = _symbols_bought_today(clients, getattr(cfg.scheduling, "timezone", "America/Los_Angeles"))
+        if bought_today:
+            kept = []
+            for e in exit_plans:
+                sym = str(e.get("symbol") or "")
+                if sym in bought_today:
+                    blocked_same_day.append({
+                        "symbol": sym,
+                        "asset_class": e.get("asset_class"),
+                        "reason": e.get("reason"),
+                        "status": "skipped_same_day_roundtrip",
+                    })
+                else:
+                    kept.append(e)
+            exit_plans = kept
+
     if exit_plans:
         print("\nExit signals:")
         for e in exit_plans:
             print(f"- SELL {e['symbol']:12s} ({e['asset_class']}) reason={e['reason']}")
+    if blocked_same_day:
+        print("\nSame-day roundtrip guard blocked exits:")
+        for e in blocked_same_day:
+            print(f"- SKIP {e['symbol']:12s} reason={e['reason']}")
+
+    fallback_conversions = _fallback_convert_open_limits(cfg, clients, market_status)
+    if fallback_conversions:
+        print(f"Fallback conversions processed: {len(fallback_conversions)}")
 
     executed_liquidations = []
     if exit_plans and bool(getattr(cfg.risk, "execute_exit_liquidations", False)):
@@ -219,6 +410,8 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
         "exit_signals": exit_plans,
         "execute_exit_liquidations": bool(getattr(cfg.risk, "execute_exit_liquidations", False)),
         "executed_liquidations": executed_liquidations,
+        "blocked_same_day_roundtrip": blocked_same_day,
+        "fallback_conversions": fallback_conversions,
         "market_status": market_status,
     }
     write_artifact("last_risk_check.json", risk_payload)
@@ -233,7 +426,9 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
             "peak_equity": dd_state.peak_equity,
             "frozen": dd_state.frozen,
             "exit_signal_count": len(exit_plans),
+            "blocked_same_day_roundtrip_count": len(blocked_same_day),
             "liquidation_count": len(executed_liquidations),
+            "fallback_conversion_count": len([x for x in fallback_conversions if str(x.get("status")) == "submitted"]),
             "market_status": market_status,
         },
     )
@@ -253,6 +448,20 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                 **e,
             }
             for e in executed_liquidations
+        ]
+        + [
+            {
+                "event_type": "exit_blocked_same_day_roundtrip",
+                **e,
+            }
+            for e in blocked_same_day
+        ]
+        + [
+            {
+                "event_type": "fallback_conversion",
+                **e,
+            }
+            for e in fallback_conversions
         ],
     )
     append_equity_point(equity=equity, cash=float(getattr(acct, "cash", 0.0) or 0.0))
