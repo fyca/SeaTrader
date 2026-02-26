@@ -9,6 +9,7 @@ import pandas as pd
 
 from tradebot.risk.exits import trend_break_exit
 from tradebot.strategies.registry import get_strategy
+from tradebot.strategies.rule_engine import EvalContext, eval_rule
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,14 @@ class BacktestParams:
     risk_check_day_crypto: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] | None = None
 
     strategy_id: str = "baseline_trendvol"
+    # Optional per-asset entry strategy overrides (fallback to strategy_id)
+    strategy_id_equities: str | None = None
+    strategy_id_crypto: str | None = None
+    # Optional per-asset exit strategy references (reserved for strategy-builder exits)
+    exit_strategy_id_equities: str | None = None
+    exit_strategy_id_crypto: str | None = None
+    exit_enabled_equities: bool = False
+    exit_enabled_crypto: bool = False
     asset_mode: Literal["both", "equities", "crypto"] = "both"
     rebalance_mode: Literal["target_notional", "no_add_to_losers"] = "target_notional"
     liquidation_mode: Literal["liquidate_non_selected", "hold_until_exit"] = "liquidate_non_selected"
@@ -167,6 +176,25 @@ def run_backtest(
     max_observed_dd = 0.0
     dd_stop_trigger_day: pd.Timestamp | None = None
 
+    # Resolve per-asset strategy ids (with legacy fallback)
+    eq_strategy_id = params.strategy_id_equities or params.strategy_id
+    cr_strategy_id = params.strategy_id_crypto or params.strategy_id
+
+    # Optional per-asset exit rule specs from rule-based user strategies.
+    def _load_exit_rule(strategy_id: str, enabled: bool):
+        if not enabled:
+            return None
+        try:
+            s = get_strategy(strategy_id)
+            if hasattr(s, "spec"):
+                return (getattr(s, "spec", {}) or {}).get("exit")
+        except Exception:
+            return None
+        return None
+
+    eq_exit_rule = _load_exit_rule(params.exit_strategy_id_equities or eq_strategy_id, bool(params.exit_enabled_equities))
+    cr_exit_rule = _load_exit_rule(params.exit_strategy_id_crypto or cr_strategy_id, bool(params.exit_enabled_crypto))
+
     # Precompute close/open series
     closes: dict[str, pd.Series] = {}
     opens: dict[str, pd.Series] = {}
@@ -269,6 +297,15 @@ def run_backtest(
                 return v
         # default to close for daily risk checks
         return px(sym, day)
+
+    def closes_until_day(sym: str, day: pd.Timestamp) -> pd.Series:
+        s = closes.get(sym)
+        if s is None or len(s) == 0:
+            return pd.Series(dtype=float)
+        try:
+            return s.loc[:day].dropna().astype(float)
+        except Exception:
+            return pd.Series(dtype=float)
 
     def _use_limit_for(sym: str) -> bool:
         is_crypto = "/" in sym
@@ -572,6 +609,66 @@ def run_backtest(
                 stopped_until_next_rebalance = True
                 dd_stop_trigger_day = day
 
+        # Optional per-asset user exit rules (from strategy builder), evaluated on risk-check schedule.
+        if eq_exit_rule is not None or cr_exit_rule is not None:
+            for sym in list(positions_qty.keys()):
+                is_crypto = "/" in sym
+                if is_crypto and day not in cr_risk_days:
+                    continue
+                if (not is_crypto) and day not in eq_risk_days:
+                    continue
+                ex_rule = cr_exit_rule if is_crypto else eq_exit_rule
+                if ex_rule is None:
+                    continue
+                cls = closes_until_day(sym, day)
+                if len(cls) < 5:
+                    continue
+                ann_factor = 365.0 if is_crypto else 252.0
+                should_exit = False
+                try:
+                    should_exit = bool(eval_rule(EvalContext(closes=cls, ann_factor=ann_factor), ex_rule))
+                except Exception:
+                    should_exit = False
+                if not should_exit:
+                    continue
+
+                p0 = px(sym, day)
+                if p0 is None:
+                    continue
+                base_px = risk_px(sym, day) or p0
+                sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+                q = positions_qty.get(sym, 0.0)
+                cash += q * sell_px
+                avg_cost = positions_avg_cost.get(sym, p0)
+                entry_date = positions_entry_date.get(sym)
+                pnl = (sell_px - avg_cost) * q
+                rec = {
+                    "symbol": sym,
+                    "entry_date": entry_date,
+                    "exit_date": day.strftime("%Y-%m-%d"),
+                    "qty": q,
+                    "entry_price": avg_cost,
+                    "exit_price": sell_px,
+                    "pnl": pnl,
+                    "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                    "reason": "strategy_exit_rule",
+                }
+                _record_trade(rec)
+                _event({
+                    "type": "sell",
+                    "symbol": sym,
+                    "date": day.strftime("%Y-%m-%d"),
+                    "qty": float(q),
+                    "price": float(sell_px),
+                    "notional": float(q * sell_px),
+                    "new_qty": 0.0,
+                    "reason": rec["reason"],
+                    "pnl": float(pnl),
+                })
+                positions_qty.pop(sym, None)
+                positions_avg_cost.pop(sym, None)
+                positions_entry_date.pop(sym, None)
+
         # Per-asset stop loss (checked daily at close)
         if params.per_asset_stop_loss_pct is not None and params.per_asset_stop_loss_pct > 0:
             sl = float(params.per_asset_stop_loss_pct)
@@ -662,8 +759,9 @@ def run_backtest(
                     continue
                 stopped_until_next_rebalance = False
                 dd_stop_trigger_day = None
-            # compute candidates based on history up to day, via selected strategy
-            strat = get_strategy(params.strategy_id)
+            # compute candidates based on history up to day, via selected per-asset entry strategies
+            eq_strat = get_strategy(eq_strategy_id)
+            cr_strat = get_strategy(cr_strategy_id)
 
             # build bars dict slices up to current day (excluding banned symbols)
             # Keep full OHLCV columns for strategy parity with live selection logic.
@@ -697,8 +795,8 @@ def run_backtest(
                 if dfx is not None:
                     cr_bars_day[sym] = dfx
 
-            eq_sel, _eq_details = strat.select_equities(bars=eq_bars_day, cfg=cfg)
-            cr_sel, _cr_details = strat.select_crypto(bars=cr_bars_day, cfg=cfg)
+            eq_sel, _eq_details = eq_strat.select_equities(bars=eq_bars_day, cfg=cfg)
+            cr_sel, _cr_details = cr_strat.select_crypto(bars=cr_bars_day, cfg=cfg)
 
             # Optional crypto price floor (per-run param, else config)
             min_cr_px = params.min_crypto_price if params.min_crypto_price is not None else getattr(cfg.limits, "min_crypto_price", None)

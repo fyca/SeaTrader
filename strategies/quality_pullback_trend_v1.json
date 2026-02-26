@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0.0",
+  "strategy_id": "quality_pullback_trend_v1",
+  "asset_policies": {
+    "stocks": {
+      "entry_policy": {
+        "enabled": true,
+        "timeframe": "1d",
+        "warmup_bars": 320,
+        "indicators": [
+          { "key": "sma_50_close", "indicator": "sma", "params": { "length": 50, "source": "close" } },
+          { "key": "sma_200_close", "indicator": "sma", "params": { "length": 200, "source": "close" } },
+          { "key": "ema_10_close", "indicator": "ema", "params": { "length": 10, "source": "close" } },
+          { "key": "rsi_14_close", "indicator": "rsi", "params": { "length": 14, "source": "close" } }
+        ],
+        "rules": [
+          {
+            "id": "stocks_entry_pullback_recovery",
+            "enabled": true,
+            "priority": 10,
+            "action": "enter_long",
+            "when": {
+              "op": "and",
+              "args": [
+                { "op": "gt", "args": [ { "ref": "ind.sma_50_close.value" }, { "ref": "ind.sma_200_close.value" } ] },
+                { "op": "between", "args": [ { "ref": "ind.rsi_14_close.value" }, { "value": 35 }, { "value": 50 } ] },
+                { "op": "crosses_above", "args": [ { "ref": "px.close" }, { "ref": "ind.ema_10_close.value" } ] }
+              ]
+            },
+            "confirm_bars": 1,
+            "cooldown_bars": 3
+          }
+        ]
+      },
+      "exit_policy": {
+        "enabled": true,
+        "timeframe": "1d",
+        "warmup_bars": 320,
+        "indicators": [
+          { "key": "sma_50_close", "indicator": "sma", "params": { "length": 50, "source": "close" } }
+        ],
+        "rules": [
+          {
+            "id": "stocks_exit_risk_5",
+            "enabled": true,
+            "priority": 10,
+            "action": "exit_full",
+            "when": { "op": "lte", "args": [ { "ref": "pos.pnl_pct" }, { "value": -5.0 } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          },
+          {
+            "id": "stocks_exit_under_sma50",
+            "enabled": true,
+            "priority": 20,
+            "action": "exit_full",
+            "when": { "op": "lt", "args": [ { "ref": "px.close" }, { "ref": "ind.sma_50_close.value" } ] },
+            "confirm_bars": 2,
+            "cooldown_bars": 0
+          },
+          {
+            "id": "stocks_exit_time_20bars",
+            "enabled": true,
+            "priority": 30,
+            "action": "exit_full",
+            "when": { "op": "gte", "args": [ { "ref": "pos.age_bars" }, { "value": 20 } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          }
+        ]
+      }
+    },
+    "crypto": {
+      "entry_policy": {
+        "enabled": true,
+        "timeframe": "1h",
+        "warmup_bars": 300,
+        "indicators": [
+          { "key": "supertrend_10_3", "indicator": "supertrend", "params": { "length": 10, "multiplier": 3 } },
+          { "key": "ema_20_close", "indicator": "ema", "params": { "length": 20, "source": "close" } }
+        ],
+        "rules": [
+          {
+            "id": "crypto_entry_st_pullback",
+            "enabled": true,
+            "priority": 10,
+            "action": "enter_long",
+            "when": {
+              "op": "and",
+              "args": [
+                { "op": "eq", "args": [ { "ref": "ind.supertrend_10_3.direction" }, { "value": 1 } ] },
+                { "op": "crosses_above", "args": [ { "ref": "px.close" }, { "ref": "ind.ema_20_close.value" } ] }
+              ]
+            },
+            "confirm_bars": 1,
+            "cooldown_bars": 2
+          }
+        ]
+      },
+      "exit_policy": {
+        "enabled": true,
+        "timeframe": "1h",
+        "warmup_bars": 300,
+        "indicators": [
+          { "key": "supertrend_10_3", "indicator": "supertrend", "params": { "length": 10, "multiplier": 3 } }
+        ],
+        "rules": [
+          {
+            "id": "crypto_exit_risk_7",
+            "enabled": true,
+            "priority": 10,
+            "action": "exit_full",
+            "when": { "op": "lte", "args": [ { "ref": "pos.pnl_pct" }, { "value": -7.0 } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          },
+          {
+            "id": "crypto_exit_supertrend_flip",
+            "enabled": true,
+            "priority": 20,
+            "action": "exit_full",
+            "when": { "op": "eq", "args": [ { "ref": "ind.supertrend_10_3.direction" }, { "value": -1 } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          }
+        ]
+      }
+    }
+  },
+  "execution": {
+    "timezone": "America/Los_Angeles",
+    "price_source": "close",
+    "evaluation_timing": "on_bar_close"
+  }
+}

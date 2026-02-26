@@ -115,6 +115,22 @@ class RebalanceBehavior(BaseModel):
     symbol_pnl_floor_include_unrealized: bool = True
 
 
+class StrategyRef(BaseModel):
+    id: str
+    version: int | None = None
+
+
+class AssetStrategyPolicy(BaseModel):
+    entry_strategy: StrategyRef | None = None
+    exit_strategy: StrategyRef | None = None
+    exit_enabled: bool = False
+
+
+class StrategiesConfig(BaseModel):
+    stocks: AssetStrategyPolicy = AssetStrategyPolicy()
+    crypto: AssetStrategyPolicy = AssetStrategyPolicy()
+
+
 class BotConfig(BaseModel):
     # Optional unified preset name. When set, the preset's `bot` patch is merged
     # on top of this YAML before validation.
@@ -131,6 +147,9 @@ class BotConfig(BaseModel):
     scheduling: Scheduling = Scheduling()
     universe: Universe = Universe()
     rebalance: RebalanceBehavior = RebalanceBehavior()
+    # Optional per-asset strategy references for builder-driven entry/exit wiring.
+    # Legacy `strategy_id` remains the fallback when these are unset.
+    strategies: StrategiesConfig = StrategiesConfig()
 
 
 def _deep_merge(a: dict, b: dict) -> dict:

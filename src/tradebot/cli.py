@@ -15,6 +15,7 @@ from tradebot.universe.liquidity import avg_dollar_volume
 from tradebot.universe.equities import list_tradable_equities
 from tradebot.universe.crypto import list_tradable_crypto
 from tradebot.strategies.registry import get_strategy
+from tradebot.strategies.resolver import resolve_for_rebalance, strategy_snapshot, validate_strategy_refs
 from tradebot.portfolio.targets import build_equal_weight_targets
 from tradebot.execution.plan import OrderPlan, diff_to_orders
 from tradebot.execution.alpaca import place_notional_market_orders
@@ -34,6 +35,9 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     run_id = str(uuid.uuid4())
     # Optional preset override
     cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
+    ref_errors = validate_strategy_refs(cfg)
+    if ref_errors:
+        raise RuntimeError("Invalid strategy references: " + "; ".join(ref_errors))
     run_asset_mode = str(getattr(args, "asset_mode", None) or "both").lower()
     if run_asset_mode not in ("both", "equities", "crypto"):
         run_asset_mode = "both"
@@ -132,12 +136,17 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     eq_bars = fetch_stock_bars(clients.stocks, eq_symbols, lookback_days=cfg.signals.lookback_days)
     cr_bars = fetch_crypto_bars(clients.crypto, cr_symbols, lookback_days=cfg.signals.lookback_days)
 
-    print(f"[rebalance] Phase 3/6: evaluating strategy '{cfg.strategy_id}'…")
-    # 3) Strategy selection
-    strat = get_strategy(cfg.strategy_id)
+    # 3) Strategy selection (per-asset strategy refs supported; legacy strategy_id fallback)
+    resolved = resolve_for_rebalance(cfg)
+    eq_strategy_id = resolved["stocks_entry"].strategy_id
+    cr_strategy_id = resolved["crypto_entry"].strategy_id
+    print(f"[rebalance] Phase 3/6: evaluating entry strategies stocks='{eq_strategy_id}' crypto='{cr_strategy_id}'…")
 
-    eq_sel, eq_sig_details = strat.select_equities(bars=eq_bars, cfg=cfg)
-    cr_sel, cr_sig_details = strat.select_crypto(bars=cr_bars, cfg=cfg)
+    eq_strat = get_strategy(eq_strategy_id)
+    cr_strat = get_strategy(cr_strategy_id)
+
+    eq_sel, eq_sig_details = eq_strat.select_equities(bars=eq_bars, cfg=cfg)
+    cr_sel, cr_sig_details = cr_strat.select_crypto(bars=cr_bars, cfg=cfg)
 
     # Optional crypto price floor (settings.limits.min_crypto_price)
     min_cr_px = getattr(cfg.limits, "min_crypto_price", None)
@@ -375,6 +384,8 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     payload_held_not_selected_diag = held_not_selected_diag if run_asset_mode != "crypto" else {}
 
     rebalance_payload = {
+        "strategy_selection": {"stocks_entry": eq_strategy_id, "crypto_entry": cr_strategy_id},
+        "strategy_snapshot": strategy_snapshot(cfg),
         "universe": {"equities": len(eq_symbols), "crypto": len(cr_symbols)},
         "selected": {"equities": payload_eq_sel, "crypto": payload_cr_sel},
         "entry_signals": {

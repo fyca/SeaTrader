@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seatrader.local/schemas/prelaunch.schema.json",
+  "title": "SeaTrader Prelaunch Validation Report",
+  "type": "object",
+  "required": ["validator_version", "ok", "errors", "warnings", "checks"],
+  "additionalProperties": false,
+  "properties": {
+    "validator_version": { "type": "string", "pattern": "^1\\.0\\.0$" },
+    "ok": { "type": "boolean" },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/checkResult" },
+      "minItems": 1
+    },
+    "errors": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+    "warnings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+  },
+  "$defs": {
+    "status": { "enum": ["pass", "fail", "waived", "not_applicable"] },
+    "severity": { "enum": ["error", "warning"] },
+    "checkCode": {
+      "enum": [
+        "REQ_POLICY_STOCKS_ENTRY", "REQ_POLICY_STOCKS_EXIT", "REQ_POLICY_CRYPTO_ENTRY", "REQ_POLICY_CRYPTO_EXIT",
+        "VALID_STRATEGY_TYPE_MATCH", "VALID_ASSET_CLASS_MATCH", "VALID_STRATEGY_EXISTS", "VALID_VERSION_PINNED",
+        "VALID_INDICATOR_PARAMS", "VALID_INDICATOR_KEYS_UNIQUE", "VALID_RULE_REFS_RESOLVE", "VALID_RULE_ACTION_PAYLOAD",
+        "VALID_WARMUP_SUFFICIENT", "VALID_TIMEFRAME_SUPPORTED", "VALID_MARKET_CALENDAR_COMPAT",
+        "RISK_LIMITS_PRESENT", "KILL_SWITCH_CONFIGURED", "PAPER_GATE_PASSED", "ROLLBACK_TARGET_SET",
+        "WARN_HIGH_TURNOVER", "WARN_LOW_TRADE_COUNT"
+      ]
+    },
+    "checkResult": {
+      "type": "object",
+      "required": ["code", "severity", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "$ref": "#/$defs/checkCode" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "status": { "$ref": "#/$defs/status" },
+        "notes": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "$ref": "#/$defs/checkCode" },
+        "path": { "type": "string" },
+        "message": { "type": "string", "minLength": 1 },
+        "context": { "type": "object", "additionalProperties": true }
+      }
+    }
+  }
+}

@@ -171,6 +171,26 @@
           <a href="/builder" style="text-decoration:none;"><button type="button" class="secondary">Open Strategy Builder</button></a>
         </div>
         <select id="strategySelect" style="width:100%;"></select>
+        <div class="assetSplit" style="margin-top:8px;">
+          <div class="subcard" style="padding:10px;">
+            <div style="font-weight:700; margin-bottom:6px;">Stocks strategy</div>
+            <div class="muted" style="font-size:12px;">Entry strategy</div>
+            <select id="liveStocksEntryStrategy" style="width:100%;"></select>
+            <div class="muted" style="font-size:12px; margin-top:6px;">Exit strategy</div>
+            <select id="liveStocksExitStrategy" style="width:100%;"></select>
+            <div class="muted" style="font-size:12px; margin-top:6px;">Enable exit strategy</div>
+            <select id="liveStocksExitEnabled" style="width:100%;"><option value="false">Off</option><option value="true">On</option></select>
+          </div>
+          <div class="subcard" style="padding:10px;">
+            <div style="font-weight:700; margin-bottom:6px;">Crypto strategy</div>
+            <div class="muted" style="font-size:12px;">Entry strategy</div>
+            <select id="liveCryptoEntryStrategy" style="width:100%;"></select>
+            <div class="muted" style="font-size:12px; margin-top:6px;">Exit strategy</div>
+            <select id="liveCryptoExitStrategy" style="width:100%;"></select>
+            <div class="muted" style="font-size:12px; margin-top:6px;">Enable exit strategy</div>
+            <select id="liveCryptoExitEnabled" style="width:100%;"><option value="false">Off</option><option value="true">On</option></select>
+          </div>
+        </div>
 
         <div class="muted" style="margin: 10px 0 6px 0;">Per-asset stop loss (live + risk-check)</div>
         <select id="stopLossSelect" style="width:100%;">
@@ -397,8 +417,32 @@
               <input id="btEnd" placeholder="YYYY-MM-DD" />
             </div>
             <div>
-              <div class="muted">Strategy</div>
+              <div class="muted">Strategy (legacy/global)</div>
               <select id="btStrategy" style="width:260px;"></select>
+            </div>
+            <div>
+              <div class="muted">Stocks entry</div>
+              <select id="btEqEntryStrategy" style="width:220px;"></select>
+            </div>
+            <div>
+              <div class="muted">Crypto entry</div>
+              <select id="btCrEntryStrategy" style="width:220px;"></select>
+            </div>
+            <div>
+              <div class="muted">Stocks exit</div>
+              <select id="btEqExitStrategy" style="width:220px;"></select>
+            </div>
+            <div>
+              <div class="muted">Crypto exit</div>
+              <select id="btCrExitStrategy" style="width:220px;"></select>
+            </div>
+            <div>
+              <div class="muted">Stocks exit enabled</div>
+              <select id="btEqExitEnabled" style="width:140px;"><option value="false">Off</option><option value="true">On</option></select>
+            </div>
+            <div>
+              <div class="muted">Crypto exit enabled</div>
+              <select id="btCrExitEnabled" style="width:140px;"><option value="false">Off</option><option value="true">On</option></select>
             </div>
             <div>
               <div class="muted">Execution mode</div>
@@ -1153,6 +1197,12 @@ function collectBacktestRequestBody() {
   const strategy_id = (document.getElementById('btStrategy')?.value || 'baseline_trendvol');
   const execution_time_mode = 'intraday';
   const execution_time = 'close';
+  const strategy_id_equities = (document.getElementById('btEqEntryStrategy')?.value || strategy_id);
+  const strategy_id_crypto = (document.getElementById('btCrEntryStrategy')?.value || strategy_id);
+  const exit_strategy_id_equities = (document.getElementById('btEqExitStrategy')?.value || null);
+  const exit_strategy_id_crypto = (document.getElementById('btCrExitStrategy')?.value || null);
+  const exit_enabled_equities = String(document.getElementById('btEqExitEnabled')?.value || 'false') === 'true';
+  const exit_enabled_crypto = String(document.getElementById('btCrExitEnabled')?.value || 'false') === 'true';
   const execution_time_local_equities = (document.getElementById('btEqExecLocal')?.value || '06:30');
   const execution_time_local = execution_time_local_equities;
   const execution_time_local_crypto = (document.getElementById('btCrExecLocal')?.value || '06:30');
@@ -1202,7 +1252,9 @@ function collectBacktestRequestBody() {
     limit_fallback_to_market_open_equities, limit_fallback_to_market_open_crypto,
     limit_fallback_to_market_open: (limit_fallback_to_market_open_equities || limit_fallback_to_market_open_crypto),
     limit_fallback_time_local: execution_time_local_equities,
-    initial_equity: 100000, strategy_id, execution_time_mode, execution_time,
+    initial_equity: 100000, strategy_id, strategy_id_equities, strategy_id_crypto,
+    exit_strategy_id_equities, exit_strategy_id_crypto, exit_enabled_equities, exit_enabled_crypto,
+    execution_time_mode, execution_time,
     execution_time_local, execution_time_local_equities, execution_time_local_crypto,
     risk_check_time_local, risk_check_time_local_equities, risk_check_time_local_crypto,
     execution_tz, asset_mode,
@@ -2470,20 +2522,47 @@ async function main() {
     }
   }
 
-  // Strategy dropdown (backtest) - do NOT overwrite user selection on refresh
-  const btStrat = document.getElementById('btStrategy');
-  if (btStrat && strategies) {
-    if (!btStrat.dataset.loaded) {
-      btStrat.innerHTML = '';
+  // Strategy dropdowns (backtest + per-asset live/backtest)
+  const strategySelectIds = [
+    'btStrategy','btEqEntryStrategy','btCrEntryStrategy','btEqExitStrategy','btCrExitStrategy',
+    'liveStocksEntryStrategy','liveStocksExitStrategy','liveCryptoEntryStrategy','liveCryptoExitStrategy'
+  ];
+  for (const sid of strategySelectIds) {
+    const el = document.getElementById(sid);
+    if (!el || !strategies) continue;
+    if (!el.dataset.loaded) {
+      el.innerHTML = '';
+      const emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '(none)';
+      el.appendChild(emptyOpt);
       for (const s of strategies) {
         const opt = document.createElement('option');
         opt.value = s.id;
         opt.textContent = (s.source === 'user') ? (s.name + ' (user)') : s.name;
-        btStrat.appendChild(opt);
+        el.appendChild(opt);
       }
-      btStrat.dataset.loaded = '1';
-      if (!freezeBacktestInputs) btStrat.value = cfg.strategy_id || 'baseline_trendvol';
+      el.dataset.loaded = '1';
     }
+  }
+  const btStrat = document.getElementById('btStrategy');
+  if (btStrat && !freezeBacktestInputs && !btStrat.value) btStrat.value = cfg.strategy_id || 'baseline_trendvol';
+  if (!freezeBacktestInputs) {
+    const ss = cfg?.strategies?.stocks || {};
+    const cs = cfg?.strategies?.crypto || {};
+    const setSel = (id, v) => { const el=document.getElementById(id); if(el && v!==undefined && v!==null) el.value=String(v); };
+    setSel('btEqEntryStrategy', ss?.entry_strategy?.id || cfg.strategy_id || '');
+    setSel('btCrEntryStrategy', cs?.entry_strategy?.id || cfg.strategy_id || '');
+    setSel('btEqExitStrategy', ss?.exit_strategy?.id || '');
+    setSel('btCrExitStrategy', cs?.exit_strategy?.id || '');
+    setSel('btEqExitEnabled', String(Boolean(ss?.exit_enabled)));
+    setSel('btCrExitEnabled', String(Boolean(cs?.exit_enabled)));
+    setSel('liveStocksEntryStrategy', ss?.entry_strategy?.id || cfg.strategy_id || '');
+    setSel('liveCryptoEntryStrategy', cs?.entry_strategy?.id || cfg.strategy_id || '');
+    setSel('liveStocksExitStrategy', ss?.exit_strategy?.id || '');
+    setSel('liveCryptoExitStrategy', cs?.exit_strategy?.id || '');
+    setSel('liveStocksExitEnabled', String(Boolean(ss?.exit_enabled)));
+    setSel('liveCryptoExitEnabled', String(Boolean(cs?.exit_enabled)));
   }
 
   // Stop loss dropdown
@@ -2679,6 +2758,12 @@ async function main() {
 
     return {
       strategy_id: (document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
+      strategy_id_equities: (document.getElementById('btEqEntryStrategy')?.value || document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
+      strategy_id_crypto: (document.getElementById('btCrEntryStrategy')?.value || document.getElementById('btStrategy')?.value || 'baseline_trendvol'),
+      exit_strategy_id_equities: (document.getElementById('btEqExitStrategy')?.value || null),
+      exit_strategy_id_crypto: (document.getElementById('btCrExitStrategy')?.value || null),
+      exit_enabled_equities: String(document.getElementById('btEqExitEnabled')?.value || 'false') === 'true',
+      exit_enabled_crypto: String(document.getElementById('btCrExitEnabled')?.value || 'false') === 'true',
       execution_time_mode: 'intraday',
       execution_time: 'close',
       execution_time_local: (document.getElementById('btEqExecLocal')?.value || '06:30'),
@@ -2724,6 +2809,12 @@ async function main() {
     if (!p) return;
     const setVal = (id, v) => { const el=document.getElementById(id); if(el && v!==undefined && v!==null) el.value=String(v); };
     setVal('btStrategy', p.strategy_id);
+    setVal('btEqEntryStrategy', p.strategy_id_equities || p.strategy_id);
+    setVal('btCrEntryStrategy', p.strategy_id_crypto || p.strategy_id);
+    setVal('btEqExitStrategy', p.exit_strategy_id_equities || '');
+    setVal('btCrExitStrategy', p.exit_strategy_id_crypto || '');
+    setVal('btEqExitEnabled', String(Boolean(p.exit_enabled_equities)));
+    setVal('btCrExitEnabled', String(Boolean(p.exit_enabled_crypto)));
     setVal('btExecMode', p.execution_time_mode);
     setVal('btExecTime', p.execution_time);
     setVal('btExecLocal', p.execution_time_local);
@@ -2773,8 +2864,17 @@ async function main() {
     const reb = cfg?.rebalance || {};
     const lim = cfg?.limits || {};
 
+    const ss = cfg?.strategies?.stocks || {};
+    const cs = cfg?.strategies?.crypto || {};
+
     return {
       strategy_id: cfg?.strategy_id || 'baseline_trendvol',
+      strategy_id_equities: ss?.entry_strategy?.id || cfg?.strategy_id || 'baseline_trendvol',
+      strategy_id_crypto: cs?.entry_strategy?.id || cfg?.strategy_id || 'baseline_trendvol',
+      exit_strategy_id_equities: ss?.exit_strategy?.id || null,
+      exit_strategy_id_crypto: cs?.exit_strategy?.id || null,
+      exit_enabled_equities: Boolean(ss?.exit_enabled),
+      exit_enabled_crypto: Boolean(cs?.exit_enabled),
       execution_time_mode: 'intraday',
       execution_time: 'close',
       // Keep buy-time parity with live rebalance schedule, not fallback conversion time.
@@ -3195,6 +3295,21 @@ async function saveConfig() {
     const strat = document.getElementById('strategySelect')?.value;
     if (strat) body.strategy_id = strat;
     const sl = document.getElementById('stopLossSelect')?.value;
+
+    body.strategies = body.strategies || {};
+    body.strategies.stocks = body.strategies.stocks || {};
+    body.strategies.crypto = body.strategies.crypto || {};
+    const lse = String(document.getElementById('liveStocksEntryStrategy')?.value || '').trim();
+    const lxe = String(document.getElementById('liveStocksExitStrategy')?.value || '').trim();
+    const lce = String(document.getElementById('liveCryptoEntryStrategy')?.value || '').trim();
+    const lcx = String(document.getElementById('liveCryptoExitStrategy')?.value || '').trim();
+    body.strategies.stocks.entry_strategy = lse ? { id: lse } : null;
+    body.strategies.stocks.exit_strategy = lxe ? { id: lxe } : null;
+    body.strategies.stocks.exit_enabled = String(document.getElementById('liveStocksExitEnabled')?.value || 'false') === 'true';
+    body.strategies.crypto.entry_strategy = lce ? { id: lce } : null;
+    body.strategies.crypto.exit_strategy = lcx ? { id: lcx } : null;
+    body.strategies.crypto.exit_enabled = String(document.getElementById('liveCryptoExitEnabled')?.value || 'false') === 'true';
+
     body.risk = body.risk || {};
     body.risk.per_asset_stop_loss_pct = sl ? Number(sl) : null;
     body.risk.execute_exit_liquidations = String(document.getElementById('riskExecLiquidationsSelect')?.value || 'false') === 'true';

@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0.0",
+  "strategy_id": "quality_trend_follow_v1",
+  "asset_policies": {
+    "stocks": {
+      "entry_policy": {
+        "enabled": true,
+        "timeframe": "1d",
+        "warmup_bars": 300,
+        "indicators": [
+          { "key": "ema_21_close", "indicator": "ema", "params": { "length": 21, "source": "close" } },
+          { "key": "sma_50_close", "indicator": "sma", "params": { "length": 50, "source": "close" } },
+          { "key": "rsi_14_close", "indicator": "rsi", "params": { "length": 14, "source": "close" } }
+        ],
+        "rules": [
+          {
+            "id": "stocks_entry_trend_momo",
+            "enabled": true,
+            "priority": 10,
+            "action": "enter_long",
+            "when": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "crosses_above",
+                  "args": [
+                    { "ref": "ind.ema_21_close.value" },
+                    { "ref": "ind.sma_50_close.value" }
+                  ]
+                },
+                {
+                  "op": "gt",
+                  "args": [
+                    { "ref": "ind.rsi_14_close.value" },
+                    { "value": 55 }
+                  ]
+                }
+              ]
+            },
+            "confirm_bars": 1,
+            "cooldown_bars": 2
+          }
+        ]
+      },
+      "exit_policy": {
+        "enabled": true,
+        "timeframe": "1d",
+        "warmup_bars": 300,
+        "indicators": [
+          { "key": "sma_50_close", "indicator": "sma", "params": { "length": 50, "source": "close" } }
+        ],
+        "rules": [
+          {
+            "id": "stocks_exit_risk_5",
+            "enabled": true,
+            "priority": 10,
+            "action": "exit_full",
+            "when": { "op": "lte", "args": [ { "ref": "pos.pnl_pct" }, { "value": -5.0 } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          },
+          {
+            "id": "stocks_exit_trend_break",
+            "enabled": true,
+            "priority": 20,
+            "action": "exit_full",
+            "when": { "op": "lt", "args": [ { "ref": "px.close" }, { "ref": "ind.sma_50_close.value" } ] },
+            "confirm_bars": 2,
+            "cooldown_bars": 0
+          }
+        ]
+      }
+    },
+    "crypto": {
+      "entry_policy": {
+        "enabled": true,
+        "timeframe": "1h",
+        "warmup_bars": 300,
+        "indicators": [
+          { "key": "ema_20_close", "indicator": "ema", "params": { "length": 20, "source": "close" } },
+          { "key": "ema_50_close", "indicator": "ema", "params": { "length": 50, "source": "close" } },
+          { "key": "adx_14", "indicator": "adx", "params": { "length": 14 } }
+        ],
+        "rules": [
+          {
+            "id": "crypto_entry_trend_strength",
+            "enabled": true,
+            "priority": 10,
+            "action": "enter_long",
+            "when": {
+              "op": "and",
+              "args": [
+                { "op": "gt", "args": [ { "ref": "ind.ema_20_close.value" }, { "ref": "ind.ema_50_close.value" } ] },
+                { "op": "gt", "args": [ { "ref": "ind.adx_14.adx" }, { "value": 20 } ] }
+              ]
+            },
+            "confirm_bars": 1,
+            "cooldown_bars": 1
+          }
+        ]
+      },
+      "exit_policy": {
+        "enabled": true,
+        "timeframe": "1h",
+        "warmup_bars": 300,
+        "indicators": [
+          { "key": "atr_14", "indicator": "atr", "params": { "length": 14 } }
+        ],
+        "rules": [
+          {
+            "id": "crypto_exit_risk_7",
+            "enabled": true,
+            "priority": 10,
+            "action": "exit_full",
+            "when": { "op": "lte", "args": [ { "ref": "pos.pnl_pct" }, { "value": -7.0 } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          },
+          {
+            "id": "crypto_exit_atr_break",
+            "enabled": true,
+            "priority": 20,
+            "action": "exit_full",
+            "when": {
+              "op": "lt",
+              "args": [
+                { "ref": "px.close" },
+                {
+                  "op": "sub",
+                  "args": [
+                    { "ref": "px.close" },
+                    { "op": "mul", "args": [ { "value": 3 }, { "ref": "ind.atr_14.value" } ] }
+                  ]
+                }
+              ]
+            },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          }
+        ]
+      }
+    }
+  },
+  "execution": {
+    "timezone": "America/Los_Angeles",
+    "price_source": "close",
+    "evaluation_timing": "on_bar_close"
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seatrader.local/schemas/strategy.schema.json",
+  "title": "SeaTrader Strategy Bundle",
+  "type": "object",
+  "required": ["schema_version", "strategy_id", "asset_policies", "execution"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.0\\.0$" },
+    "strategy_id": { "$ref": "#/$defs/id" },
+    "asset_policies": {
+      "type": "object",
+      "required": ["stocks", "crypto"],
+      "additionalProperties": false,
+      "properties": {
+        "stocks": { "$ref": "#/$defs/assetPolicy" },
+        "crypto": { "$ref": "#/$defs/assetPolicy" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "required": ["timezone", "price_source", "evaluation_timing"],
+      "additionalProperties": false,
+      "properties": {
+        "timezone": { "type": "string", "minLength": 1 },
+        "price_source": { "enum": ["close", "open", "hl2", "hlc3", "ohlc4"] },
+        "evaluation_timing": { "enum": ["on_bar_close"] }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$" },
+    "assetPolicy": {
+      "type": "object",
+      "required": ["entry_policy", "exit_policy"],
+      "additionalProperties": false,
+      "properties": {
+        "entry_policy": { "$ref": "#/$defs/policy" },
+        "exit_policy": { "$ref": "#/$defs/policy" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": ["enabled", "timeframe", "warmup_bars", "indicators", "rules"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "timeframe": { "enum": ["15m", "1h", "4h", "1d"] },
+        "warmup_bars": { "type": "integer", "minimum": 1, "maximum": 5000 },
+        "indicators": { "type": "array", "items": { "$ref": "#/$defs/indicatorDecl" } },
+        "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" }, "minItems": 1 }
+      }
+    },
+    "indicatorDecl": {
+      "type": "object",
+      "required": ["key", "indicator", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/id" },
+        "indicator": {
+          "enum": [
+            "sma", "ema", "wma", "hma", "macd", "adx", "supertrend", "donchian",
+            "rsi", "stoch_rsi", "cci", "roc", "williams_r", "atr", "bbands", "keltner", "stddev",
+            "obv", "mfi", "cmf", "vwap", "highest", "lowest", "pivot_points", "returns"
+          ]
+        },
+        "params": { "type": "object" }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["id", "enabled", "priority", "action", "when", "confirm_bars", "cooldown_bars"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "enabled": { "type": "boolean" },
+        "priority": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "action": {
+          "enum": [
+            "enter_long", "enter_short", "add_position", "skip",
+            "exit_full", "exit_partial", "move_stop", "hold"
+          ]
+        },
+        "size_pct": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "when": { "$ref": "#/$defs/expr" },
+        "confirm_bars": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "cooldown_bars": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "notes": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "expr": {
+      "oneOf": [
+        { "$ref": "#/$defs/refNode" },
+        { "$ref": "#/$defs/valueNode" },
+        { "$ref": "#/$defs/opNode" }
+      ]
+    },
+    "refNode": {
+      "type": "object",
+      "required": ["ref"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^(ind\\.[a-z][a-z0-9_]{2,63}\\.[a-z_]+|px\\.(open|high|low|close|volume)|pos\\.[a-z_]+|pf\\.[a-z_]+)$"
+        }
+      }
+    },
+    "valueNode": {
+      "type": "object",
+      "required": ["value"],
+      "additionalProperties": false,
+      "properties": { "value": { "type": ["number", "string", "boolean"] } }
+    },
+    "opNode": {
+      "type": "object",
+      "required": ["op", "args"],
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "and", "or", "not", "gt", "gte", "lt", "lte", "eq", "neq", "between",
+            "crosses_above", "crosses_below", "rising", "falling", "add", "sub", "mul", "div", "abs", "min", "max"
+          ]
+        },
+        "args": { "type": "array", "items": { "$ref": "#/$defs/expr" }, "minItems": 1, "maxItems": 10 }
+      }
+    }
+  }
+}

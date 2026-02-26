@@ -15,6 +15,7 @@ from tradebot.risk.drawdown import update_drawdown_state
 from tradebot.risk.exits import trend_break_exit
 from tradebot.util.config import load_config
 from tradebot.strategies.registry import get_strategy
+from tradebot.strategies.resolver import resolve_for_risk_check, strategy_snapshot, validate_strategy_refs
 from tradebot.util.env import load_env
 from tradebot.util.state import load_state, save_state
 from tradebot.util.artifacts import write_artifact
@@ -188,6 +189,9 @@ def _symbols_bought_today(clients, tz_name: str) -> set[str]:
 
 def cmd_risk_check(args: argparse.Namespace) -> int:
     cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
+    ref_errors = validate_strategy_refs(cfg)
+    if ref_errors:
+        raise RuntimeError("Invalid strategy references: " + "; ".join(ref_errors))
     run_id = str(uuid.uuid4())
     run_asset_mode = str(getattr(args, "asset_mode", None) or "both").lower()
     if run_asset_mode not in ("both", "equities", "crypto"):
@@ -228,16 +232,25 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
     if stop_pct is not None:
         stop_pct = float(stop_pct)
 
-    strat = None
-    try:
-        strat = get_strategy(cfg.strategy_id)
-    except Exception:
-        strat = None
+    # Resolve per-asset exit strategies (with legacy fallback to cfg.strategy_id)
+    resolved = resolve_for_risk_check(cfg)
 
-    # If user strategy has an exit rule, we'll evaluate it (in addition to stop loss / trend break)
-    user_exit = None
-    if strat is not None and hasattr(strat, "spec"):
-        user_exit = getattr(strat, "spec", {}).get("exit")
+    def _exit_rule_for(asset_class: str):
+        # Toggle gate: when disabled, do not evaluate user-defined exit strategy for that asset.
+        enabled = bool(cfg.strategies.crypto.exit_enabled) if asset_class == "crypto" else bool(cfg.strategies.stocks.exit_enabled)
+        if not enabled:
+            return None
+        strategy_id = resolved["crypto_exit"].strategy_id if asset_class == "crypto" else resolved["stocks_exit"].strategy_id
+        try:
+            strat = get_strategy(strategy_id)
+            if strat is not None and hasattr(strat, "spec"):
+                return getattr(strat, "spec", {}).get("exit")
+        except Exception:
+            return None
+        return None
+
+    user_exit_eq = _exit_rule_for("stocks")
+    user_exit_cr = _exit_rule_for("crypto")
 
     if eq_syms:
         eq_bars = fetch_stock_bars(clients.stocks, eq_syms, lookback_days=cfg.signals.lookback_days)
@@ -249,12 +262,12 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                 continue
             last_px = float(closes.iloc[-1])
 
-            # user exit rule (if present)
-            if user_exit:
+            # user exit rule (if present/enabled for stocks)
+            if user_exit_eq:
                 try:
                     from tradebot.strategies.rule_engine import EvalContext, eval_rule
                     ctx = EvalContext(closes=closes, ann_factor=252.0)
-                    if eval_rule(ctx, user_exit):
+                    if eval_rule(ctx, user_exit_eq):
                         exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": "user_exit_rule", "last_close": last_px})
                         continue
                 except Exception:
@@ -285,12 +298,12 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                 continue
             last_px = float(closes.iloc[-1])
 
-            # user exit rule
-            if user_exit:
+            # user exit rule (if present/enabled for crypto)
+            if user_exit_cr:
                 try:
                     from tradebot.strategies.rule_engine import EvalContext, eval_rule
                     ctx = EvalContext(closes=closes, ann_factor=365.0)
-                    if eval_rule(ctx, user_exit):
+                    if eval_rule(ctx, user_exit_cr):
                         exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": "user_exit_rule", "last_close": last_px})
                         continue
                 except Exception:
@@ -403,6 +416,13 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
 
     risk_payload = {
         "run_id": run_id,
+        "strategy_selection": {
+            "stocks_exit": resolved["stocks_exit"].strategy_id,
+            "crypto_exit": resolved["crypto_exit"].strategy_id,
+            "stocks_exit_enabled": bool(cfg.strategies.stocks.exit_enabled),
+            "crypto_exit_enabled": bool(cfg.strategies.crypto.exit_enabled),
+        },
+        "strategy_snapshot": strategy_snapshot(cfg),
         "equity": equity,
         "peak_equity": dd_state.peak_equity,
         "drawdown": dd_state.drawdown,

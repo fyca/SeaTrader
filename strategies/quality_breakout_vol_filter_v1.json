@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0.0",
+  "strategy_id": "quality_breakout_vol_filter_v1",
+  "asset_policies": {
+    "stocks": {
+      "entry_policy": {
+        "enabled": true,
+        "timeframe": "1d",
+        "warmup_bars": 320,
+        "indicators": [
+          { "key": "highest_20_high", "indicator": "highest", "params": { "length": 20, "source": "high" } },
+          { "key": "sma_20_volume", "indicator": "sma", "params": { "length": 20, "source": "volume" } }
+        ],
+        "rules": [
+          {
+            "id": "stocks_entry_breakout_vol",
+            "enabled": true,
+            "priority": 10,
+            "action": "enter_long",
+            "when": {
+              "op": "and",
+              "args": [
+                { "op": "gt", "args": [ { "ref": "px.close" }, { "ref": "ind.highest_20_high.value" } ] },
+                { "op": "gt", "args": [ { "ref": "px.volume" }, { "op": "mul", "args": [ { "value": 1.5 }, { "ref": "ind.sma_20_volume.value" } ] } ] }
+              ]
+            },
+            "confirm_bars": 1,
+            "cooldown_bars": 2
+          }
+        ]
+      },
+      "exit_policy": {
+        "enabled": true,
+        "timeframe": "1d",
+        "warmup_bars": 320,
+        "indicators": [
+          { "key": "donchian_20", "indicator": "donchian", "params": { "length": 20 } }
+        ],
+        "rules": [
+          {
+            "id": "stocks_exit_risk_5",
+            "enabled": true,
+            "priority": 10,
+            "action": "exit_full",
+            "when": { "op": "lte", "args": [ { "ref": "pos.pnl_pct" }, { "value": -5.0 } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          },
+          {
+            "id": "stocks_exit_donchian_mid",
+            "enabled": true,
+            "priority": 20,
+            "action": "exit_full",
+            "when": { "op": "lt", "args": [ { "ref": "px.close" }, { "ref": "ind.donchian_20.middle" } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          }
+        ]
+      }
+    },
+    "crypto": {
+      "entry_policy": {
+        "enabled": true,
+        "timeframe": "1h",
+        "warmup_bars": 320,
+        "indicators": [
+          { "key": "donchian_55", "indicator": "donchian", "params": { "length": 55 } },
+          { "key": "adx_14", "indicator": "adx", "params": { "length": 14 } }
+        ],
+        "rules": [
+          {
+            "id": "crypto_entry_breakout_adx",
+            "enabled": true,
+            "priority": 10,
+            "action": "enter_long",
+            "when": {
+              "op": "and",
+              "args": [
+                { "op": "gt", "args": [ { "ref": "px.close" }, { "ref": "ind.donchian_55.upper" } ] },
+                { "op": "gt", "args": [ { "ref": "ind.adx_14.adx" }, { "value": 25 } ] }
+              ]
+            },
+            "confirm_bars": 1,
+            "cooldown_bars": 1
+          }
+        ]
+      },
+      "exit_policy": {
+        "enabled": true,
+        "timeframe": "1h",
+        "warmup_bars": 320,
+        "indicators": [
+          { "key": "donchian_55", "indicator": "donchian", "params": { "length": 55 } }
+        ],
+        "rules": [
+          {
+            "id": "crypto_exit_risk_7",
+            "enabled": true,
+            "priority": 10,
+            "action": "exit_full",
+            "when": { "op": "lte", "args": [ { "ref": "pos.pnl_pct" }, { "value": -7.0 } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          },
+          {
+            "id": "crypto_exit_donchian_lower",
+            "enabled": true,
+            "priority": 20,
+            "action": "exit_full",
+            "when": { "op": "lt", "args": [ { "ref": "px.close" }, { "ref": "ind.donchian_55.lower" } ] },
+            "confirm_bars": 1,
+            "cooldown_bars": 0
+          }
+        ]
+      }
+    }
+  },
+  "execution": {
+    "timezone": "America/Los_Angeles",
+    "price_source": "close",
+    "evaluation_timing": "on_bar_close"
+  }
+}

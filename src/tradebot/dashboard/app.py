@@ -1145,6 +1145,25 @@ def create_app(*, config_path: str) -> FastAPI:
     async def backtest_start(req: Request):
         require_token(req)
         body = await req.json()
+
+        # Prelaunch guardrails for strategy references
+        try:
+            cfg = load_config_file(config_path)
+            from tradebot.strategies.resolver import validate_strategy_refs
+            ref_errors = validate_strategy_refs(cfg)
+            if ref_errors:
+                raise HTTPException(status_code=400, detail={"code": "INVALID_STRATEGY_REFS", "errors": ref_errors})
+        except HTTPException:
+            raise
+        except Exception:
+            # keep back-compat if guard cannot run
+            pass
+
+        if bool(body.get("exit_enabled_equities")) and not body.get("exit_strategy_id_equities"):
+            raise HTTPException(status_code=400, detail={"code": "MISSING_EXIT_STRATEGY", "error": "exit_enabled_equities=true but exit_strategy_id_equities is empty"})
+        if bool(body.get("exit_enabled_crypto")) and not body.get("exit_strategy_id_crypto"):
+            raise HTTPException(status_code=400, detail={"code": "MISSING_EXIT_STRATEGY", "error": "exit_enabled_crypto=true but exit_strategy_id_crypto is empty"})
+
         job_id = start_backtest(config_path=config_path, params=body)
         return {"ok": True, "job_id": job_id}
 
