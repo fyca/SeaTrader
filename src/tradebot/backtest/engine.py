@@ -382,6 +382,15 @@ def run_backtest(
         prev = float(positions_peak_mark.get(sym, 0.0) or 0.0)
         return max(prev, float(mark_px))
 
+    def _equity_slot_open(ts_local: pd.Timestamp) -> bool:
+        # Equities: prune obvious closed windows in hourly mode.
+        # Keep pre/post-market (04:00-20:00 in exchange-local time), weekdays only.
+        wd = int(pd.Timestamp(ts_local).weekday())
+        if wd >= 5:
+            return False
+        h = int(pd.Timestamp(ts_local).hour)
+        return 4 <= h <= 20
+
     def closes_until_day(sym: str, day: pd.Timestamp) -> pd.Series:
         s = closes.get(sym)
         if s is None or len(s) == 0:
@@ -669,6 +678,8 @@ def run_backtest(
                     ts_local = pd.Timestamp(day).replace(hour=hr, minute=int(mm), second=0, microsecond=0)
                     hourly_debug["slots_considered"] += 1
 
+                    eq_slot_open = _equity_slot_open(ts_local)
+
                     for sym in list(positions_qty.keys()):
                         is_crypto = "/" in sym
                         if is_crypto:
@@ -676,7 +687,7 @@ def run_backtest(
                                 continue
                             checks = cr_hourly_checks
                         else:
-                            if eq_risk_freq != "hourly" or ts_local.minute != eq_risk_minute:
+                            if eq_risk_freq != "hourly" or ts_local.minute != eq_risk_minute or (not eq_slot_open):
                                 continue
                             checks = eq_hourly_checks
 
@@ -749,7 +760,7 @@ def run_backtest(
                                 positions_qty.pop(sym, None); positions_avg_cost.pop(sym, None); positions_entry_date.pop(sym, None)
 
                     if params.portfolio_dd_stop is not None and peak_equity > 0:
-                        run_eq_dd = (eq_risk_freq == "hourly" and "dd_stop" in eq_hourly_checks and ts_local.minute == eq_risk_minute)
+                        run_eq_dd = (eq_risk_freq == "hourly" and "dd_stop" in eq_hourly_checks and ts_local.minute == eq_risk_minute and eq_slot_open)
                         run_cr_dd = (cr_risk_freq == "hourly" and "dd_stop" in cr_hourly_checks and ts_local.minute == cr_risk_minute)
                         if run_eq_dd or run_cr_dd:
                             eq_now = cash
