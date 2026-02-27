@@ -53,6 +53,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
 
     def run():
         try:
+            t_job_start = time.perf_counter()
+            t_fetch_start = t_job_start
             _write(status_path, {"state": "fetching_data", "progress": 0, "total": 1})
             cfg = load_config(config_path)
             # Optional backtest-only liquidity override from dashboard controls.
@@ -103,6 +105,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
 
             stock_bars: dict[str, pd.DataFrame] = {}
             crypto_bars: dict[str, pd.DataFrame] = {}
+            stock_cache_hit = False
+            crypto_cache_hit = False
 
             if asset_mode in ("both", "equities"):
                 stock_bars = load_cached_frames("stocks", tradable_eq, cfg.signals.lookback_days, cache_start, cache_end)
@@ -114,6 +118,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                         stock_bars.update(fetch_stock_bars_range(clients.stocks, syms, start=warmup_start, end=end_dt))
                         _write(status_path, {"state": "fetching_data", "progress": min(i + chunk, len(tradable_eq)), "total": len(tradable_eq)})
                     save_cached_frames("stocks", tradable_eq, cfg.signals.lookback_days, cache_start, cache_end, stock_bars)
+                else:
+                    stock_cache_hit = True
 
             if asset_mode in ("both", "crypto"):
                 crypto_bars = load_cached_frames("crypto", tradable_cr, cfg.signals.lookback_days, cache_start, cache_end)
@@ -125,6 +131,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                         crypto_bars.update(fetch_crypto_bars_range(clients.crypto, syms, start=warmup_start, end=end_dt))
                         _write(status_path, {"state": "fetching_crypto", "progress": min(i + chunkc, len(tradable_cr)), "total": len(tradable_cr)})
                     save_cached_frames("crypto", tradable_cr, cfg.signals.lookback_days, cache_start, cache_end, crypto_bars)
+                else:
+                    crypto_cache_hit = True
 
             # Normalize stop-loss input: allow UI to pass 5 meaning 5%
             if params.get("per_asset_stop_loss_pct") is not None:
@@ -135,6 +143,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     params["per_asset_stop_loss_pct"] = v
                 except Exception:
                     params["per_asset_stop_loss_pct"] = None
+
+            t_fetch_end = time.perf_counter()
 
             # Run backtest
             p = BacktestParams(**params)
@@ -212,6 +222,9 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                         return prov.price(sym, ts)
                     return prov.price_at_local_ts(sym, ts, exact_minute=True)
 
+            t_prepare_end = time.perf_counter()
+            t_sim_start = t_prepare_end
+
             res = run_backtest(
                 stock_bars=stock_bars,
                 crypto_bars=crypto_bars,
@@ -225,7 +238,29 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                 risk_intraday_price_cb=risk_intraday_cb,
             )
 
-            _write(result_path, {"job_id": job_id, **asdict(res)})
+            t_sim_end = time.perf_counter()
+            t_write_start = t_sim_end
+
+            payload = {"job_id": job_id, **asdict(res)}
+            metrics = payload.get("metrics") or {}
+            metrics["timing"] = {
+                "total_seconds": round(float(time.perf_counter() - t_job_start), 4),
+                "fetch_data_seconds": round(float(t_fetch_end - t_fetch_start), 4),
+                "prepare_seconds": round(float(t_prepare_end - t_fetch_end), 4),
+                "simulate_seconds": round(float(t_sim_end - t_sim_start), 4),
+                "write_seconds": None,
+                "stock_cache_hit": bool(stock_cache_hit),
+                "crypto_cache_hit": bool(crypto_cache_hit),
+                "stock_universe_size": len(tradable_eq),
+                "crypto_universe_size": len(tradable_cr),
+            }
+            payload["metrics"] = metrics
+            _write(result_path, payload)
+
+            t_write_end = time.perf_counter()
+            payload["metrics"]["timing"]["write_seconds"] = round(float(t_write_end - t_write_start), 4)
+            payload["metrics"]["timing"]["total_seconds"] = round(float(t_write_end - t_job_start), 4)
+            _write(result_path, payload)
             _write(status_path, {"state": "done", "progress": 1, "total": 1})
         except Exception as e:
             import traceback

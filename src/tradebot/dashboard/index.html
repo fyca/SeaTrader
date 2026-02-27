@@ -1647,6 +1647,16 @@ async function renderBacktest(res) {
   const m = res.metrics || {};
   const met = document.getElementById('btMetrics');
   met.textContent = `Return: ${pct(m.return)} • CAGR: ${pct(m.cagr)} • Max DD: ${pct(m.max_drawdown)} • Obs DD: ${pct(m.max_observed_drawdown)} • Ann vol: ${pct(m.ann_vol)} • Sharpe: ${Number(m.sharpe||0).toFixed(2)} • Trades: ${m.trade_count ?? '—'} • Win rate: ${m.win_rate==null ? '—' : pct(m.win_rate)} • DD-stop events: ${m.dd_stop_event_count ?? 0} • Start: ${money(m.start_equity)} • End: ${money(m.end_equity)}`;
+  const tm = m.timing || {};
+  let tmEl = document.getElementById('btTimingBreakdown');
+  if (!tmEl) {
+    tmEl = document.createElement('div');
+    tmEl.id = 'btTimingBreakdown';
+    tmEl.className = 'muted';
+    tmEl.style.marginTop = '4px';
+    met.insertAdjacentElement('afterend', tmEl);
+  }
+  tmEl.textContent = `Timing: total ${Number(tm.total_seconds||0).toFixed(2)}s • fetch ${Number(tm.fetch_data_seconds||0).toFixed(2)}s • prepare ${Number(tm.prepare_seconds||0).toFixed(2)}s • simulate ${Number(tm.simulate_seconds||0).toFixed(2)}s • write ${Number(tm.write_seconds||0).toFixed(2)}s • cache(eq/cr) ${tm.stock_cache_hit?'hit':'miss'}/${tm.crypto_cache_hit?'hit':'miss'}`;
   const hd = m.hourly_debug || {};
   let hdEl = document.getElementById('btHourlyDebug');
   if (!hdEl) {
