@@ -1,0 +1,25 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 50
+        }
+      }
+    ]
+  },
+  "id": "crypto_exit_sma50_break",
+  "name": "Crypto Exit SMA50 Break",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

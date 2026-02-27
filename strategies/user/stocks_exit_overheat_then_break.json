@@ -1,0 +1,37 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "all": [
+          {
+            "left": {
+              "kind": "rsi",
+              "n": 14
+            },
+            "op": ">",
+            "right": 78
+          },
+          {
+            "left": {
+              "kind": "close"
+            },
+            "op": "<",
+            "right": {
+              "kind": "ema",
+              "n": 21
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "id": "stocks_exit_overheat_then_break",
+  "name": "Stocks Exit Overheat+Break",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

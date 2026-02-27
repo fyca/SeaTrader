@@ -1,0 +1,41 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 100
+        }
+      },
+      {
+        "left": {
+          "kind": "roc",
+          "n": 30
+        },
+        "op": ">",
+        "right": 0.04
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_regime_momo",
+  "name": "Crypto Regime Momentum Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "roc",
+        "n": 30
+      },
+      "weight": 1.0
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

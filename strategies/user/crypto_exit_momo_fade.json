@@ -1,0 +1,23 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "roc",
+          "n": 14
+        },
+        "op": "<",
+        "right": -0.08
+      }
+    ]
+  },
+  "id": "crypto_exit_momo_fade",
+  "name": "Crypto Exit Momentum Fade",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

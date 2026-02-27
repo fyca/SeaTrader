@@ -1,0 +1,46 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "ret_1d"
+        },
+        "op": ">",
+        "right": 0.02
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "ema",
+          "n": 10
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_reversal_kick",
+  "name": "Crypto Reversal Kick Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "ret_1d"
+      },
+      "weight": 0.9
+    },
+    {
+      "value": {
+        "kind": "roc",
+        "n": 7
+      },
+      "weight": 0.3
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

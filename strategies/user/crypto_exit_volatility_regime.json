@@ -1,0 +1,23 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ann_vol",
+          "n": 20
+        },
+        "op": ">",
+        "right": 2.4
+      }
+    ]
+  },
+  "id": "crypto_exit_volatility_regime",
+  "name": "Crypto Exit Vol Regime",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

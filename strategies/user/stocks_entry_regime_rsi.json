@@ -1,0 +1,57 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "sma",
+          "n": 100
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": ">",
+        "right": 45
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 68
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_regime_rsi",
+  "name": "Stocks Regime RSI Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "roc",
+        "n": 30
+      },
+      "weight": 0.8
+    },
+    {
+      "value": {
+        "kind": "dist_sma",
+        "n": 100
+      },
+      "weight": 0.4
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

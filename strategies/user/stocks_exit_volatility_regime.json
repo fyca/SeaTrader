@@ -1,0 +1,23 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ann_vol",
+          "n": 20
+        },
+        "op": ">",
+        "right": 1.0
+      }
+    ]
+  },
+  "id": "stocks_exit_volatility_regime",
+  "name": "Stocks Exit Vol Regime",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

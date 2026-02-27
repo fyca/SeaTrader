@@ -1,0 +1,41 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "roc",
+          "n": 90
+        },
+        "op": ">",
+        "right": 0.15
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 50
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_long_momo_90",
+  "name": "Crypto 90D Momentum Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "roc",
+        "n": 90
+      },
+      "weight": 1.0
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

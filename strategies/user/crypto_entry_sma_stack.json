@@ -1,0 +1,52 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "sma",
+          "n": 20
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 50
+        }
+      },
+      {
+        "left": {
+          "kind": "sma",
+          "n": 50
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 100
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_sma_stack",
+  "name": "Crypto SMA Stack Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "roc",
+        "n": 20
+      },
+      "weight": 0.8
+    },
+    {
+      "value": {
+        "kind": "dist_sma",
+        "n": 50
+      },
+      "weight": 0.2
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

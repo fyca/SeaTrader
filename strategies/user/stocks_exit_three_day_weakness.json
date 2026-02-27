@@ -1,0 +1,32 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ret_1d"
+        },
+        "op": "<",
+        "right": -0.03
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<=",
+        "right": {
+          "kind": "lowest",
+          "n": 10
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_three_day_weakness",
+  "name": "Stocks Exit 3D Weakness",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

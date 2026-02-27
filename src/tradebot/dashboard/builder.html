@@ -83,6 +83,30 @@
         <select id="strategyPicker" style="min-width:280px;"></select>
       </div>
       <div>
+        <div class="muted">Filter type</div>
+        <select id="pickerType" style="min-width:120px;">
+          <option value="">All</option>
+          <option value="entry">Entry</option>
+          <option value="exit">Exit</option>
+        </select>
+      </div>
+      <div>
+        <div class="muted">Filter asset</div>
+        <select id="pickerAsset" style="min-width:120px;">
+          <option value="">All</option>
+          <option value="stocks">Stocks</option>
+          <option value="crypto">Crypto</option>
+        </select>
+      </div>
+      <div>
+        <div class="muted">Search</div>
+        <input id="pickerSearch" placeholder="name or id" style="min-width:180px;" />
+      </div>
+      <div>
+        <div class="muted">Legacy</div>
+        <select id="pickerLegacy" style="min-width:120px;"><option value="true">Include</option><option value="false">Hide</option></select>
+      </div>
+      <div>
         <button id="pickerLoad" class="secondary">Load selected</button>
       </div>
       <div>
@@ -804,17 +828,31 @@ async function refreshStrategyPicker() {
   const sel = document.getElementById('strategyPicker');
   if (!sel) return;
   try {
-    const rows = await getJSON('/api/strategies?include_legacy=true');
+    const wantType = String(document.getElementById('pickerType')?.value || '').trim();
+    const wantAsset = String(document.getElementById('pickerAsset')?.value || '').trim();
+    const q = String(document.getElementById('pickerSearch')?.value || '').trim().toLowerCase();
+    const includeLegacy = String(document.getElementById('pickerLegacy')?.value || 'true') === 'true';
+    const rows = await getJSON('/api/strategies?include_legacy=' + (includeLegacy ? 'true' : 'false'));
     sel.innerHTML = '';
     const blank = document.createElement('option');
     blank.value = '';
     blank.textContent = '(select strategy)';
     sel.appendChild(blank);
     for (const s of (rows || [])) {
+      const typ = String(s.type || '');
+      const ac = String(s.asset_class || '');
+      const id = String(s.id || '');
+      const nm = String(s.name || id);
+      if (wantType && typ !== wantType) continue;
+      if (wantAsset && ac !== wantAsset) continue;
+      if (q) {
+        const hay = (id + ' ' + nm).toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
       const opt = document.createElement('option');
-      opt.value = s.id;
-      const tags = `${s.type ? '['+String(s.type).toUpperCase()+']' : '[LEGACY]'}${s.asset_class ? '['+String(s.asset_class).toUpperCase()+']' : ''}`;
-      opt.textContent = `${s.name || s.id} ${tags}`;
+      opt.value = id;
+      const tags = `${typ ? '['+typ.toUpperCase()+']' : '[LEGACY]'}${ac ? '['+ac.toUpperCase()+']' : ''}`;
+      opt.textContent = `${nm} ${tags}`;
       sel.appendChild(opt);
     }
   } catch (e) {
@@ -846,6 +884,12 @@ const _stype = document.getElementById('stype');
 if (_stype) _stype.addEventListener('change', applyBuilderTypeUI);
 const _sasset = document.getElementById('sasset');
 if (_sasset) _sasset.addEventListener('change', applyBuilderTypeUI);
+for (const id of ['pickerType','pickerAsset','pickerSearch','pickerLegacy']) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  const ev = (id === 'pickerSearch') ? 'input' : 'change';
+  el.addEventListener(ev, ()=>{ refreshStrategyPicker(); });
+}
 
 async function save() {
   const status = document.getElementById('status');

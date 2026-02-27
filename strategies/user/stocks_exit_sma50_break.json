@@ -1,0 +1,25 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 50
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_sma50_break",
+  "name": "Stocks Exit SMA50 Break",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

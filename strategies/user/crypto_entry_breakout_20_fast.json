@@ -1,0 +1,41 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">=",
+        "right": {
+          "kind": "highest",
+          "n": 20
+        }
+      },
+      {
+        "left": {
+          "kind": "ann_vol",
+          "n": 20
+        },
+        "op": "<",
+        "right": 2.1
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_breakout_20_fast",
+  "name": "Crypto Breakout 20 Fast",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "breakout",
+        "n": 20
+      },
+      "weight": 1.0
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

@@ -1,0 +1,43 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">=",
+        "right": {
+          "kind": "highest",
+          "n": 55
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_base_break_retest",
+  "name": "Stocks Break-Retest Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "breakout",
+        "n": 55
+      },
+      "weight": 1.0
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

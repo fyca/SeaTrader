@@ -1,0 +1,33 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 100
+        }
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 28
+      }
+    ]
+  },
+  "id": "crypto_exit_dual_guard",
+  "name": "Crypto Exit Dual Guard",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

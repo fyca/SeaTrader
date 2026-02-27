@@ -1,0 +1,47 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": ">",
+        "right": 40
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "ema",
+          "n": 10
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_rsi_recovery",
+  "name": "Stocks RSI Recovery Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "ret_1d"
+      },
+      "weight": 0.5
+    },
+    {
+      "value": {
+        "kind": "roc",
+        "n": 10
+      },
+      "weight": 0.5
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

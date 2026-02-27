@@ -1,0 +1,23 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "roc",
+          "n": 20
+        },
+        "op": "<",
+        "right": -0.05
+      }
+    ]
+  },
+  "id": "stocks_exit_momo_fade",
+  "name": "Stocks Exit Momentum Fade",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

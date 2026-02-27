@@ -1,0 +1,57 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "ema",
+          "n": 21
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 100
+        }
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": ">",
+        "right": 42
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 70
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_trend_rsi_band",
+  "name": "Crypto Trend RSI Band Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "roc",
+        "n": 14
+      },
+      "weight": 0.7
+    },
+    {
+      "value": {
+        "kind": "dist_sma",
+        "n": 100
+      },
+      "weight": 0.3
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

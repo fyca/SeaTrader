@@ -1,0 +1,39 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "roc",
+          "n": 126
+        },
+        "op": ">",
+        "right": 0.05
+      },
+      {
+        "left": {
+          "kind": "ann_vol",
+          "n": 20
+        },
+        "op": "<",
+        "right": 0.75
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_momo_126d",
+  "name": "Stocks 126D Momentum Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "roc",
+        "n": 126
+      },
+      "weight": 1.0
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

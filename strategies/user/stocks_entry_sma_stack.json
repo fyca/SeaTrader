@@ -1,0 +1,52 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "sma",
+          "n": 20
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 50
+        }
+      },
+      {
+        "left": {
+          "kind": "sma",
+          "n": 50
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_sma_stack",
+  "name": "Stocks SMA Stack Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "dist_sma",
+        "n": 50
+      },
+      "weight": 0.6
+    },
+    {
+      "value": {
+        "kind": "roc",
+        "n": 20
+      },
+      "weight": 0.4
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

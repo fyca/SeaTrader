@@ -1,0 +1,49 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "sma_slope",
+          "lookback": 10,
+          "n": 200
+        },
+        "op": ">",
+        "right": 0
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 50
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_quality_trend",
+  "name": "Stocks Quality Trend Entry",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "dist_sma",
+        "n": 200
+      },
+      "weight": 0.7
+    },
+    {
+      "value": {
+        "kind": "roc",
+        "n": 60
+      },
+      "weight": 0.3
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}
