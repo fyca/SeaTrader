@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 
 
-USER_DIR = Path("strategies/user")
+# Keep user strategies in the repository-level shared folder so all bot instances
+# (including multibot dashboards launched from per-bot working dirs) see the same library.
+USER_DIR = Path(__file__).resolve().parents[3] / "strategies" / "user"
 
 
 def list_user_strategies() -> list[dict]:
