@@ -66,7 +66,7 @@
   </div>
 
   <div class="container">
-    <div class="muted">Build and save rule-based strategies (entry rules + weighted score factors). Saved strategies will appear in the main Strategy dropdown.</div>
+    <div class="muted">Build and save rule-based strategies. Choose Strategy Type (Entry/Exit) above to work in a single focused builder area.</div>
 
   <div class="card">
     <div class="row">
@@ -77,6 +77,20 @@
       <div>
         <div class="muted">Name</div>
         <input id="sname" placeholder="My Strategy" style="min-width:240px;" />
+      </div>
+      <div>
+        <div class="muted">Asset class</div>
+        <select id="sasset">
+          <option value="stocks">Stocks</option>
+          <option value="crypto">Crypto</option>
+        </select>
+      </div>
+      <div>
+        <div class="muted">Strategy type</div>
+        <select id="stype">
+          <option value="entry">Entry</option>
+          <option value="exit">Exit</option>
+        </select>
       </div>
       <div>
         <div class="muted">Theme</div>
@@ -102,7 +116,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="entryCard">
     <h2>Entry rules (builder)</h2>
     <div class="muted">Now supports nested AND/OR groups. This builds the same JSON format the engine understands: {"all": [...] } and {"any": [...]}.</div>
 
@@ -139,7 +153,7 @@
     <details style="margin-top:10px;"><summary class="muted">Entry rule JSON</summary><textarea id="entry"></textarea></details>
   </div>
 
-  <div class="card">
+  <div class="card" id="exitCard">
     <h2>Exit rules (builder)</h2>
     <div class="muted">Exit rule is evaluated as: if it returns true, the strategy should SELL/exit.</div>
 
@@ -168,7 +182,7 @@
     <details style="margin-top:10px;"><summary class="muted">Exit rule JSON</summary><textarea id="exit"></textarea></details>
   </div>
 
-  <div class="card">
+  <div class="card" id="factorsCard">
     <h2>Score factors (builder)</h2>
     <div class="muted">Weighted sum of factors. Each factor is either an indicator (numeric) or a boolean condition (counts as 0/1).</div>
 
@@ -778,11 +792,24 @@ function syncFactorsFromJson() {
 
 initThemePicker();
 
+function applyBuilderTypeUI() {
+  const t = String(document.getElementById('stype')?.value || 'entry');
+  const entryCard = document.getElementById('entryCard');
+  const exitCard = document.getElementById('exitCard');
+  const factorsCard = document.getElementById('factorsCard');
+  if (entryCard) entryCard.style.display = (t === 'entry') ? '' : 'none';
+  if (exitCard) exitCard.style.display = (t === 'exit') ? '' : 'none';
+  if (factorsCard) factorsCard.style.display = (t === 'entry') ? '' : 'none';
+}
+
 defaults();
 // initialize builders from JSON
 syncCondsFromJson();
 syncExitFromJson();
 syncFactorsFromJson();
+applyBuilderTypeUI();
+const _stype = document.getElementById('stype');
+if (_stype) _stype.addEventListener('change', applyBuilderTypeUI);
 
 async function save() {
   const status = document.getElementById('status');
@@ -793,7 +820,17 @@ async function save() {
     const entry = JSON.parse(document.getElementById('entry').value);
     const exit = JSON.parse(document.getElementById('exit').value);
     const factors = JSON.parse(document.getElementById('factors').value);
-    const obj = {id, name, entry, exit, score_factors: factors};
+    const type = String(document.getElementById('stype')?.value || 'entry');
+    const asset_class = String(document.getElementById('sasset')?.value || 'stocks');
+    const obj = {
+      id,
+      name,
+      type,
+      asset_class,
+      entry: (type === 'entry') ? entry : {all: []},
+      exit: (type === 'exit') ? exit : {any: []},
+      score_factors: (type === 'entry') ? factors : []
+    };
     status.textContent = 'saving…';
     await postJSON('/api/strategy/' + encodeURIComponent(id), obj);
     status.textContent = 'saved';
@@ -810,9 +847,13 @@ async function load() {
     status.textContent = 'loading…';
     const obj = await getJSON('/api/strategy/' + encodeURIComponent(id));
     document.getElementById('sname').value = obj.name || '';
+    document.getElementById('sasset').value = obj.asset_class || 'stocks';
+    // Keep legacy behavior: untyped strategies default to entry view.
+    document.getElementById('stype').value = obj.type || 'entry';
     document.getElementById('entry').value = JSON.stringify(obj.entry || {all:[]}, null, 2);
     document.getElementById('exit').value = JSON.stringify(obj.exit || {any:[]}, null, 2);
     document.getElementById('factors').value = JSON.stringify(obj.score_factors || [], null, 2);
+    applyBuilderTypeUI();
     status.textContent = 'loaded';
   } catch(e) {
     status.textContent = 'error: ' + e;
