@@ -416,8 +416,8 @@
                 <input id="btPresetName" placeholder="e.g. weekly_safe_v2" style="min-width:240px;" />
               </div>
               <div style="flex:1;"></div>
-              <button id="btPresetLoad" class="secondary">Load → UI</button>
-              <button id="btPresetSave" class="secondary">Save UI → preset</button>
+              <button id="btPresetLoad" class="secondary">Load -> UI</button>
+              <button id="btPresetSave" class="secondary">Save UI -> preset</button>
               <button id="btPresetUpdate" class="secondary">Update selected preset</button>
               <button id="btPresetApply" class="primary">Apply to config</button>
             </div>
@@ -1691,7 +1691,7 @@ async function renderBacktest(res) {
   const p = res.params || {};
   const bp = document.getElementById('btParams');
   if (bp) {
-    bp.textContent = `Params: strategy=${p.strategy_id||'—'} - assets=${p.asset_mode||'—'} - rebalance=${p.rebalance||'—'} - style=${p.rebalance_mode||'—'} - liquidation=${p.liquidation_mode||'—'} - stopLoss=${p.per_asset_stop_loss_pct ?? 'none'} - ddStop=${p.portfolio_dd_stop ?? 'none'} - slippage=${p.slippage_bps ?? '—'}bps - window=${p.start||'—'}→${p.end||'—'}`;
+    bp.textContent = `Params: strategy=${p.strategy_id||'—'} - assets=${p.asset_mode||'—'} - rebalance=${p.rebalance||'—'} - style=${p.rebalance_mode||'—'} - liquidation=${p.liquidation_mode||'—'} - stopLoss=${p.per_asset_stop_loss_pct ?? 'none'} - ddStop=${p.portfolio_dd_stop ?? 'none'} - slippage=${p.slippage_bps ?? '—'}bps - window=${p.start||'—'}->${p.end||'—'}`;
   }
 
   const curve = res.equity_curve || [];
@@ -1945,7 +1945,7 @@ async function renderBacktest(res) {
               evTable = '<div class="muted" style="margin-top:10px;">(no events recorded for this job — run a new backtest)</div>';
             }
 
-            detail.innerHTML = `<div style="margin-bottom:6px;"><b>${data.symbol}</b> (${data.start}→${data.end})${extra}</div>`
+            detail.innerHTML = `<div style="margin-bottom:6px;"><b>${data.symbol}</b> (${data.start}->${data.end})${extra}</div>`
               + `<div class="muted" style="margin-bottom:6px;">Realized ${money(r.realized)} - Unrealized(end) ${money(r.unreal)} - Total ${money(r.total)}</div>`
               + `<div class="row" style="gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">`
               + `<button id="btSymPlay" class="secondary">Play</button><button id="btSymPause" class="secondary">Pause</button><button id="btSymStepBack" class="secondary">◀ Step</button><button id="btSymStepFwd" class="secondary">Step ▶</button>`
