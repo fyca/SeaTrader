@@ -1449,7 +1449,7 @@ async function refreshIterationReportsList(selectedId='') {
     for (const it of (j.reports || [])) {
       const opt = document.createElement('option');
       opt.value = it.id;
-      opt.textContent = `${it.created_at || ''} • ${it.asset_mode || '—'} • ${it.axis || '—'} • ${it.count || 0} rows`;
+      opt.textContent = `${it.created_at || ''} - ${it.asset_mode || '—'} - ${it.axis || '—'} - ${it.count || 0} rows`;
       sel.appendChild(opt);
     }
     if (selectedId) sel.value = selectedId;
@@ -1569,7 +1569,7 @@ async function runBacktestIteration() {
     const jobId = j.job_id;
 
     const st = await waitBacktestJob(jobId, (x) => {
-      status.textContent = `iteration ${i+1}/${times.length}: ${t} • ${x.state} ${x.progress||0}/${x.total||0}`;
+      status.textContent = `iteration ${i+1}/${times.length}: ${t} - ${x.state} ${x.progress||0}/${x.total||0}`;
     });
 
     if (st.state !== 'done') {
@@ -1603,7 +1603,7 @@ async function runBacktestIteration() {
   } catch (e) {
     // leave as-is; user still has in-page summary/csv
   }
-  status.textContent = `iteration complete: ${doneCount}/${times.length} done${reportId ? ' • report ' + reportId : ''}`;
+  status.textContent = `iteration complete: ${doneCount}/${times.length} done${reportId ? ' - report ' + reportId : ''}`;
 
   if (document.getElementById('btIterNotifyTg')?.checked) {
     const metric = document.getElementById('btIterBestMetric')?.value || 'sharpe';
@@ -1614,9 +1614,9 @@ async function runBacktestIteration() {
       : `SeaTrader iteration complete (${doneCount}/${times.length}).${reportId ? ' Report: ' + reportId + '.' : ''}`;
     try {
       await postJSON('/api/backtest/notify-telegram', {text: note});
-      status.textContent += ' • telegram sent';
+      status.textContent += ' - telegram sent';
     } catch (e) {
-      status.textContent += ' • telegram notify failed';
+      status.textContent += ' - telegram notify failed';
     }
   }
 }
@@ -1646,7 +1646,7 @@ async function renderBacktest(res) {
   window.__lastBacktestRes = res;
   const m = res.metrics || {};
   const met = document.getElementById('btMetrics');
-  met.textContent = `Return: ${pct(m.return)} • CAGR: ${pct(m.cagr)} • Max DD: ${pct(m.max_drawdown)} • Obs DD: ${pct(m.max_observed_drawdown)} • Ann vol: ${pct(m.ann_vol)} • Sharpe: ${Number(m.sharpe||0).toFixed(2)} • Trades: ${m.trade_count ?? '—'} • Win rate: ${m.win_rate==null ? '—' : pct(m.win_rate)} • DD-stop events: ${m.dd_stop_event_count ?? 0} • Start: ${money(m.start_equity)} • End: ${money(m.end_equity)}`;
+  met.textContent = `Return: ${pct(m.return)} - CAGR: ${pct(m.cagr)} - Max DD: ${pct(m.max_drawdown)} - Obs DD: ${pct(m.max_observed_drawdown)} - Ann vol: ${pct(m.ann_vol)} - Sharpe: ${Number(m.sharpe||0).toFixed(2)} - Trades: ${m.trade_count ?? '—'} - Win rate: ${m.win_rate==null ? '—' : pct(m.win_rate)} - DD-stop events: ${m.dd_stop_event_count ?? 0} - Start: ${money(m.start_equity)} - End: ${money(m.end_equity)}`;
   const tm = m.timing || {};
   let tmEl = document.getElementById('btTimingBreakdown');
   if (!tmEl) {
@@ -1656,7 +1656,7 @@ async function renderBacktest(res) {
     tmEl.style.marginTop = '4px';
     met.insertAdjacentElement('afterend', tmEl);
   }
-  tmEl.textContent = `Timing: total ${Number(tm.total_seconds||0).toFixed(2)}s • fetch ${Number(tm.fetch_data_seconds||0).toFixed(2)}s • prepare ${Number(tm.prepare_seconds||0).toFixed(2)}s • simulate ${Number(tm.simulate_seconds||0).toFixed(2)}s • write ${Number(tm.write_seconds||0).toFixed(2)}s • cache(eq/cr) ${tm.stock_cache_hit?'hit':'miss'}/${tm.crypto_cache_hit?'hit':'miss'}`;
+  tmEl.textContent = `Timing: total ${Number(tm.total_seconds||0).toFixed(2)}s - fetch ${Number(tm.fetch_data_seconds||0).toFixed(2)}s - prepare ${Number(tm.prepare_seconds||0).toFixed(2)}s - simulate ${Number(tm.simulate_seconds||0).toFixed(2)}s - write ${Number(tm.write_seconds||0).toFixed(2)}s - cache(eq/cr) ${tm.stock_cache_hit?'hit':'miss'}/${tm.crypto_cache_hit?'hit':'miss'}`;
   const hd = m.hourly_debug || {};
   let hdEl = document.getElementById('btHourlyDebug');
   if (!hdEl) {
@@ -1666,7 +1666,7 @@ async function renderBacktest(res) {
     hdEl.style.marginTop = '4px';
     met.insertAdjacentElement('afterend', hdEl);
   }
-  hdEl.textContent = `Hourly debug: slots ${hd.slots_considered ?? 0} • checks ${hd.symbol_checks ?? 0} • prices ${hd.price_points_found ?? 0} • strategy selected ${hd.strategy_exit_selected ?? 0} • no-rule ${hd.strategy_exit_no_rule ?? 0} • evaluated ${hd.strategy_exit_evaluated ?? 0} • triggered ${hd.strategy_exit_triggered ?? 0}`;
+  hdEl.textContent = `Hourly debug: slots ${hd.slots_considered ?? 0} - checks ${hd.symbol_checks ?? 0} - prices ${hd.price_points_found ?? 0} - strategy selected ${hd.strategy_exit_selected ?? 0} - no-rule ${hd.strategy_exit_no_rule ?? 0} - evaluated ${hd.strategy_exit_evaluated ?? 0} - triggered ${hd.strategy_exit_triggered ?? 0}`;
 
   const evs = (res.events || []);
   const cPlaced = evs.filter(e => e.type==='order' && e.reason==='limit_placed').length;
@@ -1686,12 +1686,12 @@ async function renderBacktest(res) {
     life.style.marginTop = '6px';
     met.insertAdjacentElement('afterend', life);
   }
-  life.textContent = `Order lifecycle: placed ${cPlaced} • filled ${cFilled} (${fillRate==null?'—':fillRate.toFixed(1)+'%'}) • limit fills ${cLimitFill} • fallback market fills ${cFallback} • canceled(next rebalance) ${cCanceled} • buy events ${cBuy} • sell events ${cSell}`;
+  life.textContent = `Order lifecycle: placed ${cPlaced} - filled ${cFilled} (${fillRate==null?'—':fillRate.toFixed(1)+'%'}) - limit fills ${cLimitFill} - fallback market fills ${cFallback} - canceled(next rebalance) ${cCanceled} - buy events ${cBuy} - sell events ${cSell}`;
 
   const p = res.params || {};
   const bp = document.getElementById('btParams');
   if (bp) {
-    bp.textContent = `Params: strategy=${p.strategy_id||'—'} • assets=${p.asset_mode||'—'} • rebalance=${p.rebalance||'—'} • style=${p.rebalance_mode||'—'} • liquidation=${p.liquidation_mode||'—'} • stopLoss=${p.per_asset_stop_loss_pct ?? 'none'} • ddStop=${p.portfolio_dd_stop ?? 'none'} • slippage=${p.slippage_bps ?? '—'}bps • window=${p.start||'—'}→${p.end||'—'}`;
+    bp.textContent = `Params: strategy=${p.strategy_id||'—'} - assets=${p.asset_mode||'—'} - rebalance=${p.rebalance||'—'} - style=${p.rebalance_mode||'—'} - liquidation=${p.liquidation_mode||'—'} - stopLoss=${p.per_asset_stop_loss_pct ?? 'none'} - ddStop=${p.portfolio_dd_stop ?? 'none'} - slippage=${p.slippage_bps ?? '—'}bps - window=${p.start||'—'}→${p.end||'—'}`;
   }
 
   const curve = res.equity_curve || [];
@@ -1926,7 +1926,7 @@ async function renderBacktest(res) {
           const tSellY = trailingSells.map(m=> (m.price!=null ? Number(m.price) : null));
 
           if (detail) {
-            const extra = excluded.has(r.symbol) ? ' • EXCLUDED' : '';
+            const extra = excluded.has(r.symbol) ? ' - EXCLUDED' : '';
             const evs = (data.events || []);
             let evTable = '';
             if (evs.length) {
@@ -1946,7 +1946,7 @@ async function renderBacktest(res) {
             }
 
             detail.innerHTML = `<div style="margin-bottom:6px;"><b>${data.symbol}</b> (${data.start}→${data.end})${extra}</div>`
-              + `<div class="muted" style="margin-bottom:6px;">Realized ${money(r.realized)} • Unrealized(end) ${money(r.unreal)} • Total ${money(r.total)}</div>`
+              + `<div class="muted" style="margin-bottom:6px;">Realized ${money(r.realized)} - Unrealized(end) ${money(r.unreal)} - Total ${money(r.total)}</div>`
               + `<div class="row" style="gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">`
               + `<button id="btSymPlay" class="secondary">Play</button><button id="btSymPause" class="secondary">Pause</button><button id="btSymStepBack" class="secondary">◀ Step</button><button id="btSymStepFwd" class="secondary">Step ▶</button>`
               + `<label class="muted">Speed <select id="btSymSpeed"><option value="1">1x</option><option value="5" selected>5x</option><option value="20">20x</option><option value="100">Max</option></select></label>`
@@ -2000,7 +2000,7 @@ async function renderBacktest(res) {
               const ts = x[idx];
               const px = Number(y[idx] || 0);
               if (scrub) scrub.value = String(idx);
-              if (pos) pos.textContent = `${ts} • $${px.toFixed(2)} • step ${idx+1}/${x.length}`;
+              if (pos) pos.textContent = `${ts} - $${px.toFixed(2)} - step ${idx+1}/${x.length}`;
               Plotly.relayout('btSymPlot', {'shapes[0].x0': ts, 'shapes[0].x1': ts});
             };
 
@@ -2261,7 +2261,7 @@ async function main() {
   const frozen = artifacts.last_account?.payload?.frozen;
   const dd = artifacts.last_account?.payload?.drawdown;
   const status = frozen ? 'FROZEN' : 'OK';
-  document.getElementById('subtitle').textContent = `paper=${acct.paper} • status=${status}${(dd!==undefined && dd!==null) ? (' • dd=' + pct(dd)) : ''} • updated ${health.ts}`;
+  document.getElementById('subtitle').textContent = `paper=${acct.paper} - status=${status}${(dd!==undefined && dd!==null) ? (' - dd=' + pct(dd)) : ''} - updated ${health.ts}`;
 
   // Overview status strip + KPI tiles
   const lastRebalanceTs = artifacts.last_rebalance?.ts || artifacts.last_rebalance?.payload?.ts || '—';
@@ -2461,8 +2461,8 @@ async function main() {
 
     const llSummary = document.getElementById('liveLedgerSummary');
     if (llSummary) {
-      const focusTxt = liveLedgerFocusedRunId ? ` • focused run: ${liveLedgerFocusedRunId}` : '';
-      llSummary.textContent = `runs: ${runsFiltered.length}/${liveRuns.length} • events: ${eventsFiltered.length}/${liveEvents.length}${focusTxt}`;
+      const focusTxt = liveLedgerFocusedRunId ? ` - focused run: ${liveLedgerFocusedRunId}` : '';
+      llSummary.textContent = `runs: ${runsFiltered.length}/${liveRuns.length} - events: ${eventsFiltered.length}/${liveEvents.length}${focusTxt}`;
     }
 
     const lrTb = document.getElementById('liveRuns');
@@ -2670,10 +2670,10 @@ async function main() {
   const crRiskCfg = Boolean(cronStatus?.risk_crypto_enabled);
 
   const fmtSched = (s) => s ? `${s.day} ${s.hhmm}` : '—';
-  kv(stateEl, 'Cron: Stocks rebalance', eqRebCfg ? `YES • ${fmtSched(cronStatus?.rebalance_schedule_equities)}` : 'NO');
-  kv(stateEl, 'Cron: Crypto rebalance', crRebCfg ? `YES • ${fmtSched(cronStatus?.rebalance_schedule_crypto)}` : 'NO');
-  kv(stateEl, 'Cron: Stocks risk-check', eqRiskCfg ? `YES • ${fmtSched(cronStatus?.risk_schedule_equities)}` : 'NO');
-  kv(stateEl, 'Cron: Crypto risk-check', crRiskCfg ? `YES • ${fmtSched(cronStatus?.risk_schedule_crypto)}` : 'NO');
+  kv(stateEl, 'Cron: Stocks rebalance', eqRebCfg ? `YES - ${fmtSched(cronStatus?.rebalance_schedule_equities)}` : 'NO');
+  kv(stateEl, 'Cron: Crypto rebalance', crRebCfg ? `YES - ${fmtSched(cronStatus?.rebalance_schedule_crypto)}` : 'NO');
+  kv(stateEl, 'Cron: Stocks risk-check', eqRiskCfg ? `YES - ${fmtSched(cronStatus?.risk_schedule_equities)}` : 'NO');
+  kv(stateEl, 'Cron: Crypto risk-check', crRiskCfg ? `YES - ${fmtSched(cronStatus?.risk_schedule_crypto)}` : 'NO');
 
   kv(stateEl, 'Last run: Stocks rebalance', cronStatus?.rebalance_last_run_equities || '—');
   kv(stateEl, 'Last run: Crypto rebalance', cronStatus?.rebalance_last_run_crypto || '—');
@@ -2685,7 +2685,7 @@ async function main() {
     if (scheduleStatus?.rebalance_next_run_reason_equities) {
       kv(stateEl, 'Rebalance equities schedule note', String(scheduleStatus.rebalance_next_run_reason_equities));
     }
-    kv(stateEl, 'Rebalance scheduler', (scheduleStatus?.rebalance_last_state || 'running') + (scheduleStatus?.rebalance_last_error ? (' • ' + scheduleStatus.rebalance_last_error) : ''));
+    kv(stateEl, 'Rebalance scheduler', (scheduleStatus?.rebalance_last_state || 'running') + (scheduleStatus?.rebalance_last_error ? (' - ' + scheduleStatus.rebalance_last_error) : ''));
   } else if (!queued) {
     kv(stateEl, 'Run-at-time', 'Click "Run at configured time" to queue');
   }
@@ -2694,7 +2694,7 @@ async function main() {
   kv(stateEl, 'Daily risk-check queued', riskQueued ? 'YES' : 'NO');
   if (!cronRisk && scheduleStatus?.risk_daily_enabled) {
     kv(stateEl, 'Risk next run', scheduleStatus?.risk_next_run || '—');
-    kv(stateEl, 'Risk scheduler', (scheduleStatus?.risk_last_state || 'running') + (scheduleStatus?.risk_last_error ? (' • ' + scheduleStatus.risk_last_error) : ''));
+    kv(stateEl, 'Risk scheduler', (scheduleStatus?.risk_last_state || 'running') + (scheduleStatus?.risk_last_error ? (' - ' + scheduleStatus.risk_last_error) : ''));
   }
   kv(stateEl, 'Cron scheduler enabled', cronStatus?.enabled ? 'YES' : 'NO');
   const freezeConfigInputs = settingsDirty;
@@ -2704,7 +2704,7 @@ async function main() {
   if (btParityMeta) {
     const botName = String(cfg?.scheduling?.bot_name || '').trim() || 'default';
     const strat = String(cfg?.strategy_id || '—');
-    btParityMeta.textContent = `bot: ${botName} • strategy: ${strat} • source: this dashboard instance config`;
+    btParityMeta.textContent = `bot: ${botName} - strategy: ${strat} - source: this dashboard instance config`;
   }
 
   // Strategy dropdown (live)
@@ -2872,7 +2872,7 @@ async function main() {
     if (ss.rebalance_next_run_crypto) parts.push(`next crypto rebalance: ${ss.rebalance_next_run_crypto}`);
     if (ss.risk_next_run_equities) parts.push(`next stocks risk: ${ss.risk_next_run_equities}`);
     if (ss.risk_next_run_crypto) parts.push(`next crypto risk: ${ss.risk_next_run_crypto}`);
-    lss.textContent = parts.length ? parts.join(' • ') : '(next-run schedule appears here after scheduler starts)';
+    lss.textContent = parts.length ? parts.join(' - ') : '(next-run schedule appears here after scheduler starts)';
   }
 
   // Config editor
@@ -3311,12 +3311,12 @@ async function main() {
       const strat = rp.strategy_id || '—';
       const mode = rp.asset_mode || '—';
       const freq = rp.rebalance || '—';
-      const summary = `ret ${rRet} • cagr ${rCagr} • dd ${rDd} • sh ${rSh}`;
+      const summary = `ret ${rRet} - cagr ${rCagr} - dd ${rDd} - sh ${rSh}`;
 
       tr.innerHTML = `<td style="font-family: ui-monospace, monospace; font-size: 11px;">${j.job_id}</td>`
         + `<td>${j.state||''}</td>`
         + `<td>${(j.progress||0)}/${(j.total||0)}</td>`
-        + `<td style="font-size:12px;">${strat} • ${mode} • ${freq}<div class="muted" style="font-size:11px; margin-top:2px;">${summary}</div></td>`
+        + `<td style="font-size:12px;">${strat} - ${mode} - ${freq}<div class="muted" style="font-size:11px; margin-top:2px;">${summary}</div></td>`
         + `<td>${(j.error||'').slice(0,80)}</td>`
         + `<td>${btn}</td>`;
       jb.appendChild(tr);
@@ -3348,7 +3348,7 @@ async function main() {
   // Summary
   const os = document.getElementById('orderSummary');
   if (os && orderSummary) {
-    os.textContent = `open orders: ${orderSummary.open_count} (notional ~${money(orderSummary.open_notional)}) • fills: ${orderSummary.fills_count}`;
+    os.textContent = `open orders: ${orderSummary.open_count} (notional ~${money(orderSummary.open_notional)}) - fills: ${orderSummary.fills_count}`;
   }
 
   // Open orders
@@ -3530,7 +3530,7 @@ async function renderExclusions() {
     const ex = await getJSON('/api/exclusions');
     const floor = ex?.floor_pct;
     const floorTxt = (floor===null || floor===undefined) ? 'none' : `${(Number(floor)*100).toFixed(2)}%`;
-    meta.textContent = `${Number(ex?.count||0)} symbol(s) excluded • floor=${floorTxt}`;
+    meta.textContent = `${Number(ex?.count||0)} symbol(s) excluded - floor=${floorTxt}`;
     body.innerHTML = '';
     for (const r of (ex?.symbols || [])) {
       const tr = document.createElement('tr');
