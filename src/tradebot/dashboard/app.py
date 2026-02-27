@@ -642,6 +642,17 @@ def create_app(*, config_path: str) -> FastAPI:
         target = target + timedelta(days=delta_days)
         return (target - now).total_seconds(), target.isoformat()
 
+    def _seconds_until_hourly_minute(minute_of_hour: int, tz_name: str) -> tuple[float, str]:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo(tz_name)
+        now = datetime.now(tz)
+        m = max(0, min(59, int(minute_of_hour)))
+        target = now.replace(minute=m, second=0, microsecond=0)
+        if target <= now:
+            target = target + timedelta(hours=1)
+        return (target - now).total_seconds(), target.isoformat()
+
     def _is_equity_trading_day(trading_client, day_local) -> bool:
         try:
             ds = day_local.isoformat()
@@ -768,18 +779,24 @@ def create_app(*, config_path: str) -> FastAPI:
                     eq_freq = str(getattr(eq_s, "risk_check_frequency", "daily"))
                     eq_day = str(getattr(eq_s, "risk_check_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
                     eq_tm = str(getattr(eq_s, "risk_check_time_local", getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")))
+                    eq_min = int(getattr(eq_s, "risk_check_minute_of_hour", 5))
 
                     cr_freq = str(getattr(cr_s, "risk_check_frequency", "daily"))
                     cr_day = str(getattr(cr_s, "risk_check_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
                     cr_tm = str(getattr(cr_s, "risk_check_time_local", getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")))
+                    cr_min = int(getattr(cr_s, "risk_check_minute_of_hour", 5))
 
                     waits = []
                     if eq_freq == "weekly":
                         waits.append(("equities", *_seconds_until_weekly(eq_day, eq_tm, tz_name)))
+                    elif eq_freq == "hourly":
+                        waits.append(("equities", *_seconds_until_hourly_minute(eq_min, tz_name)))
                     else:
                         waits.append(("equities", *_seconds_until_local_hhmm(eq_tm, tz_name)))
                     if cr_freq == "weekly":
                         waits.append(("crypto", *_seconds_until_weekly(cr_day, cr_tm, tz_name)))
+                    elif cr_freq == "hourly":
+                        waits.append(("crypto", *_seconds_until_hourly_minute(cr_min, tz_name)))
                     else:
                         waits.append(("crypto", *_seconds_until_local_hhmm(cr_tm, tz_name)))
 
@@ -1004,6 +1021,8 @@ def create_app(*, config_path: str) -> FastAPI:
                 mm, hh, _dom, _mon, dow = p[:5]
                 dow_map = {"0":"SUN","1":"MON","2":"TUE","3":"WED","4":"THU","5":"FRI","6":"SAT"}
                 day = dow_map.get(str(dow), str(dow))
+                if str(hh) == "*":
+                    return {"hhmm": f"hourly@:{int(mm):02d}", "day": "*"}
                 return {"hhmm": f"{int(hh):02d}:{int(mm):02d}", "day": day}
             except Exception:
                 return None
@@ -1100,10 +1119,12 @@ def create_app(*, config_path: str) -> FastAPI:
         eq_risk_freq = str(getattr(eqs, "risk_check_frequency", "daily"))
         eq_risk_day = str(getattr(eqs, "risk_check_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
         eq_risk_time = str(getattr(eqs, "risk_check_time_local", getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")))
+        eq_risk_min = int(getattr(eqs, "risk_check_minute_of_hour", 5))
 
         cr_risk_freq = str(getattr(crs, "risk_check_frequency", "daily"))
         cr_risk_day = str(getattr(crs, "risk_check_day", getattr(cfg.scheduling, "weekly_rebalance_day", "MON")))
         cr_risk_time = str(getattr(crs, "risk_check_time_local", getattr(cfg.scheduling, "daily_risk_check_time_local", "18:05")))
+        cr_risk_min = int(getattr(crs, "risk_check_minute_of_hour", 5))
 
         repo = Path(config_path).resolve().parent.parent
         cmd_base = f"cd {repo} && source .venv/bin/activate"
@@ -1117,7 +1138,10 @@ def create_app(*, config_path: str) -> FastAPI:
         risk_eq_cmd = f"{cmd_base} && date -Iseconds > {risk_eq_stamp} && tradebot risk-check --config {config_path} --asset-mode equities"
         risk_cr_cmd = f"{cmd_base} && date -Iseconds > {risk_cr_stamp} && tradebot risk-check --config {config_path} --asset-mode crypto"
 
-        def _line(hhmm: str, day: str | None, cmd: str, tag: str):
+        def _line(hhmm: str, day: str | None, cmd: str, tag: str, *, hourly_minute: int | None = None):
+            if hourly_minute is not None:
+                mm = max(0, min(59, int(hourly_minute)))
+                return f"{mm} * * * * /bin/bash -lc '{cmd}' {tag}"
             hh, mm = [int(x) for x in str(hhmm).split(":")]
             if day is None:
                 return f"{mm} {hh} * * * /bin/bash -lc '{cmd}' {tag}"
@@ -1125,8 +1149,8 @@ def create_app(*, config_path: str) -> FastAPI:
 
         lines.append(_line(eq_reb_time, None if eq_reb_freq == "daily" else eq_reb_day, reb_eq_cmd, CRON_TAG_REB_EQ))
         lines.append(_line(cr_reb_time, None if cr_reb_freq == "daily" else cr_reb_day, reb_cr_cmd, CRON_TAG_REB_CR))
-        lines.append(_line(eq_risk_time, None if eq_risk_freq == "daily" else eq_risk_day, risk_eq_cmd, CRON_TAG_RISK_EQ))
-        lines.append(_line(cr_risk_time, None if cr_risk_freq == "daily" else cr_risk_day, risk_cr_cmd, CRON_TAG_RISK_CR))
+        lines.append(_line(eq_risk_time, None if eq_risk_freq == "daily" else eq_risk_day, risk_eq_cmd, CRON_TAG_RISK_EQ, hourly_minute=(eq_risk_min if eq_risk_freq == "hourly" else None)))
+        lines.append(_line(cr_risk_time, None if cr_risk_freq == "daily" else cr_risk_day, risk_cr_cmd, CRON_TAG_RISK_CR, hourly_minute=(cr_risk_min if cr_risk_freq == "hourly" else None)))
         _cron_write_lines(lines)
         return {"ok": True}
 

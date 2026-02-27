@@ -51,7 +51,7 @@ def hhmm_to_min_hour(hhmm: str) -> tuple[int, int]:
     return int(mm), int(hh)
 
 
-def cron_time(freq: str, day: str | None, hhmm: str) -> str:
+def cron_time(freq: str, day: str | None, hhmm: str, minute_of_hour: int | None = None) -> str:
     m, h = hhmm_to_min_hour(hhmm)
     f = (freq or "").lower()
     if f == "daily":
@@ -59,7 +59,10 @@ def cron_time(freq: str, day: str | None, hhmm: str) -> str:
     if f == "weekly":
         d = DOW_MAP.get((day or "MON").upper(), 1)
         return f"{m} {h} * * {d}"
-    raise ValueError(f"Unsupported frequency: {freq!r} (supported: daily, weekly)")
+    if f == "hourly":
+        mm = m if minute_of_hour is None else max(0, min(59, int(minute_of_hour)))
+        return f"{mm} * * * *"
+    raise ValueError(f"Unsupported frequency: {freq!r} (supported: daily, weekly, hourly)")
 
 
 def _daily_hhmm_cron(hhmm: str) -> str:
@@ -85,9 +88,9 @@ def bot_cron_lines(bot: str, alias: str | None = None, config_path: Path | None 
     tag_bot = (alias or bot).upper()
 
     eq_reb = cron_time(eq.get("rebalance_frequency", "weekly"), eq.get("rebalance_day", "MON"), eq.get("rebalance_time_local", "06:30"))
-    eq_risk = cron_time(eq.get("risk_check_frequency", "daily"), eq.get("risk_check_day", "MON"), eq.get("risk_check_time_local", "06:31"))
+    eq_risk = cron_time(eq.get("risk_check_frequency", "daily"), eq.get("risk_check_day", "MON"), eq.get("risk_check_time_local", "06:31"), eq.get("risk_check_minute_of_hour"))
     cr_reb = cron_time(cr.get("rebalance_frequency", "daily"), cr.get("rebalance_day", "MON"), cr.get("rebalance_time_local", "00:00"))
-    cr_risk = cron_time(cr.get("risk_check_frequency", "daily"), cr.get("risk_check_day", "MON"), cr.get("risk_check_time_local", "00:01"))
+    cr_risk = cron_time(cr.get("risk_check_frequency", "daily"), cr.get("risk_check_day", "MON"), cr.get("risk_check_time_local", "00:01"), cr.get("risk_check_minute_of_hour"))
 
     lines.append(
         f"{eq_reb} /bin/bash -lc '{prefix} && {RUN_BOT} {bot} rebalance --place-orders --asset-mode equities' # STMB_{tag_bot}_REB_EQ"

@@ -65,7 +65,18 @@ From the Hub you can:
 - Open each bot dashboard/API
 - Run per-bot wipe (cancel open orders, request close-all positions, clear local bot data/logs)
 
-Useful scripts:
+Useful scripts (cross-platform preferred):
+
+```bash
+python multibot/scripts/dashboard_ctl.py start-all
+python multibot/scripts/dashboard_ctl.py stop-all
+python multibot/scripts/dashboard_ctl.py start <bot>
+python multibot/scripts/dashboard_ctl.py stop <bot>
+python multibot/scripts/sync_shared.py
+python multibot/scripts/wipe_bot.py <bot>
+```
+
+Legacy bash wrappers (Linux/macOS):
 
 ```bash
 multibot/scripts/start_dashboards.sh

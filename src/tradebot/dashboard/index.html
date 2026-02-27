@@ -247,9 +247,15 @@
               <div><div class="muted" style="font-size:12px;">Rebalance freq</div><select id="eqRebFreqSelect"><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
               <div><div class="muted" style="font-size:12px;">Rebalance day</div><select id="eqRebDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
               <div><div class="muted" style="font-size:12px;">Rebalance time (PT)</div><input id="eqRebTimeInput" placeholder="06:35" /></div>
-              <div><div class="muted" style="font-size:12px;">Risk freq</div><select id="eqRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Risk freq</div><select id="eqRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="hourly">Hourly</option></select></div>
               <div><div class="muted" style="font-size:12px;">Risk day</div><select id="eqRiskDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+              <div id="eqRiskMinuteWrap" style="display:none;"><div class="muted" style="font-size:12px;">Run minute</div><select id="eqRiskMinuteSelect"></select></div>
+              <div id="eqRiskHourlyChecksWrap" style="display:none; grid-column: 1 / -1;"><div class="muted" style="font-size:12px;">Hourly checks</div><label style="margin-right:8px;"><input type="checkbox" id="eqRiskHourlyStop" checked /> stop loss</label><label style="margin-right:8px;"><input type="checkbox" id="eqRiskHourlyDD" checked /> dd stop</label><label><input type="checkbox" id="eqRiskHourlyExit" /> strategy exit</label></div>
               <div><div class="muted" style="font-size:12px;">Risk time (PT)</div><input id="eqRiskTimeInput" placeholder="18:05" /></div>
+              <div><div class="muted" style="font-size:12px;">Trailing stop</div><select id="eqTrailEnableSelect"><option value="false">Off</option><option value="true">On</option></select></div>
+              <div id="eqTrailOptsWrap" style="display:none;"><div class="muted" style="font-size:12px;">Trail starts at gain %</div><input id="eqTrailStartInput" placeholder="0.05" /></div>
+              <div id="eqTrailPctWrap" style="display:none;"><div class="muted" style="font-size:12px;">Trail distance %</div><input id="eqTrailPctInput" placeholder="0.02" /></div>
+              <div id="trailAnchorWrap" style="display:none;"><div class="muted" style="font-size:12px;">Trailing anchor</div><select id="trailAnchorSelect"><option value="highest_since_entry">Highest since entry</option><option value="highest_close_since_entry">Highest close since entry</option></select></div>
             </div>
           </div>
           <div class="subcard" style="padding:10px;">
@@ -258,12 +264,18 @@
               <div><div class="muted" style="font-size:12px;">Rebalance freq</div><select id="crRebFreqSelect"><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
               <div><div class="muted" style="font-size:12px;">Rebalance day</div><select id="crRebDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
               <div><div class="muted" style="font-size:12px;">Rebalance time (PT)</div><input id="crRebTimeInput" placeholder="06:35" /></div>
-              <div><div class="muted" style="font-size:12px;">Risk freq</div><select id="crRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+              <div><div class="muted" style="font-size:12px;">Risk freq</div><select id="crRiskFreqSelect"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="hourly">Hourly</option></select></div>
               <div><div class="muted" style="font-size:12px;">Risk day</div><select id="crRiskDaySelect"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+              <div id="crRiskMinuteWrap" style="display:none;"><div class="muted" style="font-size:12px;">Run minute</div><select id="crRiskMinuteSelect"></select></div>
+              <div id="crRiskHourlyChecksWrap" style="display:none; grid-column: 1 / -1;"><div class="muted" style="font-size:12px;">Hourly checks</div><label style="margin-right:8px;"><input type="checkbox" id="crRiskHourlyStop" checked /> stop loss</label><label style="margin-right:8px;"><input type="checkbox" id="crRiskHourlyDD" checked /> dd stop</label><label><input type="checkbox" id="crRiskHourlyExit" /> strategy exit</label></div>
               <div><div class="muted" style="font-size:12px;">Risk time (PT)</div><input id="crRiskTimeInput" placeholder="18:05" /></div>
+              <div><div class="muted" style="font-size:12px;">Trailing stop</div><select id="crTrailEnableSelect"><option value="false">Off</option><option value="true">On</option></select></div>
+              <div id="crTrailOptsWrap" style="display:none;"><div class="muted" style="font-size:12px;">Trail starts at gain %</div><input id="crTrailStartInput" placeholder="0.05" /></div>
+              <div id="crTrailPctWrap" style="display:none;"><div class="muted" style="font-size:12px;">Trail distance %</div><input id="crTrailPctInput" placeholder="0.02" /></div>
             </div>
           </div>
         </div>
+        <div class="muted advancedOnly" style="font-size:12px; margin-top:6px;">Hourly risk runs only when market/session data is available; missing minute bars are skipped.</div>
 
         <div class="advancedOnly" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap:8px;">
           <div>
@@ -510,8 +522,14 @@
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
                 <div><div class="muted">Rebalance freq</div><select id="btEqRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select></div>
                 <div><div class="muted">Rebalance day</div><select id="btEqRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
-                <div><div class="muted">Risk freq</div><select id="btEqRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select></div>
+                <div><div class="muted">Risk freq</div><select id="btEqRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option><option value="hourly">Hourly</option></select></div>
                 <div><div class="muted">Risk day</div><select id="btEqRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+                <div id="btEqRiskMinuteWrap" style="display:none;"><div class="muted">Run minute</div><select id="btEqRiskMinute" style="width:120px;"></select></div>
+                <div id="btEqRiskHourlyChecksWrap" style="display:none; grid-column: 1 / -1;"><div class="muted">Hourly checks</div><label style="margin-right:8px;"><input type="checkbox" id="btEqRiskHourlyStop" checked /> stop loss</label><label style="margin-right:8px;"><input type="checkbox" id="btEqRiskHourlyDD" checked /> dd stop</label><label><input type="checkbox" id="btEqRiskHourlyExit" /> strategy exit</label></div>
+                <div><div class="muted">Trailing stop</div><select id="btEqTrailEnable" style="width:130px;"><option value="false">Off</option><option value="true">On</option></select></div>
+                <div id="btEqTrailOptsWrap" style="display:none;"><div class="muted">Trail starts at gain %</div><input id="btEqTrailStart" placeholder="0.05" value="0.05" style="width:120px;" /></div>
+                <div id="btEqTrailPctWrap" style="display:none;"><div class="muted">Trail distance %</div><input id="btEqTrailPct" placeholder="0.02" value="0.02" style="width:120px;" /></div>
+                <div id="btTrailAnchorWrap" style="display:none;"><div class="muted">Trailing anchor</div><select id="btTrailAnchor" style="width:180px;"><option value="highest_since_entry">Highest since entry</option><option value="highest_close_since_entry">Highest close since entry</option></select></div>
               </div>
             </div>
             <div class="subcard" style="padding:10px;">
@@ -519,11 +537,17 @@
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
                 <div><div class="muted">Rebalance freq</div><select id="btCrRebFreq" style="width:140px;"><option value="weekly" selected>Weekly</option><option value="daily">Daily</option></select></div>
                 <div><div class="muted">Rebalance day</div><select id="btCrRebDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
-                <div><div class="muted">Risk freq</div><select id="btCrRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option></select></div>
+                <div><div class="muted">Risk freq</div><select id="btCrRiskFreq" style="width:130px;"><option value="daily" selected>Daily</option><option value="weekly">Weekly</option><option value="hourly">Hourly</option></select></div>
                 <div><div class="muted">Risk day</div><select id="btCrRiskDay" style="width:120px;"><option>MON</option><option>TUE</option><option>WED</option><option>THU</option><option>FRI</option><option>SAT</option><option>SUN</option></select></div>
+                <div id="btCrRiskMinuteWrap" style="display:none;"><div class="muted">Run minute</div><select id="btCrRiskMinute" style="width:120px;"></select></div>
+                <div id="btCrRiskHourlyChecksWrap" style="display:none; grid-column: 1 / -1;"><div class="muted">Hourly checks</div><label style="margin-right:8px;"><input type="checkbox" id="btCrRiskHourlyStop" checked /> stop loss</label><label style="margin-right:8px;"><input type="checkbox" id="btCrRiskHourlyDD" checked /> dd stop</label><label><input type="checkbox" id="btCrRiskHourlyExit" /> strategy exit</label></div>
+                <div><div class="muted">Trailing stop</div><select id="btCrTrailEnable" style="width:130px;"><option value="false">Off</option><option value="true">On</option></select></div>
+                <div id="btCrTrailOptsWrap" style="display:none;"><div class="muted">Trail starts at gain %</div><input id="btCrTrailStart" placeholder="0.05" value="0.05" style="width:120px;" /></div>
+                <div id="btCrTrailPctWrap" style="display:none;"><div class="muted">Trail distance %</div><input id="btCrTrailPct" placeholder="0.02" value="0.02" style="width:120px;" /></div>
               </div>
             </div>
           </div>
+          <div class="muted" style="font-size:12px; margin-top:6px;">Hourly risk runs only when market/session data is available; missing minute bars are skipped.</div>
             <!-- single symbol moved to header actions row -->
           </div>
 
@@ -1202,6 +1226,67 @@ function setDefaultBacktestDates() {
   }
 }
 
+function _populateMinuteSelect(id, def='05') {
+  const el = document.getElementById(id);
+  if (!el || el.dataset.populated === '1') return;
+  for (let i = 0; i < 60; i++) {
+    const v = String(i).padStart(2, '0');
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = v;
+    el.appendChild(opt);
+  }
+  el.value = String(Number(def) || 5);
+  el.dataset.populated = '1';
+}
+
+function _collectHourlyChecks(prefix) {
+  const out = [];
+  if (document.getElementById(prefix + 'RiskHourlyStop')?.checked) out.push('stop_loss');
+  if (document.getElementById(prefix + 'RiskHourlyDD')?.checked) out.push('dd_stop');
+  if (document.getElementById(prefix + 'RiskHourlyExit')?.checked) out.push('strategy_exit');
+  return out;
+}
+
+function _applyHourlyChecks(prefix, arr) {
+  const s = new Set(Array.isArray(arr) ? arr : []);
+  const stop = document.getElementById(prefix + 'RiskHourlyStop'); if (stop) stop.checked = s.has('stop_loss') || s.size === 0;
+  const dd = document.getElementById(prefix + 'RiskHourlyDD'); if (dd) dd.checked = s.has('dd_stop') || s.size === 0;
+  const ex = document.getElementById(prefix + 'RiskHourlyExit'); if (ex) ex.checked = s.has('strategy_exit');
+}
+
+function syncTrailingUI() {
+  const eqOn = String(document.getElementById('eqTrailEnableSelect')?.value || 'false') === 'true';
+  const crOn = String(document.getElementById('crTrailEnableSelect')?.value || 'false') === 'true';
+  const bteqOn = String(document.getElementById('btEqTrailEnable')?.value || 'false') === 'true';
+  const btcrOn = String(document.getElementById('btCrTrailEnable')?.value || 'false') === 'true';
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  show('eqTrailOptsWrap', eqOn); show('eqTrailPctWrap', eqOn);
+  show('crTrailOptsWrap', crOn); show('crTrailPctWrap', crOn);
+  show('trailAnchorWrap', (eqOn || crOn));
+  show('btEqTrailOptsWrap', bteqOn); show('btEqTrailPctWrap', bteqOn);
+  show('btCrTrailOptsWrap', btcrOn); show('btCrTrailPctWrap', btcrOn);
+  show('btTrailAnchorWrap', (bteqOn || btcrOn));
+}
+
+function syncRiskFrequencyUI() {
+  const pairs = [
+    ['eqRiskFreqSelect','eqRiskDaySelect','eqRiskMinuteWrap','eqRiskHourlyChecksWrap'],
+    ['crRiskFreqSelect','crRiskDaySelect','crRiskMinuteWrap','crRiskHourlyChecksWrap'],
+    ['btEqRiskFreq','btEqRiskDay','btEqRiskMinuteWrap','btEqRiskHourlyChecksWrap'],
+    ['btCrRiskFreq','btCrRiskDay','btCrRiskMinuteWrap','btCrRiskHourlyChecksWrap'],
+  ];
+  for (const [freqId, dayId, minWrapId, checksWrapId] of pairs) {
+    const freq = String(document.getElementById(freqId)?.value || 'daily');
+    const dayEl = document.getElementById(dayId)?.parentElement;
+    const minWrap = document.getElementById(minWrapId);
+    const checksWrap = document.getElementById(checksWrapId);
+    if (dayEl) dayEl.style.display = (freq === 'weekly') ? '' : 'none';
+    if (minWrap) minWrap.style.display = (freq === 'hourly') ? '' : 'none';
+    if (checksWrap) checksWrap.style.display = (freq === 'hourly') ? '' : 'none';
+  }
+}
+
 function collectBacktestRequestBody() {
   const start = document.getElementById('btStart')?.value;
   const end = document.getElementById('btEnd')?.value;
@@ -1230,8 +1315,15 @@ function collectBacktestRequestBody() {
   const rebalance_day_crypto = (document.getElementById('btCrRebDay')?.value || rebalance_day);
   const risk_check_frequency_equities = (document.getElementById('btEqRiskFreq')?.value || 'daily');
   const risk_check_day_equities = (document.getElementById('btEqRiskDay')?.value || rebalance_day);
+  const risk_check_minute_of_hour_equities = Number(document.getElementById('btEqRiskMinute')?.value || '5');
+  const risk_check_hourly_checks_equities = _collectHourlyChecks('btEq');
   const risk_check_frequency_crypto = (document.getElementById('btCrRiskFreq')?.value || 'daily');
   const risk_check_day_crypto = (document.getElementById('btCrRiskDay')?.value || rebalance_day);
+  const risk_check_minute_of_hour_crypto = Number(document.getElementById('btCrRiskMinute')?.value || '5');
+  let risk_check_hourly_checks_crypto = _collectHourlyChecks('btCr');
+  let risk_check_hourly_checks_equities_safe = risk_check_hourly_checks_equities;
+  if (risk_check_frequency_equities === 'hourly' && risk_check_hourly_checks_equities_safe.length === 0) risk_check_hourly_checks_equities_safe = ['stop_loss','dd_stop'];
+  if (risk_check_frequency_crypto === 'hourly' && risk_check_hourly_checks_crypto.length === 0) risk_check_hourly_checks_crypto = ['stop_loss','dd_stop'];
   const rebalance_mode = (document.getElementById('btRebalanceMode')?.value || 'target_notional');
   const liquidation_mode = (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected');
   const slippage_bps = Number(document.getElementById('btSlip')?.value || '10');
@@ -1250,6 +1342,13 @@ function collectBacktestRequestBody() {
   const symbol_pnl_floor_liquidate = Boolean(document.getElementById('btSymFloorLiquidate')?.checked);
   const symbol_pnl_floor_include_unrealized = Boolean(document.getElementById('btSymFloorInclUnreal')?.checked);
   const per_asset_stop_loss_pct = stopLoss ? Number(stopLoss) : null;
+  const trailing_stop_stocks_enabled = String(document.getElementById('btEqTrailEnable')?.value || 'false') === 'true';
+  const trailing_stop_crypto_enabled = String(document.getElementById('btCrTrailEnable')?.value || 'false') === 'true';
+  const trailing_stop_stocks_start_gain_pct = Number(document.getElementById('btEqTrailStart')?.value || '0.05');
+  const trailing_stop_crypto_start_gain_pct = Number(document.getElementById('btCrTrailStart')?.value || '0.05');
+  const trailing_stop_stocks_pct = Number(document.getElementById('btEqTrailPct')?.value || '0.02');
+  const trailing_stop_crypto_pct = Number(document.getElementById('btCrTrailPct')?.value || '0.02');
+  const trailing_stop_anchor = String(document.getElementById('btTrailAnchor')?.value || 'highest_since_entry');
   const allow_same_day_roundtrip = String(document.getElementById('btAllowSameDayTrading')?.value || 'false') === 'true';
   const ddCustom = (document.getElementById('btDD')?.value || '').trim();
   const ddPreset = (document.getElementById('btDDPreset')?.value || '').trim();
@@ -1273,11 +1372,14 @@ function collectBacktestRequestBody() {
     rebalance, rebalance_day,
     rebalance_frequency_equities, rebalance_day_equities,
     rebalance_frequency_crypto, rebalance_day_crypto,
-    risk_check_frequency_equities, risk_check_day_equities,
-    risk_check_frequency_crypto, risk_check_day_crypto,
+    risk_check_frequency_equities, risk_check_day_equities, risk_check_minute_of_hour_equities, risk_check_hourly_checks_equities: risk_check_hourly_checks_equities_safe,
+    risk_check_frequency_crypto, risk_check_day_crypto, risk_check_minute_of_hour_crypto, risk_check_hourly_checks_crypto,
     rebalance_mode, liquidation_mode,
     universe_mode: symbol ? 'single' : 'full', symbol: symbol || null,
     portfolio_dd_stop, per_asset_stop_loss_pct, allow_same_day_roundtrip,
+    trailing_stop_stocks_enabled, trailing_stop_crypto_enabled,
+    trailing_stop_stocks_start_gain_pct, trailing_stop_crypto_start_gain_pct,
+    trailing_stop_stocks_pct, trailing_stop_crypto_pct, trailing_stop_anchor,
     min_crypto_price, min_avg_crypto_dollar_volume_20d,
     symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized
   };
@@ -1545,6 +1647,16 @@ async function renderBacktest(res) {
   const m = res.metrics || {};
   const met = document.getElementById('btMetrics');
   met.textContent = `Return: ${pct(m.return)} • CAGR: ${pct(m.cagr)} • Max DD: ${pct(m.max_drawdown)} • Obs DD: ${pct(m.max_observed_drawdown)} • Ann vol: ${pct(m.ann_vol)} • Sharpe: ${Number(m.sharpe||0).toFixed(2)} • Trades: ${m.trade_count ?? '—'} • Win rate: ${m.win_rate==null ? '—' : pct(m.win_rate)} • DD-stop events: ${m.dd_stop_event_count ?? 0} • Start: ${money(m.start_equity)} • End: ${money(m.end_equity)}`;
+  const hd = m.hourly_debug || {};
+  let hdEl = document.getElementById('btHourlyDebug');
+  if (!hdEl) {
+    hdEl = document.createElement('div');
+    hdEl.id = 'btHourlyDebug';
+    hdEl.className = 'muted';
+    hdEl.style.marginTop = '4px';
+    met.insertAdjacentElement('afterend', hdEl);
+  }
+  hdEl.textContent = `Hourly debug: slots ${hd.slots_considered ?? 0} • checks ${hd.symbol_checks ?? 0} • prices ${hd.price_points_found ?? 0} • strategy selected ${hd.strategy_exit_selected ?? 0} • no-rule ${hd.strategy_exit_no_rule ?? 0} • evaluated ${hd.strategy_exit_evaluated ?? 0} • triggered ${hd.strategy_exit_triggered ?? 0}`;
 
   const evs = (res.events || []);
   const cPlaced = evs.filter(e => e.type==='order' && e.reason==='limit_placed').length;
@@ -1793,11 +1905,15 @@ async function renderBacktest(res) {
 
           const buys = (data.markers||[]).filter(m=>m.type==='buy');
           const sells = (data.markers||[]).filter(m=>m.type==='sell');
+          const trailingSells = sells.filter(m => String(m.reason||'').startsWith('trailing_stop_'));
+          const otherSells = sells.filter(m => !String(m.reason||'').startsWith('trailing_stop_'));
 
           const buyX = buys.map(m=>m.date);
           const buyY = buys.map(m=> (m.price!=null ? Number(m.price) : null));
-          const sellX = sells.map(m=>m.date);
-          const sellY = sells.map(m=> (m.price!=null ? Number(m.price) : null));
+          const sellX = otherSells.map(m=>m.date);
+          const sellY = otherSells.map(m=> (m.price!=null ? Number(m.price) : null));
+          const tSellX = trailingSells.map(m=>m.date);
+          const tSellY = trailingSells.map(m=> (m.price!=null ? Number(m.price) : null));
 
           if (detail) {
             const extra = excluded.has(r.symbol) ? ' • EXCLUDED' : '';
@@ -1821,9 +1937,15 @@ async function renderBacktest(res) {
 
             detail.innerHTML = `<div style="margin-bottom:6px;"><b>${data.symbol}</b> (${data.start}→${data.end})${extra}</div>`
               + `<div class="muted" style="margin-bottom:6px;">Realized ${money(r.realized)} • Unrealized(end) ${money(r.unreal)} • Total ${money(r.total)}</div>`
+              + `<div class="row" style="gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">`
+              + `<button id="btSymPlay" class="secondary">Play</button><button id="btSymPause" class="secondary">Pause</button><button id="btSymStepBack" class="secondary">◀ Step</button><button id="btSymStepFwd" class="secondary">Step ▶</button>`
+              + `<label class="muted">Speed <select id="btSymSpeed"><option value="1">1x</option><option value="5" selected>5x</option><option value="20">20x</option><option value="100">Max</option></select></label>`
+              + `<input id="btSymScrub" type="range" min="0" max="0" value="0" style="width:220px;" />`
+              + `<span id="btSymReplayPos" class="muted">—</span>`
+              + `</div>`
               + `<div id="btSymPlot" style="height:360px;"></div>`
               + `<div style="margin-top:10px; font-weight:700;">Trade events</div>`
-              + `<div class="muted" style="margin-top:2px;">All buys/sells recorded by the backtest engine (includes adds/trims). Times are per-day (daily bars).</div>`
+              + `<div class="muted" style="margin-top:2px;">Hover markers for action details. Replay cursor steps through the symbol timeline.</div>`
               + evTable;
 
             const traces = [
@@ -1833,8 +1955,11 @@ async function renderBacktest(res) {
                 customdata: buys.map(m=>[m.qty, m.notional, m.reason]),
                 hovertemplate:'%{x}<br>BUY<br>$%{y:,.6f}<br>qty %{customdata[0]:,.6f}<br>notional $%{customdata[1]:,.2f}<br>%{customdata[2]}<extra></extra>'},
               {x:sellX, y:sellY, type:'scatter', mode:'markers', name:'Sells', marker:{color:'#dc2626', size:10, symbol:'triangle-down'},
-                customdata: sells.map(m=>[m.qty, m.notional, m.reason, m.pnl]),
+                customdata: otherSells.map(m=>[m.qty, m.notional, m.reason, m.pnl]),
                 hovertemplate:'%{x}<br>SELL<br>$%{y:,.6f}<br>qty %{customdata[0]:,.6f}<br>notional $%{customdata[1]:,.2f}<br>pnl $%{customdata[3]:,.2f}<br>%{customdata[2]}<extra></extra>'},
+              {x:tSellX, y:tSellY, type:'scatter', mode:'markers+lines', name:'Trailing stop exits', marker:{color:'#f59e0b', size:9, symbol:'circle'}, line:{color:'#f59e0b', width:1, dash:'dot'},
+                customdata: trailingSells.map(m=>[m.qty, m.notional, m.reason, m.pnl]),
+                hovertemplate:'%{x}<br>TRAIL EXIT<br>$%{y:,.6f}<br>qty %{customdata[0]:,.6f}<br>notional $%{customdata[1]:,.2f}<br>pnl $%{customdata[3]:,.2f}<br>%{customdata[2]}<extra></extra>'},
             ];
 
             Plotly.newPlot('btSymPlot', traces, {
@@ -1842,8 +1967,64 @@ async function renderBacktest(res) {
               hovermode:'x unified',
               xaxis:{title:'Date', rangeslider:{visible:true}},
               yaxis:{title:'Price'},
-              legend:{orientation:'h'}
+              legend:{orientation:'h'},
+              shapes: x.length ? [{type:'line', xref:'x', yref:'paper', x0:x[0], x1:x[0], y0:0, y1:1, line:{color:'#f59e0b', width:2}}] : []
             }, {displaylogo:false, responsive:true});
+
+            if (window.__btSymReplayTimer) {
+              clearInterval(window.__btSymReplayTimer);
+              window.__btSymReplayTimer = null;
+            }
+            let idx = 0;
+            const scrub = document.getElementById('btSymScrub');
+            const pos = document.getElementById('btSymReplayPos');
+            const speedEl = document.getElementById('btSymSpeed');
+            if (scrub) {
+              scrub.max = String(Math.max(0, x.length - 1));
+              scrub.value = '0';
+            }
+
+            const renderReplayCursor = () => {
+              if (!x.length) return;
+              idx = Math.max(0, Math.min(x.length - 1, idx));
+              const ts = x[idx];
+              const px = Number(y[idx] || 0);
+              if (scrub) scrub.value = String(idx);
+              if (pos) pos.textContent = `${ts} • $${px.toFixed(2)} • step ${idx+1}/${x.length}`;
+              Plotly.relayout('btSymPlot', {'shapes[0].x0': ts, 'shapes[0].x1': ts});
+            };
+
+            const stepReplay = (delta) => {
+              idx = Math.max(0, Math.min(x.length - 1, idx + delta));
+              renderReplayCursor();
+            };
+
+            document.getElementById('btSymPlay')?.addEventListener('click', () => {
+              if (window.__btSymReplayTimer) clearInterval(window.__btSymReplayTimer);
+              const spd = Number(speedEl?.value || '5');
+              const intervalMs = Math.max(10, Math.floor(1000 / Math.max(1, spd)));
+              window.__btSymReplayTimer = setInterval(() => {
+                if (idx >= x.length - 1) {
+                  clearInterval(window.__btSymReplayTimer);
+                  window.__btSymReplayTimer = null;
+                  return;
+                }
+                stepReplay(1);
+              }, intervalMs);
+            });
+            document.getElementById('btSymPause')?.addEventListener('click', () => {
+              if (window.__btSymReplayTimer) {
+                clearInterval(window.__btSymReplayTimer);
+                window.__btSymReplayTimer = null;
+              }
+            });
+            document.getElementById('btSymStepBack')?.addEventListener('click', () => stepReplay(-1));
+            document.getElementById('btSymStepFwd')?.addEventListener('click', () => stepReplay(1));
+            scrub?.addEventListener('input', (e) => {
+              idx = Number(e?.target?.value || 0);
+              renderReplayCursor();
+            });
+            renderReplayCursor();
           }
         } catch (e) {
           const detail = document.getElementById('btSymDetail');
@@ -2651,14 +2832,27 @@ async function main() {
   setv('eqRebTimeInput', schEq.rebalance_time_local, cfg.scheduling?.weekly_rebalance_time_local || '06:35');
   setv('eqRiskFreqSelect', schEq.risk_check_frequency, 'daily');
   setv('eqRiskDaySelect', schEq.risk_check_day, cfg.scheduling?.weekly_rebalance_day || 'MON');
+  setv('eqRiskMinuteSelect', schEq.risk_check_minute_of_hour, 5);
+  _applyHourlyChecks('eq', schEq.risk_check_hourly_checks);
   setv('eqRiskTimeInput', schEq.risk_check_time_local, cfg.scheduling?.daily_risk_check_time_local || '18:05');
+  setv('eqTrailEnableSelect', Boolean(cfg.risk?.trailing_stop_stocks_enabled), 'false');
+  setv('eqTrailStartInput', cfg.risk?.trailing_stop_stocks_start_gain_pct, '0.05');
+  setv('eqTrailPctInput', cfg.risk?.trailing_stop_stocks_pct, '0.02');
+  setv('trailAnchorSelect', cfg.risk?.trailing_stop_anchor, 'highest_since_entry');
 
   setv('crRebFreqSelect', schCr.rebalance_frequency, 'weekly');
   setv('crRebDaySelect', schCr.rebalance_day, cfg.scheduling?.weekly_rebalance_day || 'MON');
   setv('crRebTimeInput', schCr.rebalance_time_local, cfg.scheduling?.weekly_rebalance_time_local || '06:35');
   setv('crRiskFreqSelect', schCr.risk_check_frequency, 'daily');
   setv('crRiskDaySelect', schCr.risk_check_day, cfg.scheduling?.weekly_rebalance_day || 'MON');
+  setv('crRiskMinuteSelect', schCr.risk_check_minute_of_hour, 5);
+  _applyHourlyChecks('cr', schCr.risk_check_hourly_checks);
   setv('crRiskTimeInput', schCr.risk_check_time_local, cfg.scheduling?.daily_risk_check_time_local || '18:05');
+  setv('crTrailEnableSelect', Boolean(cfg.risk?.trailing_stop_crypto_enabled), 'false');
+  setv('crTrailStartInput', cfg.risk?.trailing_stop_crypto_start_gain_pct, '0.05');
+  setv('crTrailPctInput', cfg.risk?.trailing_stop_crypto_pct, '0.02');
+  syncRiskFrequencyUI();
+  syncTrailingUI();
 
   const lss = document.getElementById('liveScheduleSummary');
   if (lss) {
@@ -2771,8 +2965,17 @@ async function main() {
   }
 
   function collectBTParams() {
+    const btEqChecks = _collectHourlyChecks('btEq');
+    const btCrChecks = _collectHourlyChecks('btCr');
     const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
     const per_asset_stop_loss_pct = stopLoss ? Number(stopLoss) : null;
+    const trailing_stop_stocks_enabled = String(document.getElementById('btEqTrailEnable')?.value || 'false') === 'true';
+    const trailing_stop_crypto_enabled = String(document.getElementById('btCrTrailEnable')?.value || 'false') === 'true';
+    const trailing_stop_stocks_start_gain_pct = Number(document.getElementById('btEqTrailStart')?.value || '0.05');
+    const trailing_stop_crypto_start_gain_pct = Number(document.getElementById('btCrTrailStart')?.value || '0.05');
+    const trailing_stop_stocks_pct = Number(document.getElementById('btEqTrailPct')?.value || '0.02');
+    const trailing_stop_crypto_pct = Number(document.getElementById('btCrTrailPct')?.value || '0.02');
+    const trailing_stop_anchor = String(document.getElementById('btTrailAnchor')?.value || 'highest_since_entry');
     const allow_same_day_roundtrip = String(document.getElementById('btAllowSameDayTrading')?.value || 'false') === 'true';
     const ddCustom = (document.getElementById('btDD')?.value || '').trim();
     const ddPreset = (document.getElementById('btDDPreset')?.value || '').trim();
@@ -2810,8 +3013,12 @@ async function main() {
       rebalance_day_crypto: (document.getElementById('btCrRebDay')?.value || 'MON'),
       risk_check_frequency_equities: (document.getElementById('btEqRiskFreq')?.value || 'daily'),
       risk_check_day_equities: (document.getElementById('btEqRiskDay')?.value || 'MON'),
+      risk_check_minute_of_hour_equities: Number(document.getElementById('btEqRiskMinute')?.value || '5'),
+      risk_check_hourly_checks_equities: ((document.getElementById('btEqRiskFreq')?.value || 'daily') === 'hourly' && btEqChecks.length===0) ? ['stop_loss','dd_stop'] : btEqChecks,
       risk_check_frequency_crypto: (document.getElementById('btCrRiskFreq')?.value || 'daily'),
       risk_check_day_crypto: (document.getElementById('btCrRiskDay')?.value || 'MON'),
+      risk_check_minute_of_hour_crypto: Number(document.getElementById('btCrRiskMinute')?.value || '5'),
+      risk_check_hourly_checks_crypto: ((document.getElementById('btCrRiskFreq')?.value || 'daily') === 'hourly' && btCrChecks.length===0) ? ['stop_loss','dd_stop'] : btCrChecks,
       rebalance_mode: (document.getElementById('btRebalanceMode')?.value || 'target_notional'),
       liquidation_mode: (document.getElementById('btLiquidation')?.value || 'liquidate_non_selected'),
       slippage_bps: Number(document.getElementById('btSlip')?.value || '10'),
@@ -2824,6 +3031,13 @@ async function main() {
       limit_fallback_to_market_open: (String(document.getElementById('btEqLimitFallback')?.value || 'false') === 'true') || (String(document.getElementById('btCrLimitFallback')?.value || 'false') === 'true'),
       limit_fallback_time_local: (document.getElementById('btEqExecLocal')?.value || '06:30'),
       per_asset_stop_loss_pct,
+      trailing_stop_stocks_enabled,
+      trailing_stop_crypto_enabled,
+      trailing_stop_stocks_start_gain_pct,
+      trailing_stop_crypto_start_gain_pct,
+      trailing_stop_stocks_pct,
+      trailing_stop_crypto_pct,
+      trailing_stop_anchor,
       allow_same_day_roundtrip,
       portfolio_dd_stop,
       symbol_pnl_floor_pct,
@@ -2861,8 +3075,14 @@ async function main() {
     setVal('btCrRebDay', p.rebalance_day_crypto);
     setVal('btEqRiskFreq', p.risk_check_frequency_equities);
     setVal('btEqRiskDay', p.risk_check_day_equities);
+    setVal('btEqRiskMinute', p.risk_check_minute_of_hour_equities);
+    _applyHourlyChecks('btEq', p.risk_check_hourly_checks_equities);
     setVal('btCrRiskFreq', p.risk_check_frequency_crypto);
     setVal('btCrRiskDay', p.risk_check_day_crypto);
+    setVal('btCrRiskMinute', p.risk_check_minute_of_hour_crypto);
+    _applyHourlyChecks('btCr', p.risk_check_hourly_checks_crypto);
+    syncRiskFrequencyUI();
+    syncTrailingUI();
     setVal('btRebalanceMode', p.rebalance_mode);
     setVal('btLiquidation', p.liquidation_mode);
     setVal('btSlip', p.slippage_bps);
@@ -2873,6 +3093,13 @@ async function main() {
     setVal('btEqLimitFallback', String(Boolean(p.limit_fallback_to_market_open_equities ?? p.limit_fallback_to_market_open)));
     setVal('btCrLimitFallback', String(Boolean(p.limit_fallback_to_market_open_crypto ?? p.limit_fallback_to_market_open)));
     setVal('btStopLoss', p.per_asset_stop_loss_pct);
+    setVal('btEqTrailEnable', String(Boolean(p.trailing_stop_stocks_enabled)));
+    setVal('btCrTrailEnable', String(Boolean(p.trailing_stop_crypto_enabled)));
+    setVal('btEqTrailStart', p.trailing_stop_stocks_start_gain_pct ?? 0.05);
+    setVal('btCrTrailStart', p.trailing_stop_crypto_start_gain_pct ?? 0.05);
+    setVal('btEqTrailPct', p.trailing_stop_stocks_pct ?? 0.02);
+    setVal('btCrTrailPct', p.trailing_stop_crypto_pct ?? 0.02);
+    setVal('btTrailAnchor', p.trailing_stop_anchor || 'highest_since_entry');
     setVal('btAllowSameDayTrading', String(Boolean(p.allow_same_day_roundtrip)));
     setVal('btDD', '');
     setVal('btDDPreset', p.portfolio_dd_stop);
@@ -2923,8 +3150,12 @@ async function main() {
       rebalance_day_crypto: schCr.rebalance_day || cfg?.scheduling?.weekly_rebalance_day || 'MON',
       risk_check_frequency_equities: schEq.risk_check_frequency || 'daily',
       risk_check_day_equities: schEq.risk_check_day || cfg?.scheduling?.weekly_rebalance_day || 'MON',
+      risk_check_minute_of_hour_equities: Number(schEq.risk_check_minute_of_hour ?? 5),
+      risk_check_hourly_checks_equities: Array.isArray(schEq.risk_check_hourly_checks) ? schEq.risk_check_hourly_checks : ['stop_loss','dd_stop'],
       risk_check_frequency_crypto: schCr.risk_check_frequency || 'daily',
       risk_check_day_crypto: schCr.risk_check_day || cfg?.scheduling?.weekly_rebalance_day || 'MON',
+      risk_check_minute_of_hour_crypto: Number(schCr.risk_check_minute_of_hour ?? 5),
+      risk_check_hourly_checks_crypto: Array.isArray(schCr.risk_check_hourly_checks) ? schCr.risk_check_hourly_checks : ['stop_loss','dd_stop'],
       rebalance_mode: reb?.rebalance_mode || 'target_notional',
       liquidation_mode: reb?.liquidation_mode || 'liquidate_non_selected',
       // slippage is backtest-only; preserve current backtest control value.
@@ -2936,6 +3167,13 @@ async function main() {
       limit_fallback_to_market_open_equities: Boolean(exEq.fallback_to_market_at_open),
       limit_fallback_to_market_open_crypto: Boolean(exCr.fallback_to_market_at_open),
       per_asset_stop_loss_pct: risk?.per_asset_stop_loss_pct ?? null,
+      trailing_stop_stocks_enabled: Boolean(risk?.trailing_stop_stocks_enabled),
+      trailing_stop_crypto_enabled: Boolean(risk?.trailing_stop_crypto_enabled),
+      trailing_stop_stocks_start_gain_pct: Number(risk?.trailing_stop_stocks_start_gain_pct ?? 0.05),
+      trailing_stop_crypto_start_gain_pct: Number(risk?.trailing_stop_crypto_start_gain_pct ?? 0.05),
+      trailing_stop_stocks_pct: Number(risk?.trailing_stop_stocks_pct ?? 0.02),
+      trailing_stop_crypto_pct: Number(risk?.trailing_stop_crypto_pct ?? 0.02),
+      trailing_stop_anchor: String(risk?.trailing_stop_anchor || 'highest_since_entry'),
       allow_same_day_roundtrip: !Boolean(risk?.block_same_day_roundtrip),
       portfolio_dd_stop: risk?.portfolio_dd_stop ?? null,
       symbol_pnl_floor_pct: reb?.symbol_pnl_floor_pct ?? null,
@@ -3306,6 +3544,19 @@ async function renderExclusions() {
   }
 }
 
+_populateMinuteSelect('eqRiskMinuteSelect', '5');
+_populateMinuteSelect('crRiskMinuteSelect', '5');
+_populateMinuteSelect('btEqRiskMinute', '5');
+_populateMinuteSelect('btCrRiskMinute', '5');
+for (const id of ['eqRiskFreqSelect','crRiskFreqSelect','btEqRiskFreq','btCrRiskFreq']) {
+  document.getElementById(id)?.addEventListener('change', syncRiskFrequencyUI);
+}
+for (const id of ['eqTrailEnableSelect','crTrailEnableSelect','btEqTrailEnable','btCrTrailEnable']) {
+  document.getElementById(id)?.addEventListener('change', syncTrailingUI);
+}
+syncRiskFrequencyUI();
+syncTrailingUI();
+
 setDefaultBacktestDates();
 refreshIterationReportsList().catch(()=>{});
 initBacktestDetailTabs();
@@ -3345,6 +3596,13 @@ async function saveConfig() {
     body.risk.per_asset_stop_loss_pct = sl ? Number(sl) : null;
     body.risk.execute_exit_liquidations = String(document.getElementById('riskExecLiquidationsSelect')?.value || 'false') === 'true';
     body.risk.block_same_day_roundtrip = !(String(document.getElementById('allowSameDayTradingSelect')?.value || 'false') === 'true');
+    body.risk.trailing_stop_stocks_enabled = String(document.getElementById('eqTrailEnableSelect')?.value || 'false') === 'true';
+    body.risk.trailing_stop_crypto_enabled = String(document.getElementById('crTrailEnableSelect')?.value || 'false') === 'true';
+    body.risk.trailing_stop_stocks_start_gain_pct = Number(document.getElementById('eqTrailStartInput')?.value || '0.05');
+    body.risk.trailing_stop_crypto_start_gain_pct = Number(document.getElementById('crTrailStartInput')?.value || '0.05');
+    body.risk.trailing_stop_stocks_pct = Number(document.getElementById('eqTrailPctInput')?.value || '0.02');
+    body.risk.trailing_stop_crypto_pct = Number(document.getElementById('crTrailPctInput')?.value || '0.02');
+    body.risk.trailing_stop_anchor = String(document.getElementById('trailAnchorSelect')?.value || 'highest_since_entry');
 
     const parseMaybeNone = (v, isInt=false) => {
       const s = String(v ?? '').trim().toLowerCase();
@@ -3384,6 +3642,11 @@ async function saveConfig() {
     body.scheduling.equities.rebalance_time_local = String(document.getElementById('eqRebTimeInput')?.value || '06:35');
     body.scheduling.equities.risk_check_frequency = String(document.getElementById('eqRiskFreqSelect')?.value || 'daily');
     body.scheduling.equities.risk_check_day = String(document.getElementById('eqRiskDaySelect')?.value || 'MON').toUpperCase();
+    body.scheduling.equities.risk_check_minute_of_hour = Number(document.getElementById('eqRiskMinuteSelect')?.value || '5');
+    body.scheduling.equities.risk_check_hourly_checks = _collectHourlyChecks('eq');
+    if (body.scheduling.equities.risk_check_frequency === 'hourly' && (!Array.isArray(body.scheduling.equities.risk_check_hourly_checks) || body.scheduling.equities.risk_check_hourly_checks.length === 0)) {
+      body.scheduling.equities.risk_check_hourly_checks = ['stop_loss','dd_stop'];
+    }
     body.scheduling.equities.risk_check_time_local = String(document.getElementById('eqRiskTimeInput')?.value || '18:05');
 
     body.scheduling.crypto = body.scheduling.crypto || {};
@@ -3392,6 +3655,11 @@ async function saveConfig() {
     body.scheduling.crypto.rebalance_time_local = String(document.getElementById('crRebTimeInput')?.value || '06:35');
     body.scheduling.crypto.risk_check_frequency = String(document.getElementById('crRiskFreqSelect')?.value || 'daily');
     body.scheduling.crypto.risk_check_day = String(document.getElementById('crRiskDaySelect')?.value || 'MON').toUpperCase();
+    body.scheduling.crypto.risk_check_minute_of_hour = Number(document.getElementById('crRiskMinuteSelect')?.value || '5');
+    body.scheduling.crypto.risk_check_hourly_checks = _collectHourlyChecks('cr');
+    if (body.scheduling.crypto.risk_check_frequency === 'hourly' && (!Array.isArray(body.scheduling.crypto.risk_check_hourly_checks) || body.scheduling.crypto.risk_check_hourly_checks.length === 0)) {
+      body.scheduling.crypto.risk_check_hourly_checks = ['stop_loss','dd_stop'];
+    }
     body.scheduling.crypto.risk_check_time_local = String(document.getElementById('crRiskTimeInput')?.value || '18:05');
 
     status.textContent = 'saving…';

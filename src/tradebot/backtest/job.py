@@ -204,9 +204,13 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     is_crypto = "/" in str(sym)
                     return (prov_cr if is_crypto else prov_eq).limit_touched(sym, day, side, float(limit_px))
 
-                def risk_intraday_cb(sym, day):
+                def risk_intraday_cb(sym, day_or_ts):
                     is_crypto = "/" in str(sym)
-                    return (risk_prov_cr if is_crypto else risk_prov_eq).price(sym, day)
+                    prov = (risk_prov_cr if is_crypto else risk_prov_eq)
+                    ts = pd.Timestamp(day_or_ts)
+                    if ts.hour == 0 and ts.minute == 0 and ts.second == 0:
+                        return prov.price(sym, ts)
+                    return prov.price_at_local_ts(sym, ts, exact_minute=True)
 
             res = run_backtest(
                 stock_bars=stock_bars,

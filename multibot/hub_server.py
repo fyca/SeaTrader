@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -280,27 +281,27 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/api/dashboards/start-all":
-            ok, out = run_cmd([str(ROOT / "scripts" / "start_dashboards.sh")])
+            ok, out = run_cmd([sys.executable, str(ROOT / "scripts" / "dashboard_ctl.py"), "start-all"])
             self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
             return
 
         if self.path == "/api/cron/install":
-            ok, out = run_cmd(["python3", str(ROOT / "scripts" / "manage_cron.py"), "install"])
+            ok, out = run_cmd([sys.executable, str(ROOT / "scripts" / "manage_cron.py"), "install"])
             self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
             return
 
         if self.path == "/api/cron/remove":
-            ok, out = run_cmd(["python3", str(ROOT / "scripts" / "manage_cron.py"), "remove"])
+            ok, out = run_cmd([sys.executable, str(ROOT / "scripts" / "manage_cron.py"), "remove"])
             self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
             return
 
         if self.path == "/api/cron/show":
-            ok, out = run_cmd(["python3", str(ROOT / "scripts" / "manage_cron.py"), "show"])
+            ok, out = run_cmd([sys.executable, str(ROOT / "scripts" / "manage_cron.py"), "show"])
             self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
             return
 
         if self.path == "/api/dashboards/stop-all":
-            ok, out = run_cmd([str(ROOT / "scripts" / "stop_dashboards.sh")])
+            ok, out = run_cmd([sys.executable, str(ROOT / "scripts" / "dashboard_ctl.py"), "stop-all"])
             self._send_json({"ok": ok, "message": out}, 200 if ok else 500)
             return
 
@@ -309,7 +310,7 @@ class Handler(BaseHTTPRequestHandler):
             if bot not in BOTS:
                 self._send_json({"ok": False, "error": "unknown bot"}, 400)
                 return
-            ok, out = run_cmd([str(ROOT / "scripts" / "start_one.sh"), bot])
+            ok, out = run_cmd([sys.executable, str(ROOT / "scripts" / "dashboard_ctl.py"), "start", bot])
             self._send_json({"ok": ok, "bot": bot, "message": out}, 200 if ok else 500)
             return
 
@@ -318,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
             if bot not in BOTS:
                 self._send_json({"ok": False, "error": "unknown bot"}, 400)
                 return
-            ok, out = run_cmd([str(ROOT / "scripts" / "stop_one.sh"), bot])
+            ok, out = run_cmd([sys.executable, str(ROOT / "scripts" / "dashboard_ctl.py"), "stop", bot])
             self._send_json({"ok": ok, "bot": bot, "message": out}, 200 if ok else 500)
             return
 
@@ -327,11 +328,11 @@ class Handler(BaseHTTPRequestHandler):
             if bot not in BOTS:
                 self._send_json({"ok": False, "error": "unknown bot"}, 400)
                 return
-            script = ROOT / "scripts" / "wipe_bot.sh"
+            script = ROOT / "scripts" / "wipe_bot.py"
             if not script.exists():
                 self._send_json({"ok": False, "error": "wipe script missing"}, 500)
                 return
-            ok, out = run_cmd([str(script), bot], timeout=90)
+            ok, out = run_cmd([sys.executable, str(script), bot], timeout=90)
             self._send_json({"ok": ok, "bot": bot, "message": out if ok else "", "error": "" if ok else out}, 200 if ok else 500)
             return
 

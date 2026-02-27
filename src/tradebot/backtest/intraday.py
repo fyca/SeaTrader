@@ -58,8 +58,6 @@ class IntradayPriceProvider:
             return self._cache[key]
 
         target = self._target_utc(day)
-        start = target - timedelta(hours=6)
-        end = target + timedelta(minutes=2)
 
         try:
             df = self._day_bars(sym, day)
@@ -77,6 +75,27 @@ class IntradayPriceProvider:
             return v
         except Exception:
             self._cache[key] = None
+            return None
+
+    def price_at_local_ts(self, sym: str, ts_local: pd.Timestamp, *, exact_minute: bool = True) -> float | None:
+        day = pd.Timestamp(ts_local).normalize()
+        df = self._day_bars(sym, day)
+        if df is None or len(df) == 0:
+            return None
+        try:
+            ts = pd.Timestamp(ts_local)
+            dt_local = datetime(ts.year, ts.month, ts.day, ts.hour, ts.minute, tzinfo=self._tz)
+            target = pd.to_datetime(dt_local.astimezone(ZoneInfo("UTC")))
+            if exact_minute:
+                row = df.loc[df.index == target]
+                if len(row) == 0:
+                    return None
+                return float(row["close"].iloc[-1])
+            df2 = df.loc[:target]
+            if len(df2) == 0:
+                return None
+            return float(df2["close"].iloc[-1])
+        except Exception:
             return None
 
     def limit_touched(self, sym: str, day: pd.Timestamp, side: str, limit_px: float) -> bool:

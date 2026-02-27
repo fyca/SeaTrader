@@ -53,10 +53,14 @@ class BacktestParams:
     risk_check_time_local_equities: str | None = None
     risk_check_time_local_crypto: str | None = None
     # Per-asset risk schedule (fallback to daily at risk_check_time_local)
-    risk_check_frequency_equities: Literal["weekly", "daily"] | None = None
+    risk_check_frequency_equities: Literal["weekly", "daily", "hourly"] | None = None
     risk_check_day_equities: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] | None = None
-    risk_check_frequency_crypto: Literal["weekly", "daily"] | None = None
+    risk_check_minute_of_hour_equities: int | None = None
+    risk_check_hourly_checks_equities: list[Literal["stop_loss", "dd_stop", "strategy_exit"]] | None = None
+    risk_check_frequency_crypto: Literal["weekly", "daily", "hourly"] | None = None
     risk_check_day_crypto: Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] | None = None
+    risk_check_minute_of_hour_crypto: int | None = None
+    risk_check_hourly_checks_crypto: list[Literal["stop_loss", "dd_stop", "strategy_exit"]] | None = None
 
     strategy_id: str = "baseline_trendvol"
     # Optional per-asset entry strategy overrides (fallback to strategy_id)
@@ -71,6 +75,13 @@ class BacktestParams:
     rebalance_mode: Literal["target_notional", "no_add_to_losers"] = "target_notional"
     liquidation_mode: Literal["liquidate_non_selected", "hold_until_exit"] = "liquidate_non_selected"
     per_asset_stop_loss_pct: float | None = None
+    trailing_stop_stocks_enabled: bool = False
+    trailing_stop_crypto_enabled: bool = False
+    trailing_stop_stocks_start_gain_pct: float | None = 0.05
+    trailing_stop_crypto_start_gain_pct: float | None = 0.05
+    trailing_stop_stocks_pct: float | None = 0.02
+    trailing_stop_crypto_pct: float | None = 0.02
+    trailing_stop_anchor: Literal["highest_since_entry", "highest_close_since_entry"] = "highest_since_entry"
     # When False, block same-day buy->sell roundtrips in backtest (PDT-safe behavior).
     allow_same_day_roundtrip: bool = False
 
@@ -124,7 +135,7 @@ def _date_range(start: str, end: str) -> pd.DatetimeIndex:
 
 
 def _rebalance_days(days: pd.DatetimeIndex, mode: str, weekly_day: str = "MON") -> set[pd.Timestamp]:
-    if mode == "daily":
+    if mode in ("daily", "hourly"):
         return set(days)
     day_map = {"MON":0, "TUE":1, "WED":2, "THU":3, "FRI":4, "SAT":5, "SUN":6}
     wd = day_map.get(str(weekly_day).upper(), 0)
@@ -158,8 +169,14 @@ def run_backtest(
     rebal_days = _rebalance_days(days, params.rebalance, params.rebalance_day)
     eq_rebal_days = _rebalance_days(days, params.rebalance_frequency_equities or params.rebalance, params.rebalance_day_equities or params.rebalance_day)
     cr_rebal_days = _rebalance_days(days, params.rebalance_frequency_crypto or params.rebalance, params.rebalance_day_crypto or params.rebalance_day)
-    eq_risk_days = _rebalance_days(days, params.risk_check_frequency_equities or "daily", params.risk_check_day_equities or params.rebalance_day)
-    cr_risk_days = _rebalance_days(days, params.risk_check_frequency_crypto or "daily", params.risk_check_day_crypto or params.rebalance_day)
+    eq_risk_freq = str(params.risk_check_frequency_equities or "daily")
+    cr_risk_freq = str(params.risk_check_frequency_crypto or "daily")
+    eq_risk_days = _rebalance_days(days, eq_risk_freq, params.risk_check_day_equities or params.rebalance_day)
+    cr_risk_days = _rebalance_days(days, cr_risk_freq, params.risk_check_day_crypto or params.rebalance_day)
+    eq_risk_minute = int(params.risk_check_minute_of_hour_equities if params.risk_check_minute_of_hour_equities is not None else 5)
+    cr_risk_minute = int(params.risk_check_minute_of_hour_crypto if params.risk_check_minute_of_hour_crypto is not None else 5)
+    eq_hourly_checks = set(params.risk_check_hourly_checks_equities or ["stop_loss", "dd_stop"])
+    cr_hourly_checks = set(params.risk_check_hourly_checks_crypto or ["stop_loss", "dd_stop"])
 
     # Equity trading sessions from available stock bars (captures weekends/holidays closure).
     eq_trade_days: set[pd.Timestamp] = set()
@@ -193,6 +210,7 @@ def run_backtest(
     positions_qty: dict[str, float] = {}
     positions_avg_cost: dict[str, float] = {}
     positions_entry_date: dict[str, str] = {}
+    positions_peak_mark: dict[str, float] = {}
     pending_limits: list[dict] = []  # simulated working limit orders
     trades: list[dict] = []
     events: list[dict] = []
@@ -204,6 +222,16 @@ def run_backtest(
     dd_stop_events = 0
     max_observed_dd = 0.0
     dd_stop_trigger_day: pd.Timestamp | None = None
+
+    hourly_debug = {
+        "slots_considered": 0,
+        "symbol_checks": 0,
+        "price_points_found": 0,
+        "strategy_exit_selected": 0,
+        "strategy_exit_no_rule": 0,
+        "strategy_exit_evaluated": 0,
+        "strategy_exit_triggered": 0,
+    }
 
     # Resolve per-asset strategy ids (with legacy fallback)
     eq_strategy_id = params.strategy_id_equities or params.strategy_id
@@ -326,6 +354,33 @@ def run_backtest(
                 return v
         # default to close for daily risk checks
         return px(sym, day)
+
+    def risk_px_at_ts(sym: str, ts_local: pd.Timestamp) -> float | None:
+        if params.execution_time_mode == "intraday" and risk_intraday_price_cb is not None:
+            v = risk_intraday_price_cb(sym, ts_local)
+            if v is not None:
+                return v
+        return px(sym, pd.Timestamp(ts_local).normalize())
+
+    def _trail_cfg(sym: str) -> tuple[bool, float, float | None]:
+        is_crypto = "/" in sym
+        if is_crypto:
+            start = float(params.trailing_stop_crypto_start_gain_pct if params.trailing_stop_crypto_start_gain_pct is not None else 0.05)
+            return bool(params.trailing_stop_crypto_enabled), start, (float(params.trailing_stop_crypto_pct) if params.trailing_stop_crypto_pct is not None else None)
+        start = float(params.trailing_stop_stocks_start_gain_pct if params.trailing_stop_stocks_start_gain_pct is not None else 0.05)
+        return bool(params.trailing_stop_stocks_enabled), start, (float(params.trailing_stop_stocks_pct) if params.trailing_stop_stocks_pct is not None else None)
+
+    def _trail_peak(sym: str, day: pd.Timestamp, mark_px: float) -> float:
+        if str(params.trailing_stop_anchor) == "highest_close_since_entry":
+            s = closes.get(sym)
+            if s is not None and len(s) > 0:
+                entry_s = positions_entry_date.get(sym)
+                start_d = pd.to_datetime(entry_s) if entry_s else day
+                sub = s.loc[start_d:day].dropna().astype(float)
+                if len(sub) > 0:
+                    return float(np.max(sub.values))
+        prev = float(positions_peak_mark.get(sym, 0.0) or 0.0)
+        return max(prev, float(mark_px))
 
     def closes_until_day(sym: str, day: pd.Timestamp) -> pd.Series:
         s = closes.get(sym)
@@ -450,6 +505,7 @@ def run_backtest(
             if prevQ <= 0:
                 positions_entry_date[sym] = day.strftime("%Y-%m-%d")
                 positions_avg_cost[sym] = fill_px
+                positions_peak_mark[sym] = float(fill_px)
             else:
                 positions_avg_cost[sym] = (prevQ * prevCost + q_add * fill_px) / (prevQ + q_add)
             positions_qty[sym] = newQ
@@ -600,8 +656,136 @@ def run_backtest(
         if params.symbol_pnl_floor_liquidate:
             _liquidate_excluded(day, reason="symbol_pnl_floor_exclude")
 
+        # Hourly risk checks (intraday): run selected checks at configured minute; skip if no matching bar.
+        if params.execution_time_mode == "intraday" and (eq_risk_freq == "hourly" or cr_risk_freq == "hourly"):
+            hourly_minutes: set[int] = set()
+            if eq_risk_freq == "hourly":
+                hourly_minutes.add(int(eq_risk_minute))
+            if cr_risk_freq == "hourly":
+                hourly_minutes.add(int(cr_risk_minute))
+
+            for hr in range(24):
+                for mm in sorted(hourly_minutes):
+                    ts_local = pd.Timestamp(day).replace(hour=hr, minute=int(mm), second=0, microsecond=0)
+                    hourly_debug["slots_considered"] += 1
+
+                    for sym in list(positions_qty.keys()):
+                        is_crypto = "/" in sym
+                        if is_crypto:
+                            if cr_risk_freq != "hourly" or ts_local.minute != cr_risk_minute:
+                                continue
+                            checks = cr_hourly_checks
+                        else:
+                            if eq_risk_freq != "hourly" or ts_local.minute != eq_risk_minute:
+                                continue
+                            checks = eq_hourly_checks
+
+                        hourly_debug["symbol_checks"] += 1
+                        p_intraday = risk_px_at_ts(sym, ts_local)
+                        if p_intraday is None:
+                            continue
+                        hourly_debug["price_points_found"] += 1
+
+                        trail_enabled, trail_start, trail_pct = _trail_cfg(sym)
+                        if trail_enabled and trail_pct is not None and trail_pct > 0 and _can_sell_today(sym):
+                            peak = _trail_peak(sym, day, float(p_intraday))
+                            positions_peak_mark[sym] = peak
+                            avg_cost = positions_avg_cost.get(sym, float(p_intraday))
+                            armed = (avg_cost is not None and avg_cost > 0 and peak >= (float(avg_cost) * (1 + float(trail_start))))
+                            trail_level = peak * (1 - trail_pct)
+                            if armed and float(p_intraday) <= trail_level:
+                                q = positions_qty.get(sym, 0.0)
+                                sell_px = float(p_intraday) * (1 - params.slippage_bps / 10000.0)
+                                cash += q * sell_px
+                                avg_cost = positions_avg_cost.get(sym, float(p_intraday))
+                                entry_date = positions_entry_date.get(sym)
+                                pnl = (sell_px - avg_cost) * q
+                                rec = {"symbol": sym, "entry_date": entry_date, "exit_date": day.strftime("%Y-%m-%d"), "qty": q, "entry_price": avg_cost, "exit_price": sell_px, "pnl": pnl, "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None, "reason": ("trailing_stop_crypto" if is_crypto else "trailing_stop_stocks")}
+                                _record_trade(rec)
+                                _event({"type": "sell", "symbol": sym, "date": day.strftime("%Y-%m-%d"), "qty": float(q), "price": float(sell_px), "notional": float(q * sell_px), "new_qty": 0.0, "reason": rec["reason"], "pnl": float(pnl)})
+                                positions_qty.pop(sym, None); positions_avg_cost.pop(sym, None); positions_entry_date.pop(sym, None); positions_peak_mark.pop(sym, None)
+                                continue
+
+                        if "strategy_exit" in checks:
+                            hourly_debug["strategy_exit_selected"] += 1
+                            ex_rule = cr_exit_rule if is_crypto else eq_exit_rule
+                            if ex_rule is None:
+                                hourly_debug["strategy_exit_no_rule"] += 1
+                            if ex_rule is not None:
+                                cls = closes_until_day(sym, day)
+                                if len(cls) >= 5:
+                                    hourly_debug["strategy_exit_evaluated"] += 1
+                                    ann_factor = 365.0 if is_crypto else 252.0
+                                    should_exit = False
+                                    try:
+                                        should_exit = bool(eval_rule(EvalContext(closes=cls, ann_factor=ann_factor), ex_rule))
+                                    except Exception:
+                                        should_exit = False
+                                    if should_exit and _can_sell_today(sym):
+                                        hourly_debug["strategy_exit_triggered"] += 1
+                                        q = positions_qty.get(sym, 0.0)
+                                        sell_px = p_intraday * (1 - params.slippage_bps / 10000.0)
+                                        cash += q * sell_px
+                                        avg_cost = positions_avg_cost.get(sym, p_intraday)
+                                        entry_date = positions_entry_date.get(sym)
+                                        pnl = (sell_px - avg_cost) * q
+                                        rec = {"symbol": sym, "entry_date": entry_date, "exit_date": day.strftime("%Y-%m-%d"), "qty": q, "entry_price": avg_cost, "exit_price": sell_px, "pnl": pnl, "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None, "reason": "strategy_exit_rule"}
+                                        _record_trade(rec)
+                                        _event({"type": "sell", "symbol": sym, "date": day.strftime("%Y-%m-%d"), "qty": float(q), "price": float(sell_px), "notional": float(q * sell_px), "new_qty": 0.0, "reason": rec["reason"], "pnl": float(pnl)})
+                                        positions_qty.pop(sym, None); positions_avg_cost.pop(sym, None); positions_entry_date.pop(sym, None)
+                                        continue
+
+                        if "stop_loss" in checks and params.per_asset_stop_loss_pct is not None and params.per_asset_stop_loss_pct > 0:
+                            avg_cost = positions_avg_cost.get(sym)
+                            if avg_cost is not None and avg_cost > 0 and (p_intraday / avg_cost - 1.0) <= -float(params.per_asset_stop_loss_pct) and _can_sell_today(sym):
+                                q = positions_qty.get(sym, 0.0)
+                                sell_px = p_intraday * (1 - params.slippage_bps / 10000.0)
+                                cash += q * sell_px
+                                entry_date = positions_entry_date.get(sym)
+                                pnl = (sell_px - avg_cost) * q
+                                rec = {"symbol": sym, "entry_date": entry_date, "exit_date": day.strftime("%Y-%m-%d"), "qty": q, "entry_price": avg_cost, "exit_price": sell_px, "pnl": pnl, "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None, "reason": "per_asset_stop_loss"}
+                                _record_trade(rec)
+                                _event({"type": "sell", "symbol": sym, "date": day.strftime("%Y-%m-%d"), "qty": float(q), "price": float(sell_px), "notional": float(q * sell_px), "new_qty": 0.0, "reason": rec["reason"], "pnl": float(pnl)})
+                                positions_qty.pop(sym, None); positions_avg_cost.pop(sym, None); positions_entry_date.pop(sym, None)
+
+                    if params.portfolio_dd_stop is not None and peak_equity > 0:
+                        run_eq_dd = (eq_risk_freq == "hourly" and "dd_stop" in eq_hourly_checks and ts_local.minute == eq_risk_minute)
+                        run_cr_dd = (cr_risk_freq == "hourly" and "dd_stop" in cr_hourly_checks and ts_local.minute == cr_risk_minute)
+                        if run_eq_dd or run_cr_dd:
+                            eq_now = cash
+                            for s2, q2 in positions_qty.items():
+                                p2 = risk_px_at_ts(s2, ts_local)
+                                if p2 is None:
+                                    p2 = px(s2, day) or float(positions_avg_cost.get(s2, 0.0) or 0.0)
+                                if p2 > 0:
+                                    eq_now += q2 * p2
+                            peak_equity = max(peak_equity, float(eq_now))
+                            dd = (peak_equity - float(eq_now)) / peak_equity if peak_equity > 0 else 0.0
+                            max_observed_dd = max(max_observed_dd, float(dd))
+                            if (not stopped_until_next_rebalance) and dd >= params.portfolio_dd_stop:
+                                dd_stop_events += 1
+                                for sym in list(positions_qty.keys()):
+                                    p0 = risk_px_at_ts(sym, ts_local) or px(sym, day)
+                                    if p0 is None:
+                                        continue
+                                    sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+                                    q = positions_qty.get(sym, 0.0)
+                                    if not _can_sell_today(sym):
+                                        continue
+                                    cash += q * sell_px
+                                    avg_cost = positions_avg_cost.get(sym, p0)
+                                    entry_date = positions_entry_date.get(sym)
+                                    pnl = (sell_px - avg_cost) * q
+                                    rec = {"symbol": sym, "entry_date": entry_date, "exit_date": day.strftime("%Y-%m-%d"), "qty": q, "entry_price": avg_cost, "exit_price": sell_px, "pnl": pnl, "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None, "reason": "portfolio_dd_stop"}
+                                    _record_trade(rec)
+                                    _event({"type": "sell", "symbol": sym, "date": day.strftime("%Y-%m-%d"), "qty": float(q), "price": float(sell_px), "notional": float(q * sell_px), "new_qty": 0.0, "reason": rec["reason"], "pnl": float(pnl)})
+                                positions_qty.clear(); positions_avg_cost.clear(); positions_entry_date.clear(); positions_peak_mark.clear()
+                                stopped_until_next_rebalance = True
+                                dd_stop_trigger_day = day
+                                break
+
         # Portfolio DD stop: liquidate to cash until next rebalance
-        if params.portfolio_dd_stop is not None and peak_equity > 0:
+        if params.portfolio_dd_stop is not None and peak_equity > 0 and (eq_risk_freq != "hourly" or cr_risk_freq != "hourly"):
             dd = (peak_equity - equity) / peak_equity
             max_observed_dd = max(max_observed_dd, float(dd))
             if (not stopped_until_next_rebalance) and dd >= params.portfolio_dd_stop:
@@ -653,9 +837,9 @@ def run_backtest(
         if eq_exit_rule is not None or cr_exit_rule is not None:
             for sym in list(positions_qty.keys()):
                 is_crypto = "/" in sym
-                if is_crypto and day not in cr_risk_days:
+                if is_crypto and (day not in cr_risk_days or cr_risk_freq == "hourly"):
                     continue
-                if (not is_crypto) and day not in eq_risk_days:
+                if (not is_crypto) and (day not in eq_risk_days or eq_risk_freq == "hourly"):
                     continue
                 ex_rule = cr_exit_rule if is_crypto else eq_exit_rule
                 if ex_rule is None:
@@ -711,22 +895,59 @@ def run_backtest(
                 positions_avg_cost.pop(sym, None)
                 positions_entry_date.pop(sym, None)
 
-        # Per-asset stop loss (checked daily at close)
-        if params.per_asset_stop_loss_pct is not None and params.per_asset_stop_loss_pct > 0:
-            sl = float(params.per_asset_stop_loss_pct)
+        # Per-asset risk exits (checked on risk schedule): trailing + fixed stop loss
+        if ((params.per_asset_stop_loss_pct is not None and params.per_asset_stop_loss_pct > 0)
+            or bool(params.trailing_stop_stocks_enabled) or bool(params.trailing_stop_crypto_enabled)):
+            sl = float(params.per_asset_stop_loss_pct) if (params.per_asset_stop_loss_pct is not None and params.per_asset_stop_loss_pct > 0) else None
             for sym in list(positions_qty.keys()):
                 is_crypto = "/" in sym
-                if is_crypto and day not in cr_risk_days:
+                if is_crypto and (day not in cr_risk_days or cr_risk_freq == "hourly"):
                     continue
-                if (not is_crypto) and day not in eq_risk_days:
+                if (not is_crypto) and (day not in eq_risk_days or eq_risk_freq == "hourly"):
                     continue
                 p0 = px(sym, day)
                 if p0 is None:
                     continue
+                trail_enabled, trail_start, trail_pct = _trail_cfg(sym)
+                if trail_enabled and trail_pct is not None and trail_pct > 0:
+                    peak = _trail_peak(sym, day, float(p0))
+                    positions_peak_mark[sym] = peak
+                    avg_cost_for_arm = positions_avg_cost.get(sym, p0)
+                    armed = (avg_cost_for_arm is not None and avg_cost_for_arm > 0 and peak >= (float(avg_cost_for_arm) * (1 + float(trail_start))))
+                    trail_level = peak * (1 - trail_pct)
+                    if armed and float(p0) <= trail_level:
+                        base_px = risk_px(sym, day) or p0
+                        sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+                        q = positions_qty.get(sym, 0.0)
+                        if not _can_sell_today(sym):
+                            continue
+                        cash += q * sell_px
+                        avg_cost = positions_avg_cost.get(sym, p0)
+                        entry_date = positions_entry_date.get(sym)
+                        pnl = (sell_px - avg_cost) * q
+                        rec = {
+                            "symbol": sym,
+                            "entry_date": entry_date,
+                            "exit_date": day.strftime("%Y-%m-%d"),
+                            "qty": q,
+                            "entry_price": avg_cost,
+                            "exit_price": sell_px,
+                            "pnl": pnl,
+                            "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None,
+                            "reason": "trailing_stop_crypto" if is_crypto else "trailing_stop_stocks",
+                        }
+                        _record_trade(rec)
+                        _event({"type": "sell", "symbol": sym, "date": day.strftime("%Y-%m-%d"), "qty": float(q), "price": float(sell_px), "notional": float(q * sell_px), "new_qty": 0.0, "reason": rec["reason"], "pnl": float(pnl)})
+                        positions_qty.pop(sym, None)
+                        positions_avg_cost.pop(sym, None)
+                        positions_entry_date.pop(sym, None)
+                        positions_peak_mark.pop(sym, None)
+                        continue
+
                 avg_cost = positions_avg_cost.get(sym)
                 if avg_cost is None or avg_cost <= 0:
                     continue
-                if (p0 / avg_cost - 1.0) <= -sl:
+                if (sl is not None) and ((p0 / avg_cost - 1.0) <= -sl):
                     # stop out full position at risk-check time - slippage
                     base_px = risk_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
@@ -990,6 +1211,7 @@ def run_backtest(
                         if prevQ <= 0:
                             positions_entry_date[sym] = day.strftime("%Y-%m-%d")
                             positions_avg_cost[sym] = buy_px
+                            positions_peak_mark[sym] = float(buy_px)
                         else:
                             positions_avg_cost[sym] = (prevQ * prevCost + q_add * buy_px) / (prevQ + q_add)
                         positions_qty[sym] = newQ
@@ -1146,6 +1368,7 @@ def run_backtest(
         "open_position_count": int(len(positions_qty)),
         "per_asset_stop_loss_pct": params.per_asset_stop_loss_pct,
         "ts": datetime.now(timezone.utc).isoformat(),
+        "hourly_debug": hourly_debug,
     }
 
     # Open positions (unrealized) at end

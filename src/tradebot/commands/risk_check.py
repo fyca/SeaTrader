@@ -221,6 +221,9 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
 
     eq_syms = [s for s in held if "/" not in s]
     cr_syms = [s for s in held if "/" in s]
+    if state.trailing_peaks:
+        held_set = set([str(s).upper() for s in held])
+        state.trailing_peaks = {k: v for k, v in state.trailing_peaks.items() if str(k).upper() in held_set}
     if run_asset_mode == "equities":
         cr_syms = []
     elif run_asset_mode == "crypto":
@@ -231,6 +234,19 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
     stop_pct = cfg.risk.per_asset_stop_loss_pct
     if stop_pct is not None:
         stop_pct = float(stop_pct)
+
+    trailing_anchor = str(getattr(cfg.risk, "trailing_stop_anchor", "highest_since_entry") or "highest_since_entry")
+    trail_eq_enabled = bool(getattr(cfg.risk, "trailing_stop_stocks_enabled", False))
+    trail_cr_enabled = bool(getattr(cfg.risk, "trailing_stop_crypto_enabled", False))
+    trail_eq_start = getattr(cfg.risk, "trailing_stop_stocks_start_gain_pct", 0.05)
+    trail_cr_start = getattr(cfg.risk, "trailing_stop_crypto_start_gain_pct", 0.05)
+    trail_eq_pct = getattr(cfg.risk, "trailing_stop_stocks_pct", None)
+    trail_cr_pct = getattr(cfg.risk, "trailing_stop_crypto_pct", None)
+    trail_eq_start = float(trail_eq_start) if trail_eq_start is not None else 0.05
+    trail_cr_start = float(trail_cr_start) if trail_cr_start is not None else 0.05
+    trail_eq_pct = float(trail_eq_pct) if trail_eq_pct is not None else None
+    trail_cr_pct = float(trail_cr_pct) if trail_cr_pct is not None else None
+    state.trailing_peaks = dict(state.trailing_peaks or {})
 
     # Resolve per-asset exit strategies (with legacy fallback to cfg.strategy_id)
     resolved = resolve_for_risk_check(cfg)
@@ -284,6 +300,20 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                         exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": f"stop_loss_{int(stop_pct*100)}%", "last_close": last_px, "stop_level": stop_level, "avg_entry": avg_entry})
                         continue
 
+            if trail_eq_enabled and (trail_eq_pct is not None) and trail_eq_pct > 0:
+                pos = next((p for p in positions if p.symbol == sym), None)
+                avg_entry = float(getattr(pos, "avg_entry_price", 0.0) or 0.0) if pos is not None else 0.0
+                prev_peak = float((state.trailing_peaks or {}).get(sym, 0.0) or 0.0)
+                peak = float(closes.max()) if trailing_anchor == "highest_close_since_entry" else max(prev_peak, float(last_px))
+                if peak > 0:
+                    state.trailing_peaks[sym] = peak
+                    armed = (avg_entry > 0) and (peak >= (avg_entry * (1 + trail_eq_start)))
+                    if armed:
+                        trail_level = peak * (1 - trail_eq_pct)
+                        if last_px <= trail_level:
+                            exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": "trailing_stop_stocks", "last_close": last_px, "trail_level": trail_level, "trail_peak": peak})
+                            continue
+
             should, reason, last, maL = trend_break_exit(closes, ma_long=cfg.signals.equity.ma_long)
             if should:
                 exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": reason, "last_close": last, "ma_long": maL})
@@ -317,6 +347,20 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                     if last_px <= stop_level:
                         exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": f"stop_loss_{int(stop_pct*100)}%", "last_close": last_px, "stop_level": stop_level, "avg_entry": avg_entry})
                         continue
+
+            if trail_cr_enabled and (trail_cr_pct is not None) and trail_cr_pct > 0:
+                pos = next((p for p in positions if p.symbol == sym), None)
+                avg_entry = float(getattr(pos, "avg_entry_price", 0.0) or 0.0) if pos is not None else 0.0
+                prev_peak = float((state.trailing_peaks or {}).get(sym, 0.0) or 0.0)
+                peak = float(closes.max()) if trailing_anchor == "highest_close_since_entry" else max(prev_peak, float(last_px))
+                if peak > 0:
+                    state.trailing_peaks[sym] = peak
+                    armed = (avg_entry > 0) and (peak >= (avg_entry * (1 + trail_cr_start)))
+                    if armed:
+                        trail_level = peak * (1 - trail_cr_pct)
+                        if last_px <= trail_level:
+                            exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": "trailing_stop_crypto", "last_close": last_px, "trail_level": trail_level, "trail_peak": peak})
+                            continue
 
             should, reason, last, maL = trend_break_exit(closes, ma_long=cfg.signals.crypto.ma_long)
             if should:
@@ -485,5 +529,6 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
         ],
     )
     append_equity_point(equity=equity, cash=float(getattr(acct, "cash", 0.0) or 0.0))
+    save_state(state)
 
     return 0

@@ -35,6 +35,27 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
     if params.get("portfolio_dd_stop") is not None:
         bot.setdefault("risk", {})
         bot["risk"]["portfolio_dd_stop"] = params.get("portfolio_dd_stop")
+    if params.get("trailing_stop_stocks_enabled") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["trailing_stop_stocks_enabled"] = bool(params.get("trailing_stop_stocks_enabled"))
+    if params.get("trailing_stop_crypto_enabled") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["trailing_stop_crypto_enabled"] = bool(params.get("trailing_stop_crypto_enabled"))
+    if params.get("trailing_stop_stocks_start_gain_pct") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["trailing_stop_stocks_start_gain_pct"] = float(params.get("trailing_stop_stocks_start_gain_pct"))
+    if params.get("trailing_stop_crypto_start_gain_pct") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["trailing_stop_crypto_start_gain_pct"] = float(params.get("trailing_stop_crypto_start_gain_pct"))
+    if params.get("trailing_stop_stocks_pct") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["trailing_stop_stocks_pct"] = float(params.get("trailing_stop_stocks_pct"))
+    if params.get("trailing_stop_crypto_pct") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["trailing_stop_crypto_pct"] = float(params.get("trailing_stop_crypto_pct"))
+    if params.get("trailing_stop_anchor") is not None:
+        bot.setdefault("risk", {})
+        bot["risk"]["trailing_stop_anchor"] = str(params.get("trailing_stop_anchor"))
 
     # rebalance behavior parity
     bot.setdefault("rebalance", {})
@@ -105,10 +126,18 @@ def _bt_to_bot_patch(params: dict[str, Any]) -> dict[str, Any]:
         bot["scheduling"]["equities"]["risk_check_frequency"] = str(params.get("risk_check_frequency_equities"))
     if params.get("risk_check_day_equities"):
         bot["scheduling"]["equities"]["risk_check_day"] = str(params.get("risk_check_day_equities")).upper()
+    if params.get("risk_check_minute_of_hour_equities") is not None:
+        bot["scheduling"]["equities"]["risk_check_minute_of_hour"] = int(params.get("risk_check_minute_of_hour_equities"))
+    if params.get("risk_check_hourly_checks_equities") is not None:
+        bot["scheduling"]["equities"]["risk_check_hourly_checks"] = list(params.get("risk_check_hourly_checks_equities") or [])
     if params.get("risk_check_frequency_crypto"):
         bot["scheduling"]["crypto"]["risk_check_frequency"] = str(params.get("risk_check_frequency_crypto"))
     if params.get("risk_check_day_crypto"):
         bot["scheduling"]["crypto"]["risk_check_day"] = str(params.get("risk_check_day_crypto")).upper()
+    if params.get("risk_check_minute_of_hour_crypto") is not None:
+        bot["scheduling"]["crypto"]["risk_check_minute_of_hour"] = int(params.get("risk_check_minute_of_hour_crypto"))
+    if params.get("risk_check_hourly_checks_crypto") is not None:
+        bot["scheduling"]["crypto"]["risk_check_hourly_checks"] = list(params.get("risk_check_hourly_checks_crypto") or [])
 
     # execution timing mapping (best-effort): sets unattended scheduler times.
     exec_mode = params.get("execution_time_mode") or "intraday"

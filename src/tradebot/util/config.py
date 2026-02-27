@@ -25,6 +25,13 @@ class Risk(BaseModel):
     max_drawdown_freeze: float = 0.20
     warn_drawdown: float = 0.10
     per_asset_stop_loss_pct: float | None = None
+    trailing_stop_stocks_enabled: bool = False
+    trailing_stop_crypto_enabled: bool = False
+    trailing_stop_stocks_start_gain_pct: float | None = 0.05
+    trailing_stop_crypto_start_gain_pct: float | None = 0.05
+    trailing_stop_stocks_pct: float | None = 0.02
+    trailing_stop_crypto_pct: float | None = 0.02
+    trailing_stop_anchor: Literal["highest_since_entry", "highest_close_since_entry"] = "highest_since_entry"
     # Prevent same-day roundtrip churn: do not allow risk-check to sell symbols
     # that had a BUY fill today (in scheduling.timezone).
     block_same_day_roundtrip: bool = True
@@ -83,9 +90,11 @@ class AssetSchedule(BaseModel):
     rebalance_frequency: Literal["daily", "weekly"] = "weekly"
     rebalance_day: str = "MON"
     rebalance_time_local: str = "06:35"
-    risk_check_frequency: Literal["daily", "weekly"] = "daily"
+    risk_check_frequency: Literal["daily", "weekly", "hourly"] = "daily"
     risk_check_day: str = "MON"
     risk_check_time_local: str = "18:05"
+    risk_check_minute_of_hour: int = Field(default=5, ge=0, le=59)
+    risk_check_hourly_checks: list[Literal["stop_loss", "dd_stop", "strategy_exit"]] = Field(default_factory=lambda: ["stop_loss", "dd_stop"])
 
 
 class Scheduling(BaseModel):
