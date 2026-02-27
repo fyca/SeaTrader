@@ -71,6 +71,8 @@ class BacktestParams:
     rebalance_mode: Literal["target_notional", "no_add_to_losers"] = "target_notional"
     liquidation_mode: Literal["liquidate_non_selected", "hold_until_exit"] = "liquidate_non_selected"
     per_asset_stop_loss_pct: float | None = None
+    # When False, block same-day buy->sell roundtrips in backtest (PDT-safe behavior).
+    allow_same_day_roundtrip: bool = False
 
     # If (realized + optional unrealized) P/L percent for a symbol falls below this threshold,
     # permanently exclude it from further trading for the rest of the backtest.
@@ -158,6 +160,33 @@ def run_backtest(
     cr_rebal_days = _rebalance_days(days, params.rebalance_frequency_crypto or params.rebalance, params.rebalance_day_crypto or params.rebalance_day)
     eq_risk_days = _rebalance_days(days, params.risk_check_frequency_equities or "daily", params.risk_check_day_equities or params.rebalance_day)
     cr_risk_days = _rebalance_days(days, params.risk_check_frequency_crypto or "daily", params.risk_check_day_crypto or params.rebalance_day)
+
+    # Equity trading sessions from available stock bars (captures weekends/holidays closure).
+    eq_trade_days: set[pd.Timestamp] = set()
+    try:
+        for _sym, _df in (stock_bars or {}).items():
+            if _df is None or len(_df) == 0:
+                continue
+            _idx = pd.to_datetime(_df.index)
+            try:
+                if getattr(_idx, "tz", None) is not None:
+                    _idx = _idx.tz_convert(None)
+            except Exception:
+                pass
+            try:
+                _idx = _idx.tz_localize(None)
+            except Exception:
+                pass
+            for d in _idx:
+                eq_trade_days.add(pd.Timestamp(d).normalize())
+        if not eq_trade_days:
+            # fallback at least to weekdays if bars unavailable
+            eq_trade_days = set([d for d in days if d.weekday() < 5])
+    except Exception:
+        eq_trade_days = set([d for d in days if d.weekday() < 5])
+
+    eq_rebal_days = set([d for d in eq_rebal_days if d in eq_trade_days])
+    eq_risk_days = set([d for d in eq_risk_days if d in eq_trade_days])
 
     equity = float(params.initial_equity)
     cash = equity
@@ -366,6 +395,8 @@ def run_backtest(
             base_px = risk_px(sym, day) or p0
             sell_px = base_px * (1 - params.slippage_bps / 10000.0)
             q = positions_qty.get(sym, 0.0)
+            if (not bool(params.allow_same_day_roundtrip)) and str(positions_entry_date.get(sym) or "") == day.strftime("%Y-%m-%d"):
+                continue
             cash += q * sell_px
             avg_cost = positions_avg_cost.get(sym, p0)
             entry_date = positions_entry_date.get(sym)
@@ -528,6 +559,13 @@ def run_backtest(
         return out
 
     for i, day in enumerate(days):
+        day_s = day.strftime("%Y-%m-%d")
+
+        def _can_sell_today(sym: str) -> bool:
+            if bool(params.allow_same_day_roundtrip):
+                return True
+            return str(positions_entry_date.get(sym) or "") != day_s
+
         # Process pending simulated limit orders first
         if params.order_type_equities == "limit" or params.order_type_crypto == "limit":
             _process_pending_limits(day)
@@ -576,6 +614,8 @@ def run_backtest(
                     base_px = risk_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     q = positions_qty.get(sym, 0.0)
+                    if not _can_sell_today(sym):
+                        continue
                     cash += q * sell_px
                     avg_cost = positions_avg_cost.get(sym, p0)
                     entry_date = positions_entry_date.get(sym)
@@ -638,6 +678,8 @@ def run_backtest(
                 base_px = risk_px(sym, day) or p0
                 sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                 q = positions_qty.get(sym, 0.0)
+                if not _can_sell_today(sym):
+                    continue
                 cash += q * sell_px
                 avg_cost = positions_avg_cost.get(sym, p0)
                 entry_date = positions_entry_date.get(sym)
@@ -689,6 +731,8 @@ def run_backtest(
                     base_px = risk_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     q = positions_qty.get(sym, 0.0)
+                    if not _can_sell_today(sym):
+                        continue
                     cash += q * sell_px
                     entry_date = positions_entry_date.get(sym)
                     pnl = (sell_px - avg_cost) * q
@@ -850,6 +894,8 @@ def run_backtest(
                     base_px = exec_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
                     q = positions_qty.get(sym, 0.0)
+                    if not _can_sell_today(sym):
+                        continue
                     cash += q * sell_px
 
                     avg_cost = positions_avg_cost.get(sym, p0)
@@ -961,6 +1007,8 @@ def run_backtest(
                         })
 
                 else:
+                    if not _can_sell_today(sym):
+                        continue
                     sellN = min(curN, abs(deltaN))
                     q_sub = (sellN / p_exec) if p_exec else 0.0
                     q_sub = min(q_sub, positions_qty.get(sym, 0.0))

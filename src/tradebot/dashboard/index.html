@@ -206,6 +206,10 @@
             <div class="muted" style="font-size:12px;">Execute risk-check liquidations</div>
             <select id="riskExecLiquidationsSelect"><option value="false">Off (signals only)</option><option value="true">On (place sell orders)</option></select>
           </div>
+          <div>
+            <div class="muted" style="font-size:12px;">Allow same-day roundtrip (day trading)</div>
+            <select id="allowSameDayTradingSelect"><option value="false" selected>Off (PDT-safe)</option><option value="true">On</option></select>
+          </div>
         </div>
 
         <div class="muted" style="margin: 10px 0 6px 0;">Execution options (paper/live)</div>
@@ -561,6 +565,13 @@
                 <option value="0.06">6%</option><option value="0.07">7%</option><option value="0.08">8%</option><option value="0.09">9%</option><option value="0.10">10%</option>
                 <option value="0.11">11%</option><option value="0.12">12%</option><option value="0.13">13%</option><option value="0.14">14%</option><option value="0.15">15%</option>
                 <option value="0.16">16%</option><option value="0.17">17%</option><option value="0.18">18%</option><option value="0.19">19%</option><option value="0.20">20%</option>
+              </select>
+            </div>
+            <div>
+              <div class="muted">Allow same-day roundtrip</div>
+              <select id="btAllowSameDayTrading" style="width:200px;">
+                <option value="false" selected>Off (PDT-safe)</option>
+                <option value="true">On</option>
               </select>
             </div>
             <div>
@@ -1239,6 +1250,7 @@ function collectBacktestRequestBody() {
   const symbol_pnl_floor_liquidate = Boolean(document.getElementById('btSymFloorLiquidate')?.checked);
   const symbol_pnl_floor_include_unrealized = Boolean(document.getElementById('btSymFloorInclUnreal')?.checked);
   const per_asset_stop_loss_pct = stopLoss ? Number(stopLoss) : null;
+  const allow_same_day_roundtrip = String(document.getElementById('btAllowSameDayTrading')?.value || 'false') === 'true';
   const ddCustom = (document.getElementById('btDD')?.value || '').trim();
   const ddPreset = (document.getElementById('btDDPreset')?.value || '').trim();
   const ddStopRaw = ddCustom || ddPreset;
@@ -1265,7 +1277,7 @@ function collectBacktestRequestBody() {
     risk_check_frequency_crypto, risk_check_day_crypto,
     rebalance_mode, liquidation_mode,
     universe_mode: symbol ? 'single' : 'full', symbol: symbol || null,
-    portfolio_dd_stop, per_asset_stop_loss_pct,
+    portfolio_dd_stop, per_asset_stop_loss_pct, allow_same_day_roundtrip,
     min_crypto_price, min_avg_crypto_dollar_volume_20d,
     symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized
   };
@@ -2586,6 +2598,8 @@ async function main() {
   }
   const rlSel = document.getElementById('riskExecLiquidationsSelect');
   if (rlSel && !freezeConfigInputs) rlSel.value = String(Boolean(cfg.risk?.execute_exit_liquidations));
+  const sdtSel = document.getElementById('allowSameDayTradingSelect');
+  if (sdtSel && !freezeConfigInputs) sdtSel.value = String(!Boolean(cfg.risk?.block_same_day_roundtrip));
 
   // Guardrail inputs
   const setGuard = (id, v) => {
@@ -2759,6 +2773,7 @@ async function main() {
   function collectBTParams() {
     const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
     const per_asset_stop_loss_pct = stopLoss ? Number(stopLoss) : null;
+    const allow_same_day_roundtrip = String(document.getElementById('btAllowSameDayTrading')?.value || 'false') === 'true';
     const ddCustom = (document.getElementById('btDD')?.value || '').trim();
     const ddPreset = (document.getElementById('btDDPreset')?.value || '').trim();
     const ddStopRaw = ddCustom || ddPreset;
@@ -2809,6 +2824,7 @@ async function main() {
       limit_fallback_to_market_open: (String(document.getElementById('btEqLimitFallback')?.value || 'false') === 'true') || (String(document.getElementById('btCrLimitFallback')?.value || 'false') === 'true'),
       limit_fallback_time_local: (document.getElementById('btEqExecLocal')?.value || '06:30'),
       per_asset_stop_loss_pct,
+      allow_same_day_roundtrip,
       portfolio_dd_stop,
       symbol_pnl_floor_pct,
       min_crypto_price,
@@ -2857,6 +2873,7 @@ async function main() {
     setVal('btEqLimitFallback', String(Boolean(p.limit_fallback_to_market_open_equities ?? p.limit_fallback_to_market_open)));
     setVal('btCrLimitFallback', String(Boolean(p.limit_fallback_to_market_open_crypto ?? p.limit_fallback_to_market_open)));
     setVal('btStopLoss', p.per_asset_stop_loss_pct);
+    setVal('btAllowSameDayTrading', String(Boolean(p.allow_same_day_roundtrip)));
     setVal('btDD', '');
     setVal('btDDPreset', p.portfolio_dd_stop);
     setVal('btSymFloor', p.symbol_pnl_floor_pct);
@@ -2919,6 +2936,7 @@ async function main() {
       limit_fallback_to_market_open_equities: Boolean(exEq.fallback_to_market_at_open),
       limit_fallback_to_market_open_crypto: Boolean(exCr.fallback_to_market_at_open),
       per_asset_stop_loss_pct: risk?.per_asset_stop_loss_pct ?? null,
+      allow_same_day_roundtrip: !Boolean(risk?.block_same_day_roundtrip),
       portfolio_dd_stop: risk?.portfolio_dd_stop ?? null,
       symbol_pnl_floor_pct: reb?.symbol_pnl_floor_pct ?? null,
       min_crypto_price: lim?.min_crypto_price ?? null,
@@ -3326,6 +3344,7 @@ async function saveConfig() {
     body.risk = body.risk || {};
     body.risk.per_asset_stop_loss_pct = sl ? Number(sl) : null;
     body.risk.execute_exit_liquidations = String(document.getElementById('riskExecLiquidationsSelect')?.value || 'false') === 'true';
+    body.risk.block_same_day_roundtrip = !(String(document.getElementById('allowSameDayTradingSelect')?.value || 'false') === 'true');
 
     const parseMaybeNone = (v, isInt=false) => {
       const s = String(v ?? '').trim().toLowerCase();
