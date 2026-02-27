@@ -231,7 +231,9 @@ def run_backtest(
         "strategy_exit_no_rule": 0,
         "strategy_exit_evaluated": 0,
         "strategy_exit_triggered": 0,
+        "strategy_exit_cache_hits": 0,
     }
+    strategy_eval_cache: dict[tuple[str, str], bool] = {}
 
     # Resolve per-asset strategy ids (with legacy fallback)
     eq_strategy_id = params.strategy_id_equities or params.strategy_id
@@ -678,6 +680,9 @@ def run_backtest(
                     ts_local = pd.Timestamp(day).replace(hour=hr, minute=int(mm), second=0, microsecond=0)
                     hourly_debug["slots_considered"] += 1
 
+                    if not positions_qty:
+                        continue
+
                     eq_slot_open = _equity_slot_open(ts_local)
 
                     for sym in list(positions_qty.keys()):
@@ -723,28 +728,35 @@ def run_backtest(
                             if ex_rule is None:
                                 hourly_debug["strategy_exit_no_rule"] += 1
                             if ex_rule is not None:
-                                cls = closes_until_day(sym, day)
-                                if len(cls) >= 5:
-                                    hourly_debug["strategy_exit_evaluated"] += 1
-                                    ann_factor = 365.0 if is_crypto else 252.0
+                                day_key = pd.Timestamp(day).strftime("%Y-%m-%d")
+                                cache_key = (sym, day_key)
+                                if cache_key in strategy_eval_cache:
+                                    should_exit = bool(strategy_eval_cache.get(cache_key, False))
+                                    hourly_debug["strategy_exit_cache_hits"] += 1
+                                else:
+                                    cls = closes_until_day(sym, day)
                                     should_exit = False
-                                    try:
-                                        should_exit = bool(eval_rule(EvalContext(closes=cls, ann_factor=ann_factor), ex_rule))
-                                    except Exception:
-                                        should_exit = False
-                                    if should_exit and _can_sell_today(sym):
-                                        hourly_debug["strategy_exit_triggered"] += 1
-                                        q = positions_qty.get(sym, 0.0)
-                                        sell_px = p_intraday * (1 - params.slippage_bps / 10000.0)
-                                        cash += q * sell_px
-                                        avg_cost = positions_avg_cost.get(sym, p_intraday)
-                                        entry_date = positions_entry_date.get(sym)
-                                        pnl = (sell_px - avg_cost) * q
-                                        rec = {"symbol": sym, "entry_date": entry_date, "exit_date": day.strftime("%Y-%m-%d"), "qty": q, "entry_price": avg_cost, "exit_price": sell_px, "pnl": pnl, "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None, "reason": "strategy_exit_rule"}
-                                        _record_trade(rec)
-                                        _event({"type": "sell", "symbol": sym, "date": day.strftime("%Y-%m-%d"), "qty": float(q), "price": float(sell_px), "notional": float(q * sell_px), "new_qty": 0.0, "reason": rec["reason"], "pnl": float(pnl)})
-                                        positions_qty.pop(sym, None); positions_avg_cost.pop(sym, None); positions_entry_date.pop(sym, None)
-                                        continue
+                                    if len(cls) >= 5:
+                                        hourly_debug["strategy_exit_evaluated"] += 1
+                                        ann_factor = 365.0 if is_crypto else 252.0
+                                        try:
+                                            should_exit = bool(eval_rule(EvalContext(closes=cls, ann_factor=ann_factor), ex_rule))
+                                        except Exception:
+                                            should_exit = False
+                                    strategy_eval_cache[cache_key] = bool(should_exit)
+                                if should_exit and _can_sell_today(sym):
+                                    hourly_debug["strategy_exit_triggered"] += 1
+                                    q = positions_qty.get(sym, 0.0)
+                                    sell_px = p_intraday * (1 - params.slippage_bps / 10000.0)
+                                    cash += q * sell_px
+                                    avg_cost = positions_avg_cost.get(sym, p_intraday)
+                                    entry_date = positions_entry_date.get(sym)
+                                    pnl = (sell_px - avg_cost) * q
+                                    rec = {"symbol": sym, "entry_date": entry_date, "exit_date": day.strftime("%Y-%m-%d"), "qty": q, "entry_price": avg_cost, "exit_price": sell_px, "pnl": pnl, "pnl_pct": (sell_px / avg_cost - 1.0) if avg_cost else None, "reason": "strategy_exit_rule"}
+                                    _record_trade(rec)
+                                    _event({"type": "sell", "symbol": sym, "date": day.strftime("%Y-%m-%d"), "qty": float(q), "price": float(sell_px), "notional": float(q * sell_px), "new_qty": 0.0, "reason": rec["reason"], "pnl": float(pnl)})
+                                    positions_qty.pop(sym, None); positions_avg_cost.pop(sym, None); positions_entry_date.pop(sym, None)
+                                    continue
 
                         if "stop_loss" in checks and params.per_asset_stop_loss_pct is not None and params.per_asset_stop_loss_pct > 0:
                             avg_cost = positions_avg_cost.get(sym)
