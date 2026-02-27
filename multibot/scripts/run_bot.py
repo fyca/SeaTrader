@@ -50,6 +50,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("bot")
     ap.add_argument("cmd", choices=["rebalance", "risk-check", "dashboard"])
+    ap.add_argument("--debug", action="store_true")
     ap.add_argument("extra", nargs=argparse.REMAINDER)
     args = ap.parse_args()
 
@@ -62,7 +63,9 @@ def main() -> int:
     py = venv_python()
 
     env = os.environ.copy()
-    env.update(load_env_file(bot_dir / ".env"))
+    env_file = bot_dir / ".env"
+    file_env = load_env_file(env_file)
+    env.update(file_env)
 
     base = [py, "-m", "tradebot.cli"]
     if args.cmd == "rebalance":
@@ -73,7 +76,24 @@ def main() -> int:
         port = int(env.get("PORT") or PORTS.get(bot, 8008))
         cmd = base + ["dashboard", "--config", str(cfg), "--host", "127.0.0.1", "--port", str(port)] + args.extra
 
+    if args.debug:
+        print(f"[run_bot] bot={bot} cmd={args.cmd}")
+        print(f"[run_bot] cwd={bot_dir}")
+        print(f"[run_bot] python={py}")
+        print(f"[run_bot] config={cfg} exists={cfg.exists()}")
+        print(f"[run_bot] env_file={env_file} exists={env_file.exists()}")
+        print(f"[run_bot] loaded_env_keys={sorted(file_env.keys())}")
+        print(f"[run_bot] APCA_API_KEY_ID present={bool(env.get('APCA_API_KEY_ID'))}")
+        print(f"[run_bot] APCA_API_SECRET_KEY present={bool(env.get('APCA_API_SECRET_KEY'))}")
+        print(f"[run_bot] exec={' '.join(cmd)}")
+
+    if args.cmd == "dashboard" and (not env.get("APCA_API_KEY_ID") or not env.get("APCA_API_SECRET_KEY")):
+        print("[run_bot] ERROR: Missing APCA_API_KEY_ID / APCA_API_SECRET_KEY after loading bot .env")
+        return 2
+
     p = subprocess.run(cmd, cwd=str(bot_dir), env=env)
+    if args.debug:
+        print(f"[run_bot] exit_code={p.returncode}")
     return int(p.returncode)
 
 

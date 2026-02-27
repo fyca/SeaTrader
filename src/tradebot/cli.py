@@ -810,3 +810,7 @@ def main() -> int:
 
     args = p.parse_args()
     return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
