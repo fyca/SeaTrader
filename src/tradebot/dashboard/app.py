@@ -81,10 +81,10 @@ def create_app(*, config_path: str) -> FastAPI:
         return JSONResponse(cfg.model_dump())
 
     @app.get("/api/strategies")
-    def strategies():
+    def strategies(type: str | None = None, asset_class: str | None = None, include_legacy: bool = True):
         from tradebot.strategies.registry import list_strategies
 
-        return list_strategies()
+        return list_strategies(strategy_type=type, asset_class=asset_class, include_legacy=bool(include_legacy))
 
     # Strategy Builder API (user strategies)
     @app.get("/api/strategy/{strategy_id}")
@@ -110,6 +110,24 @@ def create_app(*, config_path: str) -> FastAPI:
 
         delete_user_strategy(strategy_id)
         return {"ok": True}
+
+    @app.post("/api/strategy/{strategy_id}/convert-legacy")
+    async def strategy_convert_legacy(strategy_id: str, req: Request):
+        require_token(req)
+        body = await req.json()
+        from tradebot.strategies.user_store import convert_legacy_strategy
+
+        try:
+            out = convert_legacy_strategy(
+                strategy_id,
+                target_type=str(body.get("target_type") or ""),
+                target_asset_class=str(body.get("target_asset_class") or ""),
+                new_id=(str(body.get("new_id")) if body.get("new_id") else None),
+                new_name=(str(body.get("new_name")) if body.get("new_name") else None),
+            )
+            return {"ok": True, "strategy": out}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     @app.post("/api/strategy/{strategy_id}/preview")
     async def strategy_preview(strategy_id: str, req: Request):

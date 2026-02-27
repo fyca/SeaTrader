@@ -2527,6 +2527,17 @@ async function main() {
     'btStrategy','btEqEntryStrategy','btCrEntryStrategy','btEqExitStrategy','btCrExitStrategy',
     'liveStocksEntryStrategy','liveStocksExitStrategy','liveCryptoEntryStrategy','liveCryptoExitStrategy'
   ];
+  const strategyFilterForSelect = (sid, s) => {
+    const typ = String(s?.type || '');
+    const ac = String(s?.asset_class || '');
+    const legacy = Boolean(s?.legacy_untyped);
+    if (sid === 'btStrategy' || sid === 'strategySelect') return true;
+    if (sid.includes('EqEntry') || sid.includes('StocksEntry')) return (legacy || (typ === 'entry' && ac === 'stocks'));
+    if (sid.includes('EqExit') || sid.includes('StocksExit')) return (legacy || (typ === 'exit' && ac === 'stocks'));
+    if (sid.includes('CrEntry') || sid.includes('CryptoEntry')) return (legacy || (typ === 'entry' && ac === 'crypto'));
+    if (sid.includes('CrExit') || sid.includes('CryptoExit')) return (legacy || (typ === 'exit' && ac === 'crypto'));
+    return true;
+  };
   for (const sid of strategySelectIds) {
     const el = document.getElementById(sid);
     if (!el || !strategies) continue;
@@ -2537,9 +2548,11 @@ async function main() {
       emptyOpt.textContent = '(none)';
       el.appendChild(emptyOpt);
       for (const s of strategies) {
+        if (!strategyFilterForSelect(sid, s)) continue;
         const opt = document.createElement('option');
         opt.value = s.id;
-        opt.textContent = (s.source === 'user') ? (s.name + ' (user)') : s.name;
+        const badges = `${s.type ? '['+String(s.type).toUpperCase()+']' : '[LEGACY]'}${s.asset_class ? '['+String(s.asset_class).toUpperCase()+']' : ''}`;
+        opt.textContent = `${(s.source === 'user') ? (s.name + ' (user)') : s.name} ${badges}`;
         el.appendChild(opt);
       }
       el.dataset.loaded = '1';

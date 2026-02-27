@@ -92,7 +92,8 @@ def strategy_snapshot(cfg: BotConfig) -> dict:
 
 def validate_strategy_refs(cfg: BotConfig) -> list[str]:
     errs: list[str] = []
-    known = {str(x.get("id") or "") for x in list_strategies()}
+    items = list_strategies()
+    by_id = {str(x.get("id") or ""): x for x in items}
     for asset, aset in (("stocks", cfg.strategies.stocks), ("crypto", cfg.strategies.crypto)):
         for kind, ref in (("entry", aset.entry_strategy), ("exit", aset.exit_strategy)):
             if ref is None:
@@ -101,8 +102,17 @@ def validate_strategy_refs(cfg: BotConfig) -> list[str]:
             if not sid:
                 errs.append(f"{asset}.{kind}_strategy id is empty")
                 continue
-            if sid not in known:
+            meta = by_id.get(sid)
+            if meta is None:
                 errs.append(f"{asset}.{kind}_strategy '{sid}' not found")
+                continue
+            if not bool(meta.get("legacy_untyped")):
+                mtype = str(meta.get("type") or "")
+                mac = str(meta.get("asset_class") or "")
+                if mtype and mtype != kind:
+                    errs.append(f"{asset}.{kind}_strategy '{sid}' has type={mtype}")
+                if mac and mac != asset:
+                    errs.append(f"{asset}.{kind}_strategy '{sid}' has asset_class={mac}")
         if bool(aset.exit_enabled) and aset.exit_strategy is None:
             errs.append(f"{asset}.exit_enabled=true requires {asset}.exit_strategy")
     return errs

@@ -16,11 +16,31 @@ _STRATS = {
 }
 
 
-def list_strategies() -> list[dict]:
-    out = [{"id": s.id, "name": s.name, "source": "builtin"} for s in _STRATS.values()]
-    for u in list_user_strategies():
-        out.append({"id": u["id"], "name": u.get("name") or u["id"], "source": "user"})
-    return out
+def list_strategies(*, strategy_type: str | None = None, asset_class: str | None = None, include_legacy: bool = True) -> list[dict]:
+    out = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "source": "builtin",
+            "version": 1,
+            "type": None,
+            "asset_class": None,
+            "legacy_untyped": True,
+        }
+        for s in _STRATS.values()
+    ]
+    out.extend(list_user_strategies())
+
+    def _ok(x: dict) -> bool:
+        if (not include_legacy) and bool(x.get("legacy_untyped")):
+            return False
+        if strategy_type and str(x.get("type") or "") != strategy_type:
+            return False
+        if asset_class and str(x.get("asset_class") or "") != asset_class:
+            return False
+        return True
+
+    return [x for x in out if _ok(x)]
 
 
 def get_strategy(strategy_id: str):
