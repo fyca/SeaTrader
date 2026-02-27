@@ -1,0 +1,23 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 32
+      }
+    ]
+  },
+  "id": "stocks_exit_trend_exhaustion",
+  "name": "Stocks Exit Trend Exhaustion (RSI<32)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

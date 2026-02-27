@@ -1,0 +1,23 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 30
+      }
+    ]
+  },
+  "id": "crypto_exit_trend_exhaustion",
+  "name": "Crypto Exit Trend Exhaustion (RSI<30)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

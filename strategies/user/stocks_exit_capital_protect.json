@@ -1,0 +1,25 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 100
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_capital_protect",
+  "name": "Stocks Exit Capital Protect (SMA100 break)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

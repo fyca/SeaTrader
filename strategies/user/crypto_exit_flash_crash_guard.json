@@ -1,0 +1,22 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ret_1d"
+        },
+        "op": "<",
+        "right": -0.08
+      }
+    ]
+  },
+  "id": "crypto_exit_flash_crash_guard",
+  "name": "Crypto Exit Flash-Crash Guard (ret1d<-8%)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

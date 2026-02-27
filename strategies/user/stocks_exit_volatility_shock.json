@@ -1,0 +1,23 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ann_vol",
+          "n": 20
+        },
+        "op": ">",
+        "right": 1.05
+      }
+    ]
+  },
+  "id": "stocks_exit_volatility_shock",
+  "name": "Stocks Exit Volatility Shock",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

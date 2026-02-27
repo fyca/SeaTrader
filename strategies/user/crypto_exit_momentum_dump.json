@@ -1,0 +1,23 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "roc",
+          "n": 14
+        },
+        "op": "<",
+        "right": -0.1
+      }
+    ]
+  },
+  "id": "crypto_exit_momentum_dump",
+  "name": "Crypto Exit Momentum Dump (ROC14<-10%)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

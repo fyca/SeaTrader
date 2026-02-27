@@ -1,0 +1,22 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ret_1d"
+        },
+        "op": "<",
+        "right": -0.04
+      }
+    ]
+  },
+  "id": "stocks_exit_deadcat_fail",
+  "name": "Stocks Exit Dead-Cat Fail (ret1d<-4%)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

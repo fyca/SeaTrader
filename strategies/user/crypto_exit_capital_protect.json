@@ -1,0 +1,25 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 100
+        }
+      }
+    ]
+  },
+  "id": "crypto_exit_capital_protect",
+  "name": "Crypto Exit Capital Protect (SMA100 break)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

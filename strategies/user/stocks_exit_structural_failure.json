@@ -1,0 +1,26 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "sma",
+          "n": 50
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_structural_failure",
+  "name": "Stocks Exit Structural Failure (SMA50<SMA200)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

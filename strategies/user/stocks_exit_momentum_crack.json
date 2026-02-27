@@ -1,0 +1,23 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "roc",
+          "n": 20
+        },
+        "op": "<",
+        "right": -0.07
+      }
+    ]
+  },
+  "id": "stocks_exit_momentum_crack",
+  "name": "Stocks Exit Momentum Crack (ROC20<-7%)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

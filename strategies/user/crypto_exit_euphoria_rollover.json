@@ -1,0 +1,37 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "all": [
+          {
+            "left": {
+              "kind": "rsi",
+              "n": 14
+            },
+            "op": ">",
+            "right": 86
+          },
+          {
+            "left": {
+              "kind": "close"
+            },
+            "op": "<",
+            "right": {
+              "kind": "ema",
+              "n": 20
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "id": "crypto_exit_euphoria_rollover",
+  "name": "Crypto Exit Euphoria Rollover",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

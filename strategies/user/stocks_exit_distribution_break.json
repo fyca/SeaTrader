@@ -1,0 +1,25 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<=",
+        "right": {
+          "kind": "lowest",
+          "n": 30
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_distribution_break",
+  "name": "Stocks Exit Distribution Break (Lowest 30)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

@@ -1,0 +1,23 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ann_vol",
+          "n": 20
+        },
+        "op": ">",
+        "right": 2.6
+      }
+    ]
+  },
+  "id": "crypto_exit_volatility_explosion",
+  "name": "Crypto Exit Volatility Explosion",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}

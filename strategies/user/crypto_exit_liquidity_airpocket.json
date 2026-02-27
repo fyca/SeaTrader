@@ -1,0 +1,25 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<=",
+        "right": {
+          "kind": "lowest",
+          "n": 20
+        }
+      }
+    ]
+  },
+  "id": "crypto_exit_liquidity_airpocket",
+  "name": "Crypto Exit Airpocket (Lowest 20)",
+  "score_factors": [],
+  "type": "exit",
+  "version": 2
+}
