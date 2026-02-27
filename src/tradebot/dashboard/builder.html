@@ -114,6 +114,7 @@
         <span id="status" class="muted"></span>
       </div>
     </div>
+    <div id="builderModeHint" class="pill" style="margin-top:10px;">Building ENTRY strategy (stocks)</div>
   </div>
 
   <div class="card" id="entryCard">
@@ -794,12 +795,15 @@ initThemePicker();
 
 function applyBuilderTypeUI() {
   const t = String(document.getElementById('stype')?.value || 'entry');
+  const a = String(document.getElementById('sasset')?.value || 'stocks');
   const entryCard = document.getElementById('entryCard');
   const exitCard = document.getElementById('exitCard');
   const factorsCard = document.getElementById('factorsCard');
+  const hint = document.getElementById('builderModeHint');
   if (entryCard) entryCard.style.display = (t === 'entry') ? '' : 'none';
   if (exitCard) exitCard.style.display = (t === 'exit') ? '' : 'none';
   if (factorsCard) factorsCard.style.display = (t === 'entry') ? '' : 'none';
+  if (hint) hint.textContent = `Building ${t.toUpperCase()} strategy (${a})`;
 }
 
 defaults();
@@ -810,6 +814,8 @@ syncFactorsFromJson();
 applyBuilderTypeUI();
 const _stype = document.getElementById('stype');
 if (_stype) _stype.addEventListener('change', applyBuilderTypeUI);
+const _sasset = document.getElementById('sasset');
+if (_sasset) _sasset.addEventListener('change', applyBuilderTypeUI);
 
 async function save() {
   const status = document.getElementById('status');
