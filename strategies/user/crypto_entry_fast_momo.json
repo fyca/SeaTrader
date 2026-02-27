@@ -1,0 +1,48 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "roc",
+          "n": 7
+        },
+        "op": ">",
+        "right": 0.02
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 20
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_fast_momo",
+  "name": "Crypto Fast Momentum",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "roc",
+        "n": 7
+      },
+      "weight": 1.2
+    },
+    {
+      "value": {
+        "kind": "ann_vol",
+        "n": 20
+      },
+      "weight": -0.15
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

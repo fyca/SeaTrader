@@ -1,0 +1,33 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "fast": 50,
+          "kind": "cross_above",
+          "slow": 200
+        },
+        "op": "==",
+        "right": 1
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_golden_cross",
+  "name": "Stocks Golden Cross",
+  "score_factors": [
+    {
+      "value": {
+        "fast": 50,
+        "kind": "cross_above",
+        "slow": 200
+      },
+      "weight": 1.0
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

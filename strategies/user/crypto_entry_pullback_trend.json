@@ -1,0 +1,57 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "ema",
+          "n": 21
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 100
+        }
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": ">",
+        "right": 38
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 58
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_pullback_trend",
+  "name": "Crypto Pullback Trend",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "dist_sma",
+        "n": 100
+      },
+      "weight": 0.9
+    },
+    {
+      "value": {
+        "kind": "roc",
+        "n": 10
+      },
+      "weight": 0.3
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

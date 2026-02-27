@@ -1,0 +1,67 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "sma",
+          "n": 50
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": ">",
+        "right": 35
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 55
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "ema",
+          "n": 21
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_pullback_ema",
+  "name": "Stocks Pullback EMA",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "dist_sma",
+        "n": 50
+      },
+      "weight": 0.8
+    },
+    {
+      "value": {
+        "kind": "ann_vol",
+        "n": 20
+      },
+      "weight": -0.15
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

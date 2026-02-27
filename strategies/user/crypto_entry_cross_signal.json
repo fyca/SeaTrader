@@ -1,0 +1,33 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "fast": 20,
+          "kind": "cross_above",
+          "slow": 50
+        },
+        "op": "==",
+        "right": 1
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_cross_signal",
+  "name": "Crypto Cross Signal",
+  "score_factors": [
+    {
+      "value": {
+        "fast": 20,
+        "kind": "cross_above",
+        "slow": 50
+      },
+      "weight": 1.0
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

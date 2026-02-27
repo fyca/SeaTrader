@@ -1,0 +1,25 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<=",
+        "right": {
+          "kind": "lowest",
+          "n": 30
+        }
+      }
+    ]
+  },
+  "id": "crypto_exit_breakdown_30",
+  "name": "Crypto Exit Breakdown 30",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

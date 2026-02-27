@@ -1,0 +1,51 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "ema",
+          "n": 20
+        },
+        "op": ">",
+        "right": {
+          "kind": "ema",
+          "n": 50
+        }
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "ema",
+          "n": 20
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "crypto_entry_trend_ema",
+  "name": "Crypto Trend EMA",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "roc",
+        "n": 20
+      },
+      "weight": 1.0
+    },
+    {
+      "value": {
+        "kind": "ann_vol",
+        "n": 20
+      },
+      "weight": -0.12
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

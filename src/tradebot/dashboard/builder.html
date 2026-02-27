@@ -79,6 +79,13 @@
         <input id="sname" placeholder="My Strategy" style="min-width:240px;" />
       </div>
       <div>
+        <div class="muted">Strategy library</div>
+        <select id="strategyPicker" style="min-width:280px;"></select>
+      </div>
+      <div>
+        <button id="pickerLoad" class="secondary">Load selected</button>
+      </div>
+      <div>
         <div class="muted">Asset class</div>
         <select id="sasset">
           <option value="stocks">Stocks</option>
@@ -793,6 +800,28 @@ function syncFactorsFromJson() {
 
 initThemePicker();
 
+async function refreshStrategyPicker() {
+  const sel = document.getElementById('strategyPicker');
+  if (!sel) return;
+  try {
+    const rows = await getJSON('/api/strategies?include_legacy=true');
+    sel.innerHTML = '';
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = '(select strategy)';
+    sel.appendChild(blank);
+    for (const s of (rows || [])) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      const tags = `${s.type ? '['+String(s.type).toUpperCase()+']' : '[LEGACY]'}${s.asset_class ? '['+String(s.asset_class).toUpperCase()+']' : ''}`;
+      opt.textContent = `${s.name || s.id} ${tags}`;
+      sel.appendChild(opt);
+    }
+  } catch (e) {
+    // non-fatal
+  }
+}
+
 function applyBuilderTypeUI() {
   const t = String(document.getElementById('stype')?.value || 'entry');
   const a = String(document.getElementById('sasset')?.value || 'stocks');
@@ -812,6 +841,7 @@ syncCondsFromJson();
 syncExitFromJson();
 syncFactorsFromJson();
 applyBuilderTypeUI();
+refreshStrategyPicker();
 const _stype = document.getElementById('stype');
 if (_stype) _stype.addEventListener('change', applyBuilderTypeUI);
 const _sasset = document.getElementById('sasset');
@@ -840,6 +870,7 @@ async function save() {
     status.textContent = 'saving…';
     await postJSON('/api/strategy/' + encodeURIComponent(id), obj);
     status.textContent = 'saved';
+    refreshStrategyPicker();
   } catch(e) {
     status.textContent = 'error: ' + e;
   }
@@ -935,6 +966,7 @@ async function delStrat() {
     const r = await fetch('/api/strategy/' + encodeURIComponent(id), {method:'DELETE'});
     if(!r.ok) throw new Error(await r.text());
     status.textContent='deleted';
+    refreshStrategyPicker();
   } catch(e) {
     status.textContent = 'error: ' + e;
   }
@@ -942,6 +974,13 @@ async function delStrat() {
 
 document.getElementById('save').addEventListener('click', (e)=>{e.preventDefault(); syncCondsToJson(); syncExitToJson(); syncFactorsToJson(); save();});
 document.getElementById('load').addEventListener('click', (e)=>{e.preventDefault(); load().then(()=>{syncCondsFromJson(); syncExitFromJson(); syncFactorsFromJson();});});
+document.getElementById('pickerLoad').addEventListener('click', (e)=>{
+  e.preventDefault();
+  const sid = String(document.getElementById('strategyPicker')?.value || '').trim();
+  if (!sid) return;
+  document.getElementById('sid').value = sid;
+  load().then(()=>{syncCondsFromJson(); syncExitFromJson(); syncFactorsFromJson();});
+});
 document.getElementById('del').addEventListener('click', (e)=>{e.preventDefault(); delStrat();});
 document.getElementById('preview').addEventListener('click', (e)=>{e.preventDefault(); syncCondsToJson(); syncExitToJson(); syncFactorsToJson(); preview();});
 

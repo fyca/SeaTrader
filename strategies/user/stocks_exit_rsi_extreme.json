@@ -1,0 +1,31 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": ">",
+        "right": 80
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 25
+      }
+    ]
+  },
+  "id": "stocks_exit_rsi_extreme",
+  "name": "Stocks Exit RSI Extreme",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

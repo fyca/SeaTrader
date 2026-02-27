@@ -1,0 +1,26 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ema",
+          "n": 20
+        },
+        "op": "<",
+        "right": {
+          "kind": "ema",
+          "n": 50
+        }
+      }
+    ]
+  },
+  "id": "crypto_exit_ema_crossdown",
+  "name": "Crypto Exit EMA Crossdown",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

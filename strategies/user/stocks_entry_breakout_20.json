@@ -1,0 +1,48 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">=",
+        "right": {
+          "kind": "highest",
+          "n": 20
+        }
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 75
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_breakout_20",
+  "name": "Stocks Breakout 20",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "breakout",
+        "n": 20
+      },
+      "weight": 1.0
+    },
+    {
+      "value": {
+        "kind": "roc",
+        "n": 20
+      },
+      "weight": 0.3
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

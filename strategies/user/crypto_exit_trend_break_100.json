@@ -1,0 +1,25 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 100
+        }
+      }
+    ]
+  },
+  "id": "crypto_exit_trend_break_100",
+  "name": "Crypto Exit Trend Break 100",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

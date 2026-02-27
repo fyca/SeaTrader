@@ -1,0 +1,26 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ema",
+          "n": 21
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 50
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_ema_crossdown",
+  "name": "Stocks Exit EMA Crossdown",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

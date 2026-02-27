@@ -1,0 +1,51 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {
+          "kind": "sma",
+          "n": 50
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      },
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": ">",
+        "right": {
+          "kind": "sma",
+          "n": 50
+        }
+      }
+    ]
+  },
+  "exit": {
+    "any": []
+  },
+  "id": "stocks_entry_trend_ma",
+  "name": "Stocks Trend MA",
+  "score_factors": [
+    {
+      "value": {
+        "kind": "dist_sma",
+        "n": 200
+      },
+      "weight": 1.0
+    },
+    {
+      "value": {
+        "kind": "ann_vol",
+        "n": 20
+      },
+      "weight": -0.2
+    }
+  ],
+  "type": "entry",
+  "version": 1
+}

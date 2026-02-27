@@ -1,0 +1,31 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": ">",
+        "right": 82
+      },
+      {
+        "left": {
+          "kind": "rsi",
+          "n": 14
+        },
+        "op": "<",
+        "right": 22
+      }
+    ]
+  },
+  "id": "crypto_exit_rsi_extreme",
+  "name": "Crypto Exit RSI Extreme",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

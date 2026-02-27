@@ -1,0 +1,25 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<=",
+        "right": {
+          "kind": "lowest",
+          "n": 20
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_breakdown_20",
+  "name": "Stocks Exit Breakdown 20",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

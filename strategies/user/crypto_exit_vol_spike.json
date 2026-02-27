@@ -1,0 +1,23 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "ann_vol",
+          "n": 20
+        },
+        "op": ">",
+        "right": 1.6
+      }
+    ]
+  },
+  "id": "crypto_exit_vol_spike",
+  "name": "Crypto Exit Vol Spike",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

@@ -1,0 +1,25 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 200
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_trend_break_200",
+  "name": "Stocks Exit Trend Break 200",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}
