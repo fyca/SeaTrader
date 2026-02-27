@@ -232,8 +232,11 @@ def run_backtest(
         "strategy_exit_evaluated": 0,
         "strategy_exit_triggered": 0,
         "strategy_exit_cache_hits": 0,
+        "price_cache_hits": 0,
+        "price_cache_misses": 0,
     }
     strategy_eval_cache: dict[tuple[str, str], bool] = {}
+    hourly_price_cache: dict[tuple[str, str], float | None] = {}
 
     # Resolve per-asset strategy ids (with legacy fallback)
     eq_strategy_id = params.strategy_id_equities or params.strategy_id
@@ -358,11 +361,19 @@ def run_backtest(
         return px(sym, day)
 
     def risk_px_at_ts(sym: str, ts_local: pd.Timestamp) -> float | None:
+        key = (str(sym), pd.Timestamp(ts_local).strftime("%Y-%m-%d %H:%M"))
+        if key in hourly_price_cache:
+            hourly_debug["price_cache_hits"] += 1
+            return hourly_price_cache[key]
+        hourly_debug["price_cache_misses"] += 1
         if params.execution_time_mode == "intraday" and risk_intraday_price_cb is not None:
             v = risk_intraday_price_cb(sym, ts_local)
             if v is not None:
+                hourly_price_cache[key] = v
                 return v
-        return px(sym, pd.Timestamp(ts_local).normalize())
+        v = px(sym, pd.Timestamp(ts_local).normalize())
+        hourly_price_cache[key] = v
+        return v
 
     def _trail_cfg(sym: str) -> tuple[bool, float, float | None]:
         is_crypto = "/" in sym
