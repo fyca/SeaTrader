@@ -139,8 +139,18 @@ def create_app(*, config_path: str) -> FastAPI:
             syms = [x.strip() for x in syms.split(",") if x.strip()]
         years = int(body.get("years") or 5)
         asset_class = str(body.get("asset_class") or "stocks")
+        objective = str(body.get("objective") or "balanced")
+        min_trades = int(body.get("min_trades") or 8)
+        train_ratio = float(body.get("train_ratio") or 0.7)
         from tradebot.strategies.auto_builder import start_auto_build
-        job_id = start_auto_build(symbols=list(syms), years=years, asset_class=asset_class)
+        job_id = start_auto_build(
+            symbols=list(syms),
+            years=years,
+            asset_class=asset_class,
+            objective=objective,
+            min_trades=min_trades,
+            train_ratio=train_ratio,
+        )
         return {"ok": True, "job_id": job_id}
 
     @app.get("/api/strategy/auto-build/status")

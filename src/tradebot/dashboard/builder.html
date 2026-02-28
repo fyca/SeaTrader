@@ -263,8 +263,21 @@
         <select id="abAsset"><option value="stocks" selected>Stocks</option><option value="crypto">Crypto</option></select>
       </div>
       <div>
+        <div class="muted">Objective</div>
+        <select id="abObjective"><option value="balanced" selected>Balanced</option><option value="sharpe">Sharpe</option><option value="return">Return</option><option value="cagr">CAGR</option></select>
+      </div>
+      <div>
+        <div class="muted">Min trades (train)</div>
+        <input id="abMinTrades" type="number" value="8" min="1" max="200" style="width:100px;" />
+      </div>
+      <div>
+        <div class="muted">Train ratio</div>
+        <input id="abTrainRatio" type="number" value="0.70" min="0.50" max="0.90" step="0.05" style="width:100px;" />
+      </div>
+      <div>
         <button id="abRun" class="primary">Run auto-builder</button>
         <button id="abApply" class="secondary">Apply result to editor</button>
+        <button id="abSave" class="secondary">Save generated strategy</button>
       </div>
       <div><span id="abStatus" class="muted"></span></div>
     </div>
@@ -1034,11 +1047,14 @@ async function runAutoBuilder() {
   const symbols = String(document.getElementById('abSymbols')?.value || '').trim();
   const years = Number(document.getElementById('abYears')?.value || '5');
   const asset_class = String(document.getElementById('abAsset')?.value || 'stocks');
+  const objective = String(document.getElementById('abObjective')?.value || 'balanced');
+  const min_trades = Number(document.getElementById('abMinTrades')?.value || '8');
+  const train_ratio = Number(document.getElementById('abTrainRatio')?.value || '0.7');
   if (!symbols) throw new Error('enter symbols');
   st.textContent = 'starting…';
   out.textContent = '';
   const r = await fetch('/api/strategy/auto-build/start', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class})
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class, objective, min_trades, train_ratio})
   });
   if (!r.ok) throw new Error(await r.text());
   const j = await r.json();
@@ -1073,6 +1089,13 @@ function applyAutoBuilderResult() {
   document.getElementById('factors').value = JSON.stringify(s.score_factors || [], null, 2);
   syncCondsFromJson(); syncExitFromJson(); syncFactorsFromJson(); applyBuilderTypeUI();
   document.getElementById('status').textContent = 'auto-builder result loaded in editor';
+}
+
+async function saveAutoBuilderResult() {
+  if (!_abLastResult || !_abLastResult.strategy) throw new Error('no result yet');
+  applyAutoBuilderResult();
+  syncCondsToJson(); syncExitToJson(); syncFactorsToJson();
+  await save();
 }
 
 async function delStrat() {
@@ -1162,6 +1185,7 @@ document.getElementById('syncFactorsFromJson').addEventListener('click', (e)=>{e
 
 document.getElementById('abRun')?.addEventListener('click', (e)=>{ e.preventDefault(); runAutoBuilder().catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
 document.getElementById('abApply')?.addEventListener('click', (e)=>{ e.preventDefault(); try { applyAutoBuilderResult(); } catch(err) { document.getElementById('abStatus').textContent = 'error: ' + err; } });
+document.getElementById('abSave')?.addEventListener('click', (e)=>{ e.preventDefault(); saveAutoBuilderResult().then(()=>{ document.getElementById('abStatus').textContent = 'generated strategy saved'; }).catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
 setInterval(()=>{ pollAutoBuilder().catch(()=>{}); }, 1500);
 </script>
   </div>

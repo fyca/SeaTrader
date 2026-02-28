@@ -57,6 +57,17 @@ def _metrics(equity: pd.Series) -> dict:
     return {"return": total_ret, "cagr": cagr, "max_drawdown": max_dd, "sharpe": sharpe}
 
 
+def _objective(metrics: dict, objective: str) -> float:
+    o = str(objective or "balanced").lower()
+    if o == "sharpe":
+        return float(metrics.get("sharpe") or 0.0)
+    if o == "return":
+        return float(metrics.get("return") or 0.0) - 1.5 * abs(float(metrics.get("max_drawdown") or 0.0))
+    if o == "cagr":
+        return float(metrics.get("cagr") or 0.0) - 1.5 * abs(float(metrics.get("max_drawdown") or 0.0))
+    return float((metrics.get("sharpe") or 0.0) + 0.5 * (metrics.get("return") or 0.0) + 0.2 * (metrics.get("cagr") or 0.0) - 2.0 * abs(float(metrics.get("max_drawdown") or 0.0)))
+
+
 def _simulate_symbol(close: pd.Series, ma_long: int, ma_short: int, rsi_max: int, exit_ma: int) -> dict:
     s = close.dropna().astype(float)
     if len(s) < max(ma_long, ma_short, exit_ma, 50) + 5:
@@ -90,8 +101,7 @@ def _simulate_symbol(close: pd.Series, ma_long: int, ma_short: int, rsi_max: int
 
     equity = pd.Series(eq, index=idx)
     m = _metrics(equity)
-    obj = float(m["sharpe"] + 0.5 * m["return"] + 0.2 * m["cagr"] - 2.0 * abs(m["max_drawdown"]))
-    return {"ok": True, "metrics": m, "objective": obj, "trades": trades}
+    return {"ok": True, "metrics": m, "trades": trades}
 
 
 def _build_spec(params: dict, asset_class: str = "stocks") -> dict:
@@ -125,7 +135,7 @@ def _build_spec(params: dict, asset_class: str = "stocks") -> dict:
     }
 
 
-def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks") -> str:
+def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks", objective: str = "balanced", min_trades: int = 8, train_ratio: float = 0.7) -> str:
     job_id = str(uuid.uuid4())
     now = _now()
     with _LOCK:
@@ -171,6 +181,11 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                     upd(progress=done, state="running")
                     continue
                 close = df["close"].dropna().astype(float)
+                split_idx = max(200, int(len(close) * float(train_ratio)))
+                if split_idx >= len(close) - 30:
+                    split_idx = int(len(close) * 0.7)
+                train_close = close.iloc[:split_idx]
+                valid_close = close.iloc[split_idx:]
 
                 best = None
                 for ml in grid["ma_long"]:
@@ -179,10 +194,29 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                             continue
                         for rm in grid["rsi_max"]:
                             for ex in grid["exit_ma"]:
-                                r = _simulate_symbol(close, ml, ms, rm, ex)
-                                if not r.get("ok"):
+                                r_tr = _simulate_symbol(train_close, ml, ms, rm, ex)
+                                r_va = _simulate_symbol(valid_close, ml, ms, rm, ex)
+                                if not r_tr.get("ok") or not r_va.get("ok"):
                                     continue
-                                row = {"symbol": sym, "ma_long": ml, "ma_short": ms, "rsi_max": rm, "exit_ma": ex, **r}
+                                if int(r_tr.get("trades") or 0) < int(min_trades):
+                                    continue
+                                obj_tr = _objective(r_tr["metrics"], objective)
+                                obj_va = _objective(r_va["metrics"], objective)
+                                # favor robust params that transfer to validation
+                                obj = 0.6 * float(obj_tr) + 0.4 * float(obj_va)
+                                row = {
+                                    "symbol": sym,
+                                    "ma_long": ml,
+                                    "ma_short": ms,
+                                    "rsi_max": rm,
+                                    "exit_ma": ex,
+                                    "objective": obj,
+                                    "train_objective": float(obj_tr),
+                                    "valid_objective": float(obj_va),
+                                    "train_metrics": r_tr["metrics"],
+                                    "valid_metrics": r_va["metrics"],
+                                    "trades": int(r_tr.get("trades") or 0),
+                                }
                                 if best is None or float(row["objective"]) > float(best["objective"]):
                                     best = row
                 if best is not None:
@@ -206,6 +240,9 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 "symbols": symbols,
                 "years": years,
                 "asset_class": asset_class,
+                "objective": objective,
+                "min_trades": int(min_trades),
+                "train_ratio": float(train_ratio),
                 "aggregate_params": agg,
                 "strategy": spec,
                 "per_symbol_best": per_symbol_best,
