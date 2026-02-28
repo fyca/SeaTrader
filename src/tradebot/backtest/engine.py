@@ -114,11 +114,11 @@ class BacktestParams:
     min_avg_crypto_dollar_volume_20d: float | None = None
 
 
-@dataclass(frozen=True)
 class BacktestStopped(Exception):
     pass
 
 
+@dataclass(frozen=True)
 class BacktestResult:
     params: dict
     equity_curve: list[dict]
