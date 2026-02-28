@@ -11,6 +11,9 @@ import pandas as pd
 
 from tradebot.adapters.alpaca_client import make_alpaca_clients
 from tradebot.adapters.bars import fetch_crypto_bars_range, fetch_stock_bars_range
+from tradebot.backtest.engine import BacktestParams, run_backtest
+from tradebot.strategies.user_store import save_user_strategy, delete_user_strategy
+from tradebot.util.config import load_config
 from tradebot.util.env import load_env
 
 
@@ -276,6 +279,56 @@ def _candidate_configs(search_mode: str) -> list[dict]:
     return out
 
 
+def _evaluate_candidate_parity(*, cfg_obj, bars_by_symbol: dict[str, pd.DataFrame], symbol: str, asset_class: str, cand_cfg: dict, params_overrides: dict, start: str, end: str) -> dict:
+    temp_id = f"__ab_{str(uuid.uuid4())[:8]}_{symbol.replace('/','_')}"
+    spec = _build_spec({**cand_cfg, "asset_class": asset_class}, asset_class=asset_class)
+    spec["id"] = temp_id
+    spec["name"] = f"AUTO TMP {temp_id}"
+
+    try:
+        save_user_strategy(temp_id, spec)
+
+        p = dict(params_overrides or {})
+        p.setdefault("initial_equity", 100000)
+        p.setdefault("slippage_bps", 10)
+        p["start"] = start
+        p["end"] = end
+        p["universe_mode"] = "single"
+        p["symbol"] = symbol
+        p["strategy_id"] = temp_id
+        if asset_class == "stocks":
+            p["asset_mode"] = "equities"
+            p["strategy_id_equities"] = temp_id
+            p["strategy_id_crypto"] = p.get("strategy_id_crypto") or temp_id
+        else:
+            p["asset_mode"] = "crypto"
+            p["strategy_id_crypto"] = temp_id
+            p["strategy_id_equities"] = p.get("strategy_id_equities") or temp_id
+
+        bt_params = BacktestParams(**{k: v for k, v in p.items() if k in BacktestParams.__dataclass_fields__})
+        stock_bars = {symbol: bars_by_symbol[symbol]} if asset_class == "stocks" else {}
+        crypto_bars = {symbol: bars_by_symbol[symbol]} if asset_class == "crypto" else {}
+
+        res = run_backtest(
+            stock_bars=stock_bars,
+            crypto_bars=crypto_bars,
+            stock_universe=([symbol] if asset_class == "stocks" else []),
+            crypto_universe=([symbol] if asset_class == "crypto" else []),
+            cfg=cfg_obj,
+            params=bt_params,
+        )
+        m = res.metrics or {}
+        trades = int(m.get("trade_count") or 0)
+        return {"ok": True, "metrics": m, "trades": trades}
+    except Exception:
+        return {"ok": False}
+    finally:
+        try:
+            delete_user_strategy(temp_id)
+        except Exception:
+            pass
+
+
 def _fetch_with_timeout(fetch_fn, timeout_s: float = 25.0):
     box = {"res": None, "err": None}
 
@@ -295,7 +348,7 @@ def _fetch_with_timeout(fetch_fn, timeout_s: float = 25.0):
     return box["res"]
 
 
-def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks", objective: str = "balanced", min_trades: int = 8, train_ratio: float = 0.7, folds: int = 3, search_mode: str = "standard") -> str:
+def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks", objective: str = "balanced", min_trades: int = 8, train_ratio: float = 0.7, folds: int = 3, search_mode: str = "standard", parity_mode: bool = True, base_params: dict | None = None, config_path: str | None = None) -> str:
     job_id = str(uuid.uuid4())
     now = _now()
     with _LOCK:
@@ -316,6 +369,8 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
             upd(state="running", phase="fetching", detail="initializing")
             env = load_env()
             clients = make_alpaca_clients(env)
+            cfg_obj = load_config(config_path) if config_path else None
+            params_overrides = dict(base_params or {})
             end_dt = datetime.now(timezone.utc)
             start_dt = end_dt - timedelta(days=int(years) * 365)
             candidates = _candidate_configs(search_mode)
@@ -393,8 +448,30 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                     fold_valid_scores: list[float] = []
                     fold_trades: list[int] = []
                     for train_close, valid_close in fold_windows:
-                        r_tr = _simulate_symbol(train_close, cfg)
-                        r_va = _simulate_symbol(valid_close, cfg)
+                        if parity_mode and cfg_obj is not None:
+                            r_tr = _evaluate_candidate_parity(
+                                cfg_obj=cfg_obj,
+                                bars_by_symbol={sym: df},
+                                symbol=sym,
+                                asset_class=asset_class,
+                                cand_cfg=cfg,
+                                params_overrides=params_overrides,
+                                start=pd.Timestamp(train_close.index[0]).strftime("%Y-%m-%d"),
+                                end=pd.Timestamp(train_close.index[-1]).strftime("%Y-%m-%d"),
+                            )
+                            r_va = _evaluate_candidate_parity(
+                                cfg_obj=cfg_obj,
+                                bars_by_symbol={sym: df},
+                                symbol=sym,
+                                asset_class=asset_class,
+                                cand_cfg=cfg,
+                                params_overrides=params_overrides,
+                                start=pd.Timestamp(valid_close.index[0]).strftime("%Y-%m-%d"),
+                                end=pd.Timestamp(valid_close.index[-1]).strftime("%Y-%m-%d"),
+                            )
+                        else:
+                            r_tr = _simulate_symbol(train_close, cfg)
+                            r_va = _simulate_symbol(valid_close, cfg)
                         if not r_tr.get("ok") or not r_va.get("ok"):
                             continue
                         tr_count = int(r_tr.get("trades") or 0)
@@ -461,6 +538,7 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 "train_ratio": float(train_ratio),
                 "folds": int(folds),
                 "search_mode": str(search_mode),
+                "parity_mode": bool(parity_mode),
                 "candidate_count": int(len(candidates)),
                 "total_evaluations": int(total_evals),
                 "aggregate_params": agg,

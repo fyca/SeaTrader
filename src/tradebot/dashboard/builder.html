@@ -283,6 +283,9 @@
         <select id="abSearchMode"><option value="standard" selected>Standard</option><option value="exhaustive">Exhaustive (all indicator families)</option></select>
       </div>
       <div>
+        <label class="muted" style="display:flex; align-items:center; gap:6px; margin-top:18px;"><input id="abParity" type="checkbox" checked /> Parity mode (use backtest engine)</label>
+      </div>
+      <div>
         <button id="abRun" class="primary">Run auto-builder</button>
         <button id="abStop" class="secondary">Stop</button>
         <button id="abApply" class="secondary">Apply result to editor</button>
@@ -1061,11 +1064,12 @@ async function runAutoBuilder() {
   const train_ratio = Number(document.getElementById('abTrainRatio')?.value || '0.7');
   const folds = Number(document.getElementById('abFolds')?.value || '3');
   const search_mode = String(document.getElementById('abSearchMode')?.value || 'standard');
+  const parity_mode = Boolean(document.getElementById('abParity')?.checked);
   if (!symbols) throw new Error('enter symbols');
   st.textContent = 'starting…';
   out.textContent = '';
   const r = await fetch('/api/strategy/auto-build/start', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class, objective, min_trades, train_ratio, folds, search_mode})
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class, objective, min_trades, train_ratio, folds, search_mode, parity_mode})
   });
   if (!r.ok) throw new Error(await r.text());
   const j = await r.json();
