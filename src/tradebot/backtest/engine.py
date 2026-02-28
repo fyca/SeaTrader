@@ -518,9 +518,41 @@ def run_backtest(
         pnl = float(t.get("pnl") or 0.0)
         if sym:
             realized_pnl_by_symbol[sym] = float(realized_pnl_by_symbol.get(sym, 0.0) + pnl)
+        if debug_verbose:
+            try:
+                _dbg(
+                    "trade_recorded",
+                    symbol=sym,
+                    reason=t.get("reason"),
+                    qty=t.get("qty"),
+                    entry_price=t.get("entry_price"),
+                    exit_price=t.get("exit_price"),
+                    pnl=t.get("pnl"),
+                    pnl_pct=t.get("pnl_pct"),
+                    entry_date=t.get("entry_date"),
+                    exit_date=t.get("exit_date"),
+                )
+            except Exception:
+                pass
 
     def _event(e: dict) -> None:
         events.append(e)
+        if debug_verbose:
+            try:
+                _dbg(
+                    "event",
+                    event_type=e.get("type"),
+                    symbol=e.get("symbol"),
+                    reason=e.get("reason"),
+                    date=e.get("date"),
+                    qty=e.get("qty"),
+                    price=e.get("price"),
+                    notional=e.get("notional"),
+                    side=e.get("side"),
+                    limit_px=e.get("limit_px"),
+                )
+            except Exception:
+                pass
 
     def _liquidate_excluded(day: pd.Timestamp, *, reason: str) -> None:
         """If a symbol is excluded, immediately sell any remaining position."""
@@ -833,6 +865,8 @@ def run_backtest(
                                         except Exception:
                                             should_exit = False
                                     strategy_eval_cache[cache_key] = bool(should_exit)
+                                if debug_verbose:
+                                    _dbg("hourly_strategy_exit_eval", day=day_s, ts=str(ts_local), symbol=sym, should_exit=bool(should_exit), has_rule=bool(ex_rule), closes_len=len(cls) if 'cls' in locals() else None)
                                 if should_exit and _can_sell_today(sym):
                                     hourly_debug["strategy_exit_triggered"] += 1
                                     q = positions_qty.get(sym, 0.0)
@@ -965,6 +999,8 @@ def run_backtest(
                     should_exit = bool(eval_rule(EvalContext(closes=cls, ann_factor=ann_factor), ex_rule))
                 except Exception:
                     should_exit = False
+                if debug_verbose:
+                    _dbg("daily_strategy_exit_eval", day=day_s, symbol=sym, should_exit=bool(should_exit), closes_len=len(cls), ann_factor=ann_factor)
                 if not should_exit:
                     continue
 
@@ -1059,6 +1095,9 @@ def run_backtest(
                 avg_cost = positions_avg_cost.get(sym)
                 if avg_cost is None or avg_cost <= 0:
                     continue
+                dd_pct = (p0 / avg_cost - 1.0) if avg_cost else None
+                if debug_verbose and sl is not None:
+                    _dbg("daily_stop_eval", day=day_s, symbol=sym, price=p0, avg_cost=avg_cost, pnl_pct=dd_pct, stop_loss_pct=-sl)
                 if (sl is not None) and ((p0 / avg_cost - 1.0) <= -sl):
                     # stop out full position at risk-check time - slippage
                     base_px = risk_px(sym, day) or p0

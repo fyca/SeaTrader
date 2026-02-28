@@ -49,8 +49,29 @@ def start_backtest(*, config_path: str, params: dict) -> str:
     status_path = job_dir / "status.json"
     result_path = job_dir / "result.json"
     debug_log_path = job_dir / "debug.log"
+    trace_dir = job_dir / "trace"
+    trace_run_path = trace_dir / "run.jsonl"
+    trace_symbols_dir = trace_dir / "symbols"
 
     _write(status_path, {"state": "starting", "progress": 0, "total": 1})
+
+    def _trace(event: str, **fields) -> None:
+        try:
+            ts = datetime.now(timezone.utc).isoformat()
+            rec = {"ts": ts, "event": str(event)}
+            rec.update(fields or {})
+            trace_dir.mkdir(parents=True, exist_ok=True)
+            with trace_run_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, sort_keys=True, default=str) + "\n")
+            sym = rec.get("symbol")
+            if sym is not None:
+                s = str(sym).strip().upper().replace("/", "_")
+                if s:
+                    trace_symbols_dir.mkdir(parents=True, exist_ok=True)
+                    with (trace_symbols_dir / f"{s}.jsonl").open("a", encoding="utf-8") as sf:
+                        sf.write(json.dumps(rec, sort_keys=True, default=str) + "\n")
+        except Exception:
+            pass
 
     def _log(msg: str, **fields) -> None:
         try:
@@ -63,6 +84,7 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                 line = f"[{ts}] {msg}"
             with debug_log_path.open("a", encoding="utf-8") as f:
                 f.write(line + "\n")
+            _trace(msg, **fields)
         except Exception:
             pass
 

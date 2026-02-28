@@ -11,6 +11,7 @@ import io
 import contextlib
 from pathlib import Path
 from collections import defaultdict
+import glob
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -1265,6 +1266,37 @@ def create_app(*, config_path: str) -> FastAPI:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
+
+    @app.get("/api/backtest/trace")
+    def backtest_trace(job_id: str | None = None, symbol: str | None = None, limit: int = 500):
+        job_id = job_id or get_latest_job_id()
+        if not job_id:
+            return {"state": "missing", "lines": []}
+        base = Path("data/backtests") / str(job_id) / "trace"
+        p = (base / "run.jsonl") if not symbol else (base / "symbols" / (str(symbol).upper().replace("/", "_") + ".jsonl"))
+        if not p.exists():
+            return {"job_id": job_id, "symbol": symbol, "lines": []}
+        lines: list[dict] = []
+        try:
+            for ln in p.read_text(encoding="utf-8", errors="replace").splitlines()[-max(1, min(int(limit), 5000)) :]:
+                try:
+                    lines.append(json.loads(ln))
+                except Exception:
+                    pass
+        except Exception:
+            lines = []
+        return {"job_id": job_id, "symbol": symbol, "lines": lines}
+
+    @app.get("/api/backtest/trace/symbols")
+    def backtest_trace_symbols(job_id: str | None = None):
+        job_id = job_id or get_latest_job_id()
+        if not job_id:
+            return {"state": "missing", "symbols": []}
+        d = Path("data/backtests") / str(job_id) / "trace" / "symbols"
+        if not d.exists():
+            return {"job_id": job_id, "symbols": []}
+        syms = sorted([p.stem for p in d.glob("*.jsonl")])
+        return {"job_id": job_id, "symbols": syms}
 
     @app.get("/api/backtest/jobs")
     def backtest_jobs(limit: int = 20):
