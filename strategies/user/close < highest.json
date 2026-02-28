@@ -1,0 +1,24 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "sma",
+          "n": 10
+        }
+      }
+    ]
+  },
+  "id": "close < highest",
+  "name": "close < highest",
+  "score_factors": [],
+  "type": "exit"
+}
