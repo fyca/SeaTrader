@@ -429,10 +429,13 @@
                 <div style="font-weight:700;">Backtest debug log</div>
                 <div class="muted" style="font-size:12px; margin-top:2px;">Real-time backend phases/progress for this run.</div>
               </div>
-              <label class="muted" style="display:flex; align-items:center; gap:6px; user-select:none;">
-                <input id="btDebugToggle" type="checkbox" />
-                Show real-time debug log
-              </label>
+              <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap;">
+                <button id="btDebugPause" class="secondary" type="button">Pause scroll</button>
+                <label class="muted" style="display:flex; align-items:center; gap:6px; user-select:none;">
+                  <input id="btDebugToggle" type="checkbox" />
+                  Show real-time debug log
+                </label>
+              </div>
             </div>
             <pre id="btDebugLog" class="muted" style="display:none; margin-top:8px; max-height:220px; overflow:auto; background:#0f1115; color:#d7dde7; border:1px solid var(--border); border-radius:10px; padding:10px; white-space:pre-wrap;"></pre>
           </div>
@@ -1207,6 +1210,7 @@ let btDebugLastJobId = null;
 let btDebugPollInFlight = false;
 let btDebugES = null;
 let btDebugLastLine = '';
+let btDebugAutoScroll = true;
 
 let openExposureSymbols = new Set();
 let openLiveDailyDays = new Set();
@@ -1424,7 +1428,7 @@ function _appendBacktestDebugLines(lines) {
   }
   if (!filtered.length) return;
   box.textContent += (box.textContent ? '\n' : '') + filtered.join('\n');
-  box.scrollTop = box.scrollHeight;
+  if (btDebugAutoScroll) box.scrollTop = box.scrollHeight;
 }
 
 function stopBacktestDebugStream() {
@@ -1461,6 +1465,9 @@ function _resetBacktestDebug(jobId = null) {
   btDebugOffset = 0;
   btDebugLastJobId = jobId || btJobId || null;
   btDebugLastLine = '';
+  btDebugAutoScroll = true;
+  const pauseBtn = document.getElementById('btDebugPause');
+  if (pauseBtn) pauseBtn.textContent = 'Pause scroll';
   stopBacktestDebugStream();
   if (box) box.textContent = '';
 }
@@ -4015,6 +4022,17 @@ document.getElementById('btDebugToggle')?.addEventListener('change', () => {
   } else {
     stopBacktestDebugStream();
     box.style.display = 'none';
+  }
+});
+
+document.getElementById('btDebugPause')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  btDebugAutoScroll = !btDebugAutoScroll;
+  const btn = document.getElementById('btDebugPause');
+  if (btn) btn.textContent = btDebugAutoScroll ? 'Pause scroll' : 'Resume scroll';
+  if (btDebugAutoScroll) {
+    const box = document.getElementById('btDebugLog');
+    if (box) box.scrollTop = box.scrollHeight;
   }
 });
 
