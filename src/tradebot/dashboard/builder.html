@@ -284,6 +284,7 @@
       </div>
       <div>
         <button id="abRun" class="primary">Run auto-builder</button>
+        <button id="abStop" class="secondary">Stop</button>
         <button id="abApply" class="secondary">Apply result to editor</button>
         <button id="abSave" class="secondary">Save generated strategy</button>
       </div>
@@ -1072,19 +1073,28 @@ async function runAutoBuilder() {
   st.textContent = `job ${_abJobId} running…`;
 }
 
+async function stopAutoBuilder() {
+  if (!_abJobId) return;
+  const r = await fetch('/api/strategy/auto-build/stop', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({job_id: _abJobId})});
+  if (!r.ok) throw new Error(await r.text());
+}
+
 async function pollAutoBuilder() {
   if (!_abJobId) return;
   const st = document.getElementById('abStatus');
   const out = document.getElementById('abOut');
   const s = await getJSON('/api/strategy/auto-build/status?job_id=' + encodeURIComponent(_abJobId));
-  st.textContent = `${s.state} ${s.progress||0}/${s.total||0}` + (s.error ? (' • ' + s.error) : '');
+  const phase = s.phase ? (` • ${s.phase}`) : '';
+  const sym = s.current_symbol ? (` • ${s.current_symbol}`) : '';
+  const det = s.detail ? (` • ${s.detail}`) : '';
+  st.textContent = `${s.state}${phase} ${s.progress||0}/${s.total||0}${sym}${det}` + (s.error ? (' • ' + s.error) : '');
   if (s.state === 'done') {
     const res = await getJSON('/api/strategy/auto-build/result?job_id=' + encodeURIComponent(_abJobId));
     _abLastResult = res;
     out.textContent = JSON.stringify(res, null, 2);
     _abJobId = null;
   }
-  if (s.state === 'error' || s.state === 'missing') _abJobId = null;
+  if (s.state === 'error' || s.state === 'missing' || s.state === 'stopped') _abJobId = null;
 }
 
 function applyAutoBuilderResult() {
@@ -1194,6 +1204,7 @@ document.getElementById('syncFactorsToJson').addEventListener('click', (e)=>{e.p
 document.getElementById('syncFactorsFromJson').addEventListener('click', (e)=>{e.preventDefault(); syncFactorsFromJson();});
 
 document.getElementById('abRun')?.addEventListener('click', (e)=>{ e.preventDefault(); runAutoBuilder().catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
+document.getElementById('abStop')?.addEventListener('click', (e)=>{ e.preventDefault(); stopAutoBuilder().then(()=>{ document.getElementById('abStatus').textContent = 'stopping…'; }).catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
 document.getElementById('abApply')?.addEventListener('click', (e)=>{ e.preventDefault(); try { applyAutoBuilderResult(); } catch(err) { document.getElementById('abStatus').textContent = 'error: ' + err; } });
 document.getElementById('abSave')?.addEventListener('click', (e)=>{ e.preventDefault(); saveAutoBuilderResult().then(()=>{ document.getElementById('abStatus').textContent = 'generated strategy saved'; }).catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
 setInterval(()=>{ pollAutoBuilder().catch(()=>{}); }, 1500);

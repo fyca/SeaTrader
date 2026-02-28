@@ -23,9 +23,13 @@ class AutoBuildJob:
     updated_at: str
     error: str | None = None
     result: dict | None = None
+    phase: str = "starting"
+    current_symbol: str | None = None
+    detail: str | None = None
 
 
 _JOBS: dict[str, AutoBuildJob] = {}
+_STOPS: dict[str, threading.Event] = {}
 _LOCK = threading.Lock()
 
 
@@ -163,6 +167,7 @@ def _build_spec(params: dict, asset_class: str = "stocks") -> dict:
     exn = int(params.get("exit_n", 100))
     exk = str(params.get("exit_kind", "sma"))
     sid = f"auto_{asset_class}_{mk}_ml{ml}_ms{ms}_x{exn}"
+
     entry_all = [
         {"left": {"kind": "close"}, "op": ">", "right": {"kind": mk, "n": ml}},
         {"left": {"kind": mk, "n": ms}, "op": ">", "right": {"kind": mk, "n": ml}},
@@ -183,16 +188,15 @@ def _build_spec(params: dict, asset_class: str = "stocks") -> dict:
     elif ft == "lowest":
         entry_all.append({"left": {"kind": "close"}, "op": ">", "right": {"kind": "lowest", "n": int(params.get("lowest_n", 20))}})
 
-    exit_any = []
     et = str(params.get("exit_type", "ma"))
     if et == "ma":
-        exit_any.append({"left": {"kind": "close"}, "op": "<", "right": {"kind": exk, "n": exn}})
+        exit_any = [{"left": {"kind": "close"}, "op": "<", "right": {"kind": exk, "n": exn}}]
     elif et == "rsi":
-        exit_any.append({"left": {"kind": "rsi", "n": 14}, "op": ">", "right": float(params.get("exit_rsi", 75))})
+        exit_any = [{"left": {"kind": "rsi", "n": 14}, "op": ">", "right": float(params.get("exit_rsi", 75))}]
     elif et == "roc":
-        exit_any.append({"left": {"kind": "roc", "n": int(params.get("exit_roc_n", 20))}, "op": "<", "right": float(params.get("exit_roc_min", -0.06))})
+        exit_any = [{"left": {"kind": "roc", "n": int(params.get("exit_roc_n", 20))}, "op": "<", "right": float(params.get("exit_roc_min", -0.06))}]
     else:
-        exit_any.append({"left": {"kind": "close"}, "op": "<=", "right": {"kind": "lowest", "n": int(params.get("exit_break_n", 20))}})
+        exit_any = [{"left": {"kind": "close"}, "op": "<=", "right": {"kind": "lowest", "n": int(params.get("exit_break_n", 20))}}]
 
     return {
         "id": sid,
@@ -236,7 +240,6 @@ def _candidate_configs(search_mode: str) -> list[dict]:
                                 "exit_n": int(exn),
                                 "exit_kind": mk,
                             }
-                            # Representative thresholds per indicator family
                             if ft == "rsi":
                                 for v in ([60, 65, 70] if mode == "exhaustive" else [65]):
                                     c = dict(cfg); c["rsi_max"] = v; out.append(c)
@@ -273,11 +276,31 @@ def _candidate_configs(search_mode: str) -> list[dict]:
     return out
 
 
+def _fetch_with_timeout(fetch_fn, timeout_s: float = 25.0):
+    box = {"res": None, "err": None}
+
+    def _run():
+        try:
+            box["res"] = fetch_fn()
+        except Exception as e:
+            box["err"] = e
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive():
+        raise TimeoutError(f"fetch_timeout_{timeout_s}s")
+    if box["err"] is not None:
+        raise box["err"]
+    return box["res"]
+
+
 def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks", objective: str = "balanced", min_trades: int = 8, train_ratio: float = 0.7, folds: int = 3, search_mode: str = "standard") -> str:
     job_id = str(uuid.uuid4())
     now = _now()
     with _LOCK:
         _JOBS[job_id] = AutoBuildJob(state="starting", progress=0, total=max(1, len(symbols)), started_at=now, updated_at=now)
+        _STOPS[job_id] = threading.Event()
 
     def upd(**kw):
         with _LOCK:
@@ -290,38 +313,58 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
 
     def run():
         try:
-            upd(state="fetching")
+            upd(state="running", phase="fetching", detail="initializing")
             env = load_env()
             clients = make_alpaca_clients(env)
             end_dt = datetime.now(timezone.utc)
             start_dt = end_dt - timedelta(days=int(years) * 365)
-
             candidates = _candidate_configs(search_mode)
 
             per_symbol_best: list[dict] = []
             done = 0
             total_evals = 0
             for sym in symbols:
+                stop_ev = _STOPS.get(job_id)
+                if stop_ev is not None and stop_ev.is_set():
+                    upd(state="stopped", phase="stopped", detail="stopped_by_user")
+                    return
+
                 sym = str(sym).strip().upper()
                 if not sym:
                     continue
-                if "/" in sym:
-                    bars = fetch_crypto_bars_range(clients.crypto, [sym], start=start_dt, end=end_dt)
-                else:
-                    bars = fetch_stock_bars_range(clients.stocks, [sym], start=start_dt, end=end_dt)
+                upd(state="running", phase="fetching", current_symbol=sym, detail=f"fetching {done+1}/{len(symbols)}")
+
+                bars = None
+                last_fetch_err = None
+                for attempt in range(1, 4):
+                    try:
+                        if "/" in sym:
+                            bars = _fetch_with_timeout(lambda: fetch_crypto_bars_range(clients.crypto, [sym], start=start_dt, end=end_dt), timeout_s=25.0)
+                        else:
+                            bars = _fetch_with_timeout(lambda: fetch_stock_bars_range(clients.stocks, [sym], start=start_dt, end=end_dt), timeout_s=25.0)
+                        last_fetch_err = None
+                        break
+                    except Exception as e:
+                        last_fetch_err = e
+                        upd(state="running", phase="fetching", current_symbol=sym, detail=f"retry {attempt}/3 after {type(e).__name__}")
+                        time.sleep(0.6 * attempt)
+
+                if bars is None:
+                    done += 1
+                    upd(progress=done, state="running", phase="fetching", current_symbol=sym, detail=f"skip fetch error: {last_fetch_err}")
+                    continue
+
                 df = bars.get(sym)
                 if df is None or len(df) < 250 or "close" not in df.columns:
                     done += 1
-                    upd(progress=done, state="running")
+                    upd(progress=done, state="running", phase="running", current_symbol=sym, detail="insufficient bars")
                     continue
-                close = df["close"].dropna().astype(float)
 
-                # Walk-forward folds: evaluate each candidate over multiple train/valid windows.
+                close = df["close"].dropna().astype(float)
                 n = len(close)
                 fcnt = max(1, int(folds))
                 fold_windows: list[tuple[pd.Series, pd.Series]] = []
                 for fi in range(fcnt):
-                    # rolling anchored split with small shift forward per fold
                     start_i = int((n * 0.05) * fi)
                     sub = close.iloc[start_i:]
                     if len(sub) < 260:
@@ -334,13 +377,15 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                     if len(train_close) < 200 or len(valid_close) < 30:
                         continue
                     fold_windows.append((train_close, valid_close))
+
                 if not fold_windows:
                     done += 1
-                    upd(progress=done, state="running")
+                    upd(progress=done, state="running", phase="running", current_symbol=sym, detail="no valid fold windows")
                     continue
 
                 best = None
                 evals_symbol = 0
+                upd(state="running", phase="optimizing", current_symbol=sym, detail=f"optimizing {len(candidates)} candidates")
                 for cfg in candidates:
                     evals_symbol += 1
                     fold_scores: list[float] = []
@@ -377,19 +422,19 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                     }
                     if best is None or float(row["objective"]) > float(best["objective"]):
                         best = row
+
                 total_evals += int(evals_symbol)
                 if best is not None:
                     best["evaluations"] = int(evals_symbol)
                     per_symbol_best.append(best)
 
                 done += 1
-                upd(progress=done, state="running")
+                upd(progress=done, state="running", phase="running", current_symbol=sym, detail=f"done {done}/{len(symbols)}")
 
             if not per_symbol_best:
-                upd(state="error", error="no viable symbol results")
+                upd(state="error", phase="error", error="no viable symbol results")
                 return
 
-            # Aggregate the top symbol configs by objective, then take medians/modes.
             top = sorted(per_symbol_best, key=lambda x: float(x.get("objective") or -1e9), reverse=True)
             topk = top[: max(3, min(len(top), 10))]
             agg = {
@@ -401,11 +446,11 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 "filter_type": max({str(x.get("filter_type", "none")) for x in topk}, key=lambda k: sum(1 for z in topk if str(z.get("filter_type", "none")) == k)),
                 "exit_type": max({str(x.get("exit_type", "ma")) for x in topk}, key=lambda k: sum(1 for z in topk if str(z.get("exit_type", "ma")) == k)),
             }
-            # carry optional params from the best row matching selected filter/exit
             best0 = topk[0]
             for k in ["rsi_max", "roc_n", "roc_min", "vol_n", "vol_max", "breakout_n", "dist_n", "dist_max", "ret1d_min", "lowest_n", "rebound_min", "exit_rsi", "exit_roc_n", "exit_roc_min", "exit_break_n"]:
                 if k in best0:
                     agg[k] = best0[k]
+
             spec = _build_spec(agg, asset_class=asset_class)
             out = {
                 "symbols": symbols,
@@ -422,13 +467,25 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 "strategy": spec,
                 "per_symbol_best": per_symbol_best,
             }
-            upd(state="done", progress=max(1, len(symbols)), total=max(1, len(symbols)), result=out)
+            upd(state="done", phase="done", progress=max(1, len(symbols)), total=max(1, len(symbols)), result=out, current_symbol=None, detail="complete")
         except Exception as e:
-            upd(state="error", error=str(e))
+            upd(state="error", phase="error", error=str(e), detail=type(e).__name__)
+        finally:
+            with _LOCK:
+                _STOPS.pop(job_id, None)
 
     t = threading.Thread(target=run, daemon=True)
     t.start()
     return job_id
+
+
+def stop_auto_build(job_id: str) -> dict:
+    with _LOCK:
+        ev = _STOPS.get(job_id)
+    if ev is None:
+        return {"ok": False, "error": "job_not_running", "job_id": job_id}
+    ev.set()
+    return {"ok": True, "job_id": job_id}
 
 
 def get_auto_build_status(job_id: str) -> dict:
@@ -438,8 +495,11 @@ def get_auto_build_status(job_id: str) -> dict:
             return {"state": "missing"}
         return {
             "state": j.state,
+            "phase": j.phase,
             "progress": j.progress,
             "total": j.total,
+            "current_symbol": j.current_symbol,
+            "detail": j.detail,
             "error": j.error,
             "started_at": j.started_at,
             "updated_at": j.updated_at,

@@ -157,6 +157,15 @@ def create_app(*, config_path: str) -> FastAPI:
         )
         return {"ok": True, "job_id": job_id}
 
+    @app.post("/api/strategy/auto-build/stop")
+    async def strategy_auto_build_stop(req: Request):
+        body = await req.json()
+        job_id = str((body or {}).get("job_id") or "").strip()
+        if not job_id:
+            return {"ok": False, "error": "missing_job_id"}
+        from tradebot.strategies.auto_builder import stop_auto_build
+        return stop_auto_build(job_id)
+
     @app.get("/api/strategy/auto-build/status")
     def strategy_auto_build_status(job_id: str):
         from tradebot.strategies.auto_builder import get_auto_build_status
