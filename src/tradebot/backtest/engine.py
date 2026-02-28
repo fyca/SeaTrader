@@ -1097,10 +1097,22 @@ def run_backtest(
                     positions_entry_date.pop(sym, None)
 
         # Rebalance
-        do_eq_rebalance = day in eq_rebal_days
-        do_cr_rebalance = day in cr_rebal_days
+        do_eq_rebalance_raw = day in eq_rebal_days
+        do_cr_rebalance_raw = day in cr_rebal_days
+        do_eq_rebalance = bool(do_eq_rebalance_raw) and (params.asset_mode in ("both", "equities"))
+        do_cr_rebalance = bool(do_cr_rebalance_raw) and (params.asset_mode in ("both", "crypto"))
         if debug_verbose:
-            _dbg("day_schedule", day=day_s, do_eq_rebalance=bool(do_eq_rebalance), do_cr_rebalance=bool(do_cr_rebalance), eq_risk_day=bool(day in eq_risk_days), cr_risk_day=bool(day in cr_risk_days))
+            _dbg(
+                "day_schedule",
+                day=day_s,
+                do_eq_rebalance=bool(do_eq_rebalance),
+                do_cr_rebalance=bool(do_cr_rebalance),
+                raw_eq_rebalance=bool(do_eq_rebalance_raw),
+                raw_cr_rebalance=bool(do_cr_rebalance_raw),
+                eq_risk_day=bool(day in eq_risk_days),
+                cr_risk_day=bool(day in cr_risk_days),
+                asset_mode=str(params.asset_mode),
+            )
         if (i == 0) or ((i + 1) % 10 == 0):
             _dbg("day_tick", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), pending_limits=len(pending_limits), cash=round(float(cash), 2), equity=round(float(equity), 2))
         if do_eq_rebalance or do_cr_rebalance:
