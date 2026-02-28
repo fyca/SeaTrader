@@ -241,6 +241,8 @@ def run_backtest(
     # Resolve per-asset strategy ids (with legacy fallback)
     eq_strategy_id = params.strategy_id_equities or params.strategy_id
     cr_strategy_id = params.strategy_id_crypto or params.strategy_id
+    eq_strat = get_strategy(eq_strategy_id)
+    cr_strat = get_strategy(cr_strategy_id)
 
     # Optional per-asset exit rule specs from rule-based user strategies.
     def _load_exit_rule(strategy_id: str, enabled: bool):
@@ -257,9 +259,14 @@ def run_backtest(
     eq_exit_rule = _load_exit_rule(params.exit_strategy_id_equities or eq_strategy_id, bool(params.exit_enabled_equities))
     cr_exit_rule = _load_exit_rule(params.exit_strategy_id_crypto or cr_strategy_id, bool(params.exit_enabled_crypto))
 
-    # Precompute close/open series
+    # Precompute normalized OHLCV frames and close/open series once.
+    # This avoids repeated copy/sort/tz work during each rebalance slice.
+    bars_all_src = {**stock_bars, **crypto_bars}
+    bars_all: dict[str, pd.DataFrame] = {}
     closes: dict[str, pd.Series] = {}
     opens: dict[str, pd.Series] = {}
+    highs: dict[str, pd.Series] = {}
+    lows: dict[str, pd.Series] = {}
     def _naive_utc_index(idx: pd.Index) -> pd.DatetimeIndex:
         di = pd.to_datetime(idx)
         # If tz-aware, drop tz to compare with naive backtest dates
@@ -276,19 +283,24 @@ def run_backtest(
                 pass
         return di
 
-    for sym, df in {**stock_bars, **crypto_bars}.items():
+    for sym, df in bars_all_src.items():
         if df is not None and len(df) and "close" in df.columns:
             dfx = df.copy()
             dfx.index = _naive_utc_index(dfx.index)
             dfx = dfx.sort_index()
+            bars_all[sym] = dfx
             closes[sym] = dfx["close"].astype(float)
             if "open" in dfx.columns:
                 opens[sym] = dfx["open"].astype(float)
             else:
                 opens[sym] = pd.Series(dtype=float)
+            highs[sym] = dfx["high"].astype(float) if "high" in dfx.columns else pd.Series(dtype=float)
+            lows[sym] = dfx["low"].astype(float) if "low" in dfx.columns else pd.Series(dtype=float)
         else:
             closes[sym] = pd.Series(dtype=float)
             opens[sym] = pd.Series(dtype=float)
+            highs[sym] = pd.Series(dtype=float)
+            lows[sym] = pd.Series(dtype=float)
 
     def px(sym: str, day: pd.Timestamp) -> float | None:
         s = closes.get(sym)
@@ -322,14 +334,28 @@ def run_backtest(
         return None
 
     def px_col(sym: str, day: pd.Timestamp, col: str) -> float | None:
-        df = stock_bars.get(sym) if sym in stock_bars else crypto_bars.get(sym)
-        if df is None or len(df) == 0 or col not in df.columns:
+        s: pd.Series
+        if col == "high":
+            s = highs.get(sym, pd.Series(dtype=float))
+        elif col == "low":
+            s = lows.get(sym, pd.Series(dtype=float))
+        elif col == "open":
+            s = opens.get(sym, pd.Series(dtype=float))
+        elif col == "close":
+            s = closes.get(sym, pd.Series(dtype=float))
+        else:
+            df = bars_all.get(sym)
+            if df is None or len(df) == 0 or col not in df.columns:
+                return None
+            try:
+                s = df[col].astype(float)
+            except Exception:
+                return None
+
+        if s is None or len(s) == 0:
             return None
         try:
-            dfx = df.copy()
-            dfx.index = _naive_utc_index(dfx.index)
-            dfx = dfx.sort_index()
-            sub = dfx[col].astype(float).loc[:day]
+            sub = s.loc[:day]
             if len(sub) == 0:
                 return None
             v = float(sub.iloc[-1])
@@ -1059,8 +1085,6 @@ def run_backtest(
                 stopped_until_next_rebalance = False
                 dd_stop_trigger_day = None
             # compute candidates based on history up to day, via selected per-asset entry strategies
-            eq_strat = get_strategy(eq_strategy_id)
-            cr_strat = get_strategy(cr_strategy_id)
 
             # build bars dict slices up to current day (excluding banned symbols)
             # Keep full OHLCV columns for strategy parity with live selection logic.
@@ -1069,9 +1093,7 @@ def run_backtest(
                 if df0 is None or len(df0) == 0:
                     return None
                 try:
-                    dfx = df0.copy()
-                    dfx.index = _naive_utc_index(dfx.index)
-                    dfx = dfx.sort_index().loc[:day_]
+                    dfx = df0.loc[:day_]
                     if len(dfx) == 0:
                         return None
                     return dfx
@@ -1082,7 +1104,7 @@ def run_backtest(
             for sym in stock_universe:
                 if sym in excluded:
                     continue
-                dfx = _slice_df(stock_bars, sym, day)
+                dfx = _slice_df(bars_all, sym, day)
                 if dfx is not None:
                     eq_bars_day[sym] = dfx
 
@@ -1090,7 +1112,7 @@ def run_backtest(
             for sym in crypto_universe:
                 if sym in excluded:
                     continue
-                dfx = _slice_df(crypto_bars, sym, day)
+                dfx = _slice_df(bars_all, sym, day)
                 if dfx is not None:
                     cr_bars_day[sym] = dfx
 
