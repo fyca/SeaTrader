@@ -2,101 +2,46 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
 import pandas as pd
+
+from tradebot.indicators import indicator_service
 
 
 def sma(closes: pd.Series, n: int) -> float | None:
-    if n <= 0:
-        return None
-    s = closes.dropna()
-    if len(s) < n:
-        return None
-    return float(s.rolling(n).mean().iloc[-1])
+    return indicator_service.sma(closes, n)
 
 
 def highest(closes: pd.Series, n: int) -> float | None:
-    if n <= 0:
-        return None
-    s = closes.dropna()
-    if len(s) < n:
-        return None
-    return float(s.tail(n).max())
+    return indicator_service.highest(closes, n)
 
 
 def lowest(closes: pd.Series, n: int) -> float | None:
-    if n <= 0:
-        return None
-    s = closes.dropna()
-    if len(s) < n:
-        return None
-    return float(s.tail(n).min())
+    return indicator_service.lowest(closes, n)
 
 
 def ema(closes: pd.Series, n: int) -> float | None:
-    if n <= 0:
-        return None
-    s = closes.dropna().astype(float)
-    if len(s) < n:
-        return None
-    v = float(s.ewm(span=n, adjust=False).mean().iloc[-1])
-    return v if np.isfinite(v) else None
+    return indicator_service.ema(closes, n)
 
 
 def roc(closes: pd.Series, n: int) -> float | None:
     """Rate of change over n days as fractional return (close/close[-n]-1)."""
-    if n <= 0:
-        return None
-    s = closes.dropna().astype(float)
-    if len(s) < n + 1:
-        return None
-    prev = float(s.iloc[-(n + 1)])
-    now = float(s.iloc[-1])
-    if prev == 0:
-        return None
-    return float(now / prev - 1.0)
+    return indicator_service.roc(closes, n)
 
 
 def ret_1d(closes: pd.Series) -> float | None:
-    s = closes.dropna().astype(float)
-    if len(s) < 2:
-        return None
-    prev = float(s.iloc[-2])
-    now = float(s.iloc[-1])
-    if prev == 0:
-        return None
-    return float(now / prev - 1.0)
+    return indicator_service.ret_1d(closes)
 
 
 def ann_vol(closes: pd.Series, n: int, ann_factor: float) -> float | None:
-    s = closes.dropna()
-    if len(s) < n + 2:
-        return None
-    rets = s.pct_change().dropna()
-    v = float(rets.tail(n).std(ddof=0) * np.sqrt(ann_factor))
-    return v if np.isfinite(v) else None
+    return indicator_service.ann_vol(closes, n, ann_factor)
 
 
 def rsi(closes: pd.Series, n: int = 14) -> float | None:
-    s = closes.dropna().astype(float)
-    if len(s) < n + 2:
-        return None
-    delta = s.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(n).mean().iloc[-1]
-    avg_loss = loss.rolling(n).mean().iloc[-1]
-    if avg_loss == 0:
-        return 100.0
-    rs = avg_gain / avg_loss
-    return float(100 - (100 / (1 + rs)))
+    return indicator_service.rsi(closes, n)
 
 
 def close(closes: pd.Series) -> float | None:
-    s = closes.dropna()
-    if len(s) == 0:
-        return None
-    return float(s.iloc[-1])
+    return indicator_service.close(closes)
 
 
 @dataclass(frozen=True)
@@ -150,8 +95,8 @@ def eval_indicator(ctx: EvalContext, spec: dict) -> float | None:
         s = ctx.closes.dropna().astype(float)
         if len(s) < max(nf, ns) + 2:
             return None
-        f = s.rolling(nf).mean()
-        g = s.rolling(ns).mean()
+        f = indicator_service.sma_series(s, nf)
+        g = indicator_service.sma_series(s, ns)
         if pd.isna(f.iloc[-2]) or pd.isna(g.iloc[-2]) or pd.isna(f.iloc[-1]) or pd.isna(g.iloc[-1]):
             return None
         prev = f.iloc[-2] <= g.iloc[-2]
@@ -165,7 +110,7 @@ def eval_indicator(ctx: EvalContext, spec: dict) -> float | None:
         s = ctx.closes.dropna().astype(float)
         if len(s) < n + lb + 2:
             return None
-        ma = s.rolling(n).mean()
+        ma = indicator_service.sma_series(s, n)
         ma_now = ma.iloc[-1]
         ma_prev = ma.iloc[-(lb + 1)]
         if pd.isna(ma_now) or pd.isna(ma_prev) or ma_prev == 0:

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
+from math import isfinite
+
 import pandas as pd
+
+from tradebot.indicators import indicator_service
 
 
 @dataclass(frozen=True)
@@ -37,16 +40,18 @@ def compute_trend_vol_signal(
     if len(closes) < max(ma_long, ma_short, vol_lookback) + 5:
         return SignalResult(False, 0.0, "insufficient_history", float("nan"), float("nan"), float("nan"), float("nan"))
 
-    last = float(closes.iloc[-1])
-    maL = float(closes.rolling(ma_long).mean().iloc[-1])
-    maS = closes.rolling(ma_short).mean()
+    last = indicator_service.close(closes)
+    maL = indicator_service.sma(closes, ma_long)
+    maS = indicator_service.sma_series(closes, ma_short)
     maS_last = float(maS.iloc[-1])
     maS_prev = float(maS.iloc[-6])  # ~1 week slope on daily data
 
-    rets = closes.pct_change().dropna()
-    vol = float(rets.tail(vol_lookback).std(ddof=0) * np.sqrt(ann_factor))
+    vol = indicator_service.ann_vol(closes, vol_lookback, ann_factor)
 
-    if not np.isfinite(last) or not np.isfinite(maL) or not np.isfinite(vol):
+    if last is None or maL is None or vol is None:
+        return SignalResult(False, 0.0, "nan_values", float("nan"), float("nan"), float("nan"), float("nan"))
+
+    if not isfinite(last) or not isfinite(maL) or not isfinite(vol):
         return SignalResult(False, 0.0, "nan_values", last, vol, maL, maS_last)
 
     if vol > max_ann_vol:

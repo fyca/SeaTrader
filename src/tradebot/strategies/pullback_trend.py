@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from tradebot.indicators import indicator_service
 from tradebot.signals.trend_vol import compute_trend_vol_signal
 
 
@@ -48,7 +49,10 @@ class PullbackInTrendStrategy:
                 continue
 
             last = float(closes.iloc[-1])
-            maS = float(closes.rolling(sp.ma_short).mean().iloc[-1])
+            maS_v = indicator_service.sma(closes, sp.ma_short)
+            if maS_v is None:
+                continue
+            maS = float(maS_v)
             if maS <= 0:
                 continue
 
