@@ -1204,6 +1204,7 @@ function fmtDate(d) {
 let btJobId = null;
 let btDebugOffset = 0;
 let btDebugLastJobId = null;
+let btDebugPollInFlight = false;
 
 let openExposureSymbols = new Set();
 let openLiveDailyDays = new Set();
@@ -1424,17 +1425,24 @@ async function pollBacktestDebug(force=false) {
   if (!activeJob) return;
   const shouldPoll = force || btJobId != null;
   if (!shouldPoll) return;
+  if (btDebugPollInFlight) return;
+  btDebugPollInFlight = true;
   try {
-    const j = await getJSON('/api/backtest/log?job_id=' + encodeURIComponent(activeJob) + '&offset=' + encodeURIComponent(btDebugOffset) + '&limit=200');
+    const reqOffset = btDebugOffset;
+    const j = await getJSON('/api/backtest/log?job_id=' + encodeURIComponent(activeJob) + '&offset=' + encodeURIComponent(reqOffset) + '&limit=200');
     const lines = Array.isArray(j.lines) ? j.lines : [];
-    if (lines.length) {
+    if (lines.length && reqOffset === btDebugOffset) {
       box.textContent += (box.textContent ? '\n' : '') + lines.join('\n');
       box.scrollTop = box.scrollHeight;
+      btDebugOffset = Number(j.next_offset || btDebugOffset || 0);
+    } else if (reqOffset === btDebugOffset) {
+      btDebugOffset = Number(j.next_offset || btDebugOffset || 0);
     }
-    btDebugOffset = Number(j.next_offset || btDebugOffset || 0);
     btDebugLastJobId = activeJob;
   } catch (e) {
     // keep UI resilient
+  } finally {
+    btDebugPollInFlight = false;
   }
 }
 

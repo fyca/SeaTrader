@@ -176,11 +176,14 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             # Run backtest
             p = BacktestParams(**params)
             _log("phase", state="running")
+            _last_prog_log = {"done": -1}
 
             def prog(done, total):
                 _write(status_path, {"state": "running", "progress": done, "total": total})
-                if (done == total) or (done % 25 == 0):
+                last_done = int(_last_prog_log.get("done", -1))
+                if (done == total) or (done - last_done >= 25) or (last_done < 0):
                     _log("simulate_progress", done=done, total=total)
+                    _last_prog_log["done"] = int(done)
 
             intraday_cb = None
             intraday_limit_touch_cb = None
@@ -256,18 +259,35 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             t_prepare_end = time.perf_counter()
             t_sim_start = t_prepare_end
 
-            res = run_backtest(
-                stock_bars=stock_bars,
-                crypto_bars=crypto_bars,
-                stock_universe=tradable_eq,
-                crypto_universe=tradable_cr,
-                cfg=cfg,
-                params=p,
-                progress_cb=prog,
-                intraday_price_cb=intraday_cb,
-                intraday_limit_touch_cb=intraday_limit_touch_cb,
-                risk_intraday_price_cb=risk_intraday_cb,
-            )
+            _hb_stop = threading.Event()
+
+            def _sim_heartbeat():
+                while not _hb_stop.wait(5.0):
+                    try:
+                        st = _read_json_safe(status_path) or {}
+                        if str(st.get("state")) != "running":
+                            continue
+                        _log("simulate_heartbeat", done=st.get("progress", 0), total=st.get("total", 0))
+                    except Exception:
+                        pass
+
+            hb_t = threading.Thread(target=_sim_heartbeat, daemon=True)
+            hb_t.start()
+            try:
+                res = run_backtest(
+                    stock_bars=stock_bars,
+                    crypto_bars=crypto_bars,
+                    stock_universe=tradable_eq,
+                    crypto_universe=tradable_cr,
+                    cfg=cfg,
+                    params=p,
+                    progress_cb=prog,
+                    intraday_price_cb=intraday_cb,
+                    intraday_limit_touch_cb=intraday_limit_touch_cb,
+                    risk_intraday_price_cb=risk_intraday_cb,
+                )
+            finally:
+                _hb_stop.set()
 
             t_sim_end = time.perf_counter()
             t_write_start = t_sim_end
