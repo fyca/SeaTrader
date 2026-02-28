@@ -1099,6 +1099,8 @@ def run_backtest(
         # Rebalance
         do_eq_rebalance = day in eq_rebal_days
         do_cr_rebalance = day in cr_rebal_days
+        if debug_verbose:
+            _dbg("day_schedule", day=day_s, do_eq_rebalance=bool(do_eq_rebalance), do_cr_rebalance=bool(do_cr_rebalance), eq_risk_day=bool(day in eq_risk_days), cr_risk_day=bool(day in cr_risk_days))
         if (i == 0) or ((i + 1) % 10 == 0):
             _dbg("day_tick", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), pending_limits=len(pending_limits), cash=round(float(cash), 2), equity=round(float(equity), 2))
         if do_eq_rebalance or do_cr_rebalance:

@@ -179,6 +179,15 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             p_params.pop("debug_verbose", None)
             p = BacktestParams(**p_params)
             _log("phase", state="running", debug_verbose=debug_verbose)
+            _log(
+                "effective_schedule",
+                rebalance=str(getattr(p, "rebalance", "weekly")),
+                rebalance_day=str(getattr(p, "rebalance_day", "MON")),
+                eq_rebalance=str(getattr(p, "rebalance_frequency_equities", None) or getattr(p, "rebalance", "weekly")),
+                eq_day=str(getattr(p, "rebalance_day_equities", None) or getattr(p, "rebalance_day", "MON")),
+                cr_rebalance=str(getattr(p, "rebalance_frequency_crypto", None) or getattr(p, "rebalance", "weekly")),
+                cr_day=str(getattr(p, "rebalance_day_crypto", None) or getattr(p, "rebalance_day", "MON")),
+            )
             _last_prog_log = {"done": -1}
 
             def prog(done, total):
