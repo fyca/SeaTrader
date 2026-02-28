@@ -275,6 +275,10 @@
         <input id="abTrainRatio" type="number" value="0.70" min="0.50" max="0.90" step="0.05" style="width:100px;" />
       </div>
       <div>
+        <div class="muted">Walk-forward folds</div>
+        <input id="abFolds" type="number" value="3" min="1" max="6" style="width:100px;" />
+      </div>
+      <div>
         <button id="abRun" class="primary">Run auto-builder</button>
         <button id="abApply" class="secondary">Apply result to editor</button>
         <button id="abSave" class="secondary">Save generated strategy</button>
@@ -1050,11 +1054,12 @@ async function runAutoBuilder() {
   const objective = String(document.getElementById('abObjective')?.value || 'balanced');
   const min_trades = Number(document.getElementById('abMinTrades')?.value || '8');
   const train_ratio = Number(document.getElementById('abTrainRatio')?.value || '0.7');
+  const folds = Number(document.getElementById('abFolds')?.value || '3');
   if (!symbols) throw new Error('enter symbols');
   st.textContent = 'starting…';
   out.textContent = '';
   const r = await fetch('/api/strategy/auto-build/start', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class, objective, min_trades, train_ratio})
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class, objective, min_trades, train_ratio, folds})
   });
   if (!r.ok) throw new Error(await r.text());
   const j = await r.json();

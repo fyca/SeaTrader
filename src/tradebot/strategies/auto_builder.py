@@ -135,7 +135,7 @@ def _build_spec(params: dict, asset_class: str = "stocks") -> dict:
     }
 
 
-def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks", objective: str = "balanced", min_trades: int = 8, train_ratio: float = 0.7) -> str:
+def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks", objective: str = "balanced", min_trades: int = 8, train_ratio: float = 0.7, folds: int = 3) -> str:
     job_id = str(uuid.uuid4())
     now = _now()
     with _LOCK:
@@ -167,6 +167,7 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
 
             per_symbol_best: list[dict] = []
             done = 0
+            total_evals = 0
             for sym in symbols:
                 sym = str(sym).strip().upper()
                 if not sym:
@@ -181,45 +182,79 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                     upd(progress=done, state="running")
                     continue
                 close = df["close"].dropna().astype(float)
-                split_idx = max(200, int(len(close) * float(train_ratio)))
-                if split_idx >= len(close) - 30:
-                    split_idx = int(len(close) * 0.7)
-                train_close = close.iloc[:split_idx]
-                valid_close = close.iloc[split_idx:]
+
+                # Walk-forward folds: evaluate each candidate over multiple train/valid windows.
+                n = len(close)
+                fcnt = max(1, int(folds))
+                fold_windows: list[tuple[pd.Series, pd.Series]] = []
+                for fi in range(fcnt):
+                    # rolling anchored split with small shift forward per fold
+                    start_i = int((n * 0.05) * fi)
+                    sub = close.iloc[start_i:]
+                    if len(sub) < 260:
+                        continue
+                    split_idx = max(200, int(len(sub) * float(train_ratio)))
+                    if split_idx >= len(sub) - 30:
+                        split_idx = int(len(sub) * 0.7)
+                    train_close = sub.iloc[:split_idx]
+                    valid_close = sub.iloc[split_idx:]
+                    if len(train_close) < 200 or len(valid_close) < 30:
+                        continue
+                    fold_windows.append((train_close, valid_close))
+                if not fold_windows:
+                    done += 1
+                    upd(progress=done, state="running")
+                    continue
 
                 best = None
+                evals_symbol = 0
                 for ml in grid["ma_long"]:
                     for ms in grid["ma_short"]:
                         if ms >= ml:
                             continue
                         for rm in grid["rsi_max"]:
                             for ex in grid["exit_ma"]:
-                                r_tr = _simulate_symbol(train_close, ml, ms, rm, ex)
-                                r_va = _simulate_symbol(valid_close, ml, ms, rm, ex)
-                                if not r_tr.get("ok") or not r_va.get("ok"):
+                                evals_symbol += 1
+                                fold_scores: list[float] = []
+                                fold_train_scores: list[float] = []
+                                fold_valid_scores: list[float] = []
+                                fold_trades: list[int] = []
+                                for train_close, valid_close in fold_windows:
+                                    r_tr = _simulate_symbol(train_close, ml, ms, rm, ex)
+                                    r_va = _simulate_symbol(valid_close, ml, ms, rm, ex)
+                                    if not r_tr.get("ok") or not r_va.get("ok"):
+                                        continue
+                                    tr_count = int(r_tr.get("trades") or 0)
+                                    if tr_count < int(min_trades):
+                                        continue
+                                    obj_tr = _objective(r_tr["metrics"], objective)
+                                    obj_va = _objective(r_va["metrics"], objective)
+                                    obj = 0.6 * float(obj_tr) + 0.4 * float(obj_va)
+                                    fold_scores.append(float(obj))
+                                    fold_train_scores.append(float(obj_tr))
+                                    fold_valid_scores.append(float(obj_va))
+                                    fold_trades.append(tr_count)
+
+                                if not fold_scores:
                                     continue
-                                if int(r_tr.get("trades") or 0) < int(min_trades):
-                                    continue
-                                obj_tr = _objective(r_tr["metrics"], objective)
-                                obj_va = _objective(r_va["metrics"], objective)
-                                # favor robust params that transfer to validation
-                                obj = 0.6 * float(obj_tr) + 0.4 * float(obj_va)
                                 row = {
                                     "symbol": sym,
                                     "ma_long": ml,
                                     "ma_short": ms,
                                     "rsi_max": rm,
                                     "exit_ma": ex,
-                                    "objective": obj,
-                                    "train_objective": float(obj_tr),
-                                    "valid_objective": float(obj_va),
-                                    "train_metrics": r_tr["metrics"],
-                                    "valid_metrics": r_va["metrics"],
-                                    "trades": int(r_tr.get("trades") or 0),
+                                    "objective": float(np.mean(fold_scores)),
+                                    "train_objective": float(np.mean(fold_train_scores)),
+                                    "valid_objective": float(np.mean(fold_valid_scores)),
+                                    "trades": int(np.mean(fold_trades)) if fold_trades else 0,
+                                    "folds_used": int(len(fold_scores)),
+                                    "folds_requested": int(fcnt),
                                 }
                                 if best is None or float(row["objective"]) > float(best["objective"]):
                                     best = row
+                total_evals += int(evals_symbol)
                 if best is not None:
+                    best["evaluations"] = int(evals_symbol)
                     per_symbol_best.append(best)
 
                 done += 1
@@ -243,6 +278,8 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 "objective": objective,
                 "min_trades": int(min_trades),
                 "train_ratio": float(train_ratio),
+                "folds": int(folds),
+                "total_evaluations": int(total_evals),
                 "aggregate_params": agg,
                 "strategy": spec,
                 "per_symbol_best": per_symbol_best,

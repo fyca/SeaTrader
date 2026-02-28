@@ -142,6 +142,7 @@ def create_app(*, config_path: str) -> FastAPI:
         objective = str(body.get("objective") or "balanced")
         min_trades = int(body.get("min_trades") or 8)
         train_ratio = float(body.get("train_ratio") or 0.7)
+        folds = int(body.get("folds") or 3)
         from tradebot.strategies.auto_builder import start_auto_build
         job_id = start_auto_build(
             symbols=list(syms),
@@ -150,6 +151,7 @@ def create_app(*, config_path: str) -> FastAPI:
             objective=objective,
             min_trades=min_trades,
             train_ratio=train_ratio,
+            folds=folds,
         )
         return {"ok": True, "job_id": job_id}
 
