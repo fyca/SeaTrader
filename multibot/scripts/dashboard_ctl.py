@@ -26,6 +26,19 @@ BOTS = {
 }
 
 
+def _load_env_file(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not path.exists():
+        return out
+    for ln in path.read_text().splitlines():
+        s = ln.strip()
+        if not s or s.startswith("#") or "=" not in s:
+            continue
+        k, v = s.split("=", 1)
+        out[k.strip()] = v.strip().strip('"').strip("'")
+    return out
+
+
 def _venv_python() -> str:
     if os.name == "nt":
         p = REPO / ".venv" / "Scripts" / "python.exe"
@@ -84,13 +97,16 @@ def _spawn_dashboard(bot: str, port: int) -> tuple[bool, str]:
         str(port),
     ]
 
+    child_env = os.environ.copy()
+    child_env.update(_load_env_file(bot_dir / ".env"))
+
     kwargs = {
         "cwd": str(bot_dir),
         "stdout": log_f,
         "stderr": subprocess.STDOUT,
         "stdin": subprocess.DEVNULL,
         "close_fds": True,
-        "env": os.environ.copy(),
+        "env": child_env,
     }
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
