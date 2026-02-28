@@ -152,6 +152,7 @@ def run_backtest(
     params: BacktestParams,
     progress_cb=None,
     debug_cb=None,
+    debug_verbose: bool = False,
     intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
     intraday_limit_touch_cb: Callable[[str, pd.Timestamp, str, float], bool] | None = None,
     risk_intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
@@ -709,6 +710,8 @@ def run_backtest(
 
     for i, day in enumerate(days):
         day_s = day.strftime("%Y-%m-%d")
+        if debug_verbose:
+            _dbg("day_start", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), pending_limits=len(pending_limits))
 
         def _can_sell_today(sym: str) -> bool:
             if bool(params.allow_same_day_roundtrip):
@@ -761,6 +764,8 @@ def run_backtest(
                 for mm in sorted(hourly_minutes):
                     ts_local = pd.Timestamp(day).replace(hour=hr, minute=int(mm), second=0, microsecond=0)
                     hourly_debug["slots_considered"] += 1
+                    if debug_verbose:
+                        _dbg("hourly_slot", day=day_s, ts=str(ts_local), positions=len(positions_qty), minute=int(mm))
 
                     if not positions_qty:
                         continue
@@ -780,6 +785,8 @@ def run_backtest(
 
                         hourly_debug["symbol_checks"] += 1
                         p_intraday = risk_px_at_ts(sym, ts_local)
+                        if debug_verbose:
+                            _dbg("hourly_symbol", day=day_s, ts=str(ts_local), symbol=sym, has_price=(p_intraday is not None), checks=','.join(sorted(list(checks))))
                         if p_intraday is None:
                             continue
                         hourly_debug["price_points_found"] += 1
@@ -1426,7 +1433,9 @@ def run_backtest(
 
         if progress_cb and (i % 10 == 0 or i == len(days) - 1):
             progress_cb(i + 1, len(days))
-        if (i == len(days) - 1) or ((i + 1) % 10 == 0):
+        if debug_verbose:
+            _dbg("day_end", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), cash=round(float(cash), 2), equity=round(float(equity), 2))
+        elif (i == len(days) - 1) or ((i + 1) % 10 == 0):
             _dbg("day_done", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), cash=round(float(cash), 2), equity=round(float(equity), 2))
 
     # metrics

@@ -1206,6 +1206,7 @@ let btDebugOffset = 0;
 let btDebugLastJobId = null;
 let btDebugPollInFlight = false;
 let btDebugES = null;
+let btDebugLastLine = '';
 
 let openExposureSymbols = new Set();
 let openLiveDailyDays = new Set();
@@ -1351,6 +1352,7 @@ function collectBacktestRequestBody() {
   const limit_offset_bps_equities = Number(document.getElementById('btEqLimitOffset')?.value || '10');
   const limit_offset_bps_crypto = Number(document.getElementById('btCrLimitOffset')?.value || '10');
   const symbol = (document.getElementById('btSymbol')?.value || '').trim();
+  const debug_verbose = Boolean(document.getElementById('btDebugToggle')?.checked);
   const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
   const minCryptoRaw = (document.getElementById('btMinCryptoPrice')?.value || '').trim();
   const min_crypto_price = minCryptoRaw ? Number(minCryptoRaw) : null;
@@ -1399,7 +1401,8 @@ function collectBacktestRequestBody() {
     trailing_stop_stocks_start_gain_pct, trailing_stop_crypto_start_gain_pct,
     trailing_stop_stocks_pct, trailing_stop_crypto_pct, trailing_stop_anchor,
     min_crypto_price, min_avg_crypto_dollar_volume_20d,
-    symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized
+    symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized,
+    debug_verbose
   };
 }
 
@@ -1411,7 +1414,16 @@ function _appendBacktestDebugLines(lines) {
   const box = document.getElementById('btDebugLog');
   if (!box) return;
   if (!Array.isArray(lines) || !lines.length) return;
-  box.textContent += (box.textContent ? '\n' : '') + lines.join('\n');
+  const filtered = [];
+  for (const ln of lines) {
+    const s = String(ln || '');
+    if (!s) continue;
+    if (s === btDebugLastLine) continue;
+    filtered.push(s);
+    btDebugLastLine = s;
+  }
+  if (!filtered.length) return;
+  box.textContent += (box.textContent ? '\n' : '') + filtered.join('\n');
   box.scrollTop = box.scrollHeight;
 }
 
@@ -1448,6 +1460,7 @@ function _resetBacktestDebug(jobId = null) {
   const box = document.getElementById('btDebugLog');
   btDebugOffset = 0;
   btDebugLastJobId = jobId || btJobId || null;
+  btDebugLastLine = '';
   stopBacktestDebugStream();
   if (box) box.textContent = '';
 }

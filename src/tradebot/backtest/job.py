@@ -174,8 +174,11 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             t_fetch_end = time.perf_counter()
 
             # Run backtest
-            p = BacktestParams(**params)
-            _log("phase", state="running")
+            debug_verbose = bool(params.get("debug_verbose", False))
+            p_params = dict(params)
+            p_params.pop("debug_verbose", None)
+            p = BacktestParams(**p_params)
+            _log("phase", state="running", debug_verbose=debug_verbose)
             _last_prog_log = {"done": -1}
 
             def prog(done, total):
@@ -286,6 +289,7 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     params=p,
                     progress_cb=prog,
                     debug_cb=dbg,
+                    debug_verbose=debug_verbose,
                     intraday_price_cb=intraday_cb,
                     intraday_limit_touch_cb=intraday_limit_touch_cb,
                     risk_intraday_price_cb=risk_intraday_cb,
