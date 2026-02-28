@@ -48,14 +48,31 @@ def start_backtest(*, config_path: str, params: dict) -> str:
     job_dir = BASE / job_id
     status_path = job_dir / "status.json"
     result_path = job_dir / "result.json"
+    debug_log_path = job_dir / "debug.log"
 
     _write(status_path, {"state": "starting", "progress": 0, "total": 1})
+
+    def _log(msg: str, **fields) -> None:
+        try:
+            job_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now(timezone.utc).isoformat()
+            if fields:
+                extras = " ".join([f"{k}={fields[k]}" for k in sorted(fields.keys())])
+                line = f"[{ts}] {msg} | {extras}"
+            else:
+                line = f"[{ts}] {msg}"
+            with debug_log_path.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
 
     def run():
         try:
             t_job_start = time.perf_counter()
+            _log("backtest_started", config_path=config_path)
             t_fetch_start = t_job_start
             _write(status_path, {"state": "fetching_data", "progress": 0, "total": 1})
+            _log("phase", state="fetching_data")
             cfg = load_config(config_path)
             # Optional backtest-only liquidity override from dashboard controls.
             try:
@@ -92,6 +109,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     tradable_eq = [sym]
                     tradable_cr = []
 
+            _log("universe_resolved", equities=len(tradable_eq), crypto=len(tradable_cr), mode=params.get("asset_mode", "both"))
+
             # Fetch bars: cover evaluation window plus warmup for indicators
             start_dt = datetime.fromisoformat(params["start"]).replace(tzinfo=timezone.utc)
             end_dt = datetime.fromisoformat(params["end"]).replace(tzinfo=timezone.utc) + timedelta(days=1)
@@ -111,28 +130,36 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             if asset_mode in ("both", "equities"):
                 stock_bars = load_cached_frames("stocks", tradable_eq, cfg.signals.lookback_days, cache_start, cache_end)
                 if stock_bars is None:
+                    _log("stock_cache", hit=False, symbols=len(tradable_eq))
                     stock_bars = {}
                     chunk = 100
                     for i in range(0, len(tradable_eq), chunk):
                         syms = tradable_eq[i : i + chunk]
                         stock_bars.update(fetch_stock_bars_range(clients.stocks, syms, start=warmup_start, end=end_dt))
                         _write(status_path, {"state": "fetching_data", "progress": min(i + chunk, len(tradable_eq)), "total": len(tradable_eq)})
+                        _log("fetch_stocks_chunk", done=min(i + chunk, len(tradable_eq)), total=len(tradable_eq))
                     save_cached_frames("stocks", tradable_eq, cfg.signals.lookback_days, cache_start, cache_end, stock_bars)
+                    _log("stock_cache_saved", frames=len(stock_bars))
                 else:
                     stock_cache_hit = True
+                    _log("stock_cache", hit=True, frames=len(stock_bars))
 
             if asset_mode in ("both", "crypto"):
                 crypto_bars = load_cached_frames("crypto", tradable_cr, cfg.signals.lookback_days, cache_start, cache_end)
                 if crypto_bars is None:
+                    _log("crypto_cache", hit=False, symbols=len(tradable_cr))
                     crypto_bars = {}
                     chunkc = 50
                     for i in range(0, len(tradable_cr), chunkc):
                         syms = tradable_cr[i : i + chunkc]
                         crypto_bars.update(fetch_crypto_bars_range(clients.crypto, syms, start=warmup_start, end=end_dt))
                         _write(status_path, {"state": "fetching_crypto", "progress": min(i + chunkc, len(tradable_cr)), "total": len(tradable_cr)})
+                        _log("fetch_crypto_chunk", done=min(i + chunkc, len(tradable_cr)), total=len(tradable_cr))
                     save_cached_frames("crypto", tradable_cr, cfg.signals.lookback_days, cache_start, cache_end, crypto_bars)
+                    _log("crypto_cache_saved", frames=len(crypto_bars))
                 else:
                     crypto_cache_hit = True
+                    _log("crypto_cache", hit=True, frames=len(crypto_bars))
 
             # Normalize stop-loss input: allow UI to pass 5 meaning 5%
             if params.get("per_asset_stop_loss_pct") is not None:
@@ -148,14 +175,18 @@ def start_backtest(*, config_path: str, params: dict) -> str:
 
             # Run backtest
             p = BacktestParams(**params)
+            _log("phase", state="running")
 
             def prog(done, total):
                 _write(status_path, {"state": "running", "progress": done, "total": total})
+                if (done == total) or (done % 25 == 0):
+                    _log("simulate_progress", done=done, total=total)
 
             intraday_cb = None
             intraday_limit_touch_cb = None
             risk_intraday_cb = None
             if getattr(p, "execution_time_mode", "daily") == "intraday":
+                _log("intraday_mode_enabled", execution_tz=p.execution_tz)
                 from tradebot.backtest.intraday import IntradayPriceProvider
 
                 eq_exec_t = getattr(p, "execution_time_local_equities", None) or p.execution_time_local
@@ -262,10 +293,13 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             payload["metrics"]["timing"]["total_seconds"] = round(float(t_write_end - t_job_start), 4)
             _write(result_path, payload)
             _write(status_path, {"state": "done", "progress": 1, "total": 1})
+            _log("backtest_done", total_seconds=payload["metrics"]["timing"].get("total_seconds"))
         except Exception as e:
             import traceback
 
-            _write(status_path, {"state": "error", "error": str(e), "traceback": traceback.format_exc()})
+            tb = traceback.format_exc()
+            _write(status_path, {"state": "error", "error": str(e), "traceback": tb})
+            _log("backtest_error", error=str(e))
 
     # record latest job id
     BASE.mkdir(parents=True, exist_ok=True)
@@ -298,6 +332,21 @@ def get_result(job_id: str) -> dict | None:
     if not p.exists():
         return None
     return _read_json_safe(p)
+
+
+def get_debug_log(job_id: str, *, offset: int = 0, limit: int = 200) -> dict:
+    p = BASE / job_id / "debug.log"
+    if not p.exists():
+        return {"job_id": job_id, "lines": [], "next_offset": 0, "eof": True}
+    try:
+        lines_all = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception:
+        return {"job_id": job_id, "lines": [], "next_offset": 0, "eof": True}
+    off = max(0, int(offset))
+    lim = max(1, min(int(limit), 2000))
+    out = lines_all[off : off + lim]
+    nxt = off + len(out)
+    return {"job_id": job_id, "lines": out, "next_offset": nxt, "eof": nxt >= len(lines_all)}
 
 
 def list_jobs(limit: int = 20) -> list[dict]:

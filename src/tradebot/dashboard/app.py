@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from tradebot.dashboard.auth import check_token
 from tradebot.dashboard.actions import require_token
 from tradebot.dashboard.config_api import load_config_file, save_config_file, validate_config_payload
-from tradebot.backtest.job import start_backtest, get_status as bt_status, get_result as bt_result, list_jobs as bt_list_jobs, get_latest_job_id
+from tradebot.backtest.job import start_backtest, get_status as bt_status, get_result as bt_result, list_jobs as bt_list_jobs, get_latest_job_id, get_debug_log as bt_debug_log
 from tradebot.util.config import load_config
 from tradebot.util.env import load_env
 from tradebot.adapters.alpaca_client import make_alpaca_clients
@@ -1223,6 +1223,13 @@ def create_app(*, config_path: str) -> FastAPI:
             return {"state": "missing"}
         res = bt_result(job_id)
         return res or {"state": "missing"}
+
+    @app.get("/api/backtest/log")
+    def backtest_log(job_id: str | None = None, offset: int = 0, limit: int = 200):
+        job_id = job_id or get_latest_job_id()
+        if not job_id:
+            return {"state": "missing", "lines": [], "next_offset": 0, "eof": True}
+        return bt_debug_log(job_id, offset=offset, limit=limit)
 
     @app.get("/api/backtest/jobs")
     def backtest_jobs(limit: int = 20):
