@@ -1205,6 +1205,7 @@ let btJobId = null;
 let btDebugOffset = 0;
 let btDebugLastJobId = null;
 let btDebugPollInFlight = false;
+let btDebugES = null;
 
 let openExposureSymbols = new Set();
 let openLiveDailyDays = new Set();
@@ -1406,10 +1407,48 @@ function _isDebugEnabled() {
   return Boolean(document.getElementById('btDebugToggle')?.checked);
 }
 
+function _appendBacktestDebugLines(lines) {
+  const box = document.getElementById('btDebugLog');
+  if (!box) return;
+  if (!Array.isArray(lines) || !lines.length) return;
+  box.textContent += (box.textContent ? '\n' : '') + lines.join('\n');
+  box.scrollTop = box.scrollHeight;
+}
+
+function stopBacktestDebugStream() {
+  if (btDebugES) {
+    try { btDebugES.close(); } catch(e) {}
+    btDebugES = null;
+  }
+}
+
+function startBacktestDebugStream(jobId) {
+  stopBacktestDebugStream();
+  if (!_isDebugEnabled()) return;
+  if (!jobId) return;
+  const box = document.getElementById('btDebugLog');
+  if (box) box.style.display = '';
+  btDebugLastJobId = jobId;
+  const es = new EventSource('/api/backtest/log/stream?job_id=' + encodeURIComponent(jobId));
+  btDebugES = es;
+  es.onmessage = (ev) => {
+    if (typeof ev?.data === 'string' && ev.data.length) {
+      _appendBacktestDebugLines([ev.data]);
+    }
+  };
+  es.addEventListener('end', () => {
+    stopBacktestDebugStream();
+  });
+  es.onerror = () => {
+    // fallback polling will still work
+  };
+}
+
 function _resetBacktestDebug(jobId = null) {
   const box = document.getElementById('btDebugLog');
   btDebugOffset = 0;
   btDebugLastJobId = jobId || btJobId || null;
+  stopBacktestDebugStream();
   if (box) box.textContent = '';
 }
 
@@ -1462,6 +1501,7 @@ async function runBacktest() {
   btJobId = j.job_id;
   btDebugLastJobId = btJobId;
   status.textContent = `job ${btJobId} started`;
+  startBacktestDebugStream(btJobId);
   await pollBacktestDebug(true);
 }
 
@@ -1696,6 +1736,7 @@ async function pollBacktest() {
   if (st.state === 'done') {
     el.textContent = 'done';
     await pollBacktestDebug(true);
+    stopBacktestDebugStream();
     const res = await getJSON('/api/backtest/result?job_id=' + encodeURIComponent(btJobId));
     await renderBacktest(res);
     btJobId = null;
@@ -1703,6 +1744,7 @@ async function pollBacktest() {
   if (st.state === 'error') {
     el.textContent = 'error: ' + st.error;
     await pollBacktestDebug(true);
+    stopBacktestDebugStream();
     const met = document.getElementById('btMetrics');
     if (st.traceback) met.textContent = st.traceback;
     btJobId = null;
@@ -3954,8 +3996,11 @@ document.getElementById('btDebugToggle')?.addEventListener('change', () => {
   if (!box) return;
   if (_isDebugEnabled()) {
     box.style.display = '';
+    const activeJob = btJobId || btDebugLastJobId;
+    if (btJobId && activeJob) startBacktestDebugStream(activeJob);
     pollBacktestDebug(true).catch(() => {});
   } else {
+    stopBacktestDebugStream();
     box.style.display = 'none';
   }
 });
@@ -4030,8 +4075,8 @@ setInterval(() => {
 }, 10_000);
 
 setInterval(() => {
-  if (btJobId) pollBacktestDebug().catch(() => {});
-}, 1_500);
+  if (btJobId && !btDebugES) pollBacktestDebug().catch(() => {});
+}, 500);
 </script>
 </body>
 </html>

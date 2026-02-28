@@ -4,6 +4,7 @@ import argparse
 import json
 import subprocess
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 import io
@@ -12,7 +13,7 @@ from pathlib import Path
 from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from tradebot.dashboard.auth import check_token
@@ -1230,6 +1231,40 @@ def create_app(*, config_path: str) -> FastAPI:
         if not job_id:
             return {"state": "missing", "lines": [], "next_offset": 0, "eof": True}
         return bt_debug_log(job_id, offset=offset, limit=limit)
+
+    @app.get("/api/backtest/log/stream")
+    def backtest_log_stream(job_id: str | None = None):
+        job_id = job_id or get_latest_job_id()
+        if not job_id:
+            raise HTTPException(status_code=404, detail="missing job_id")
+
+        def _iter_events():
+            offset = 0
+            while True:
+                chunk = bt_debug_log(job_id, offset=offset, limit=200)
+                lines = chunk.get("lines") or []
+                offset = int(chunk.get("next_offset") or offset)
+                if lines:
+                    for line in lines:
+                        safe = str(line).replace("\n", " ")
+                        yield f"data: {safe}\n\n"
+                    continue
+
+                st = bt_status(job_id)
+                state = str(st.get("state") or "")
+                if state in ("done", "error", "missing"):
+                    yield f"event: end\ndata: {state}\n\n"
+                    break
+
+                # keep connection alive while waiting for new lines
+                yield "event: keepalive\ndata: ping\n\n"
+                time.sleep(0.2)
+
+        return StreamingResponse(
+            _iter_events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     @app.get("/api/backtest/jobs")
     def backtest_jobs(limit: int = 20):
