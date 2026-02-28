@@ -1731,11 +1731,11 @@ async function pollBacktest() {
   const el = document.getElementById('btStatus');
   if (st.state === 'running' || st.state === 'fetching_data' || st.state === 'fetching_crypto') {
     el.textContent = `${st.state} ${st.progress||0}/${st.total||0}`;
-    await pollBacktestDebug();
+    if (!btDebugES) await pollBacktestDebug();
   }
   if (st.state === 'done') {
     el.textContent = 'done';
-    await pollBacktestDebug(true);
+    if (!btDebugES) await pollBacktestDebug(true);
     stopBacktestDebugStream();
     const res = await getJSON('/api/backtest/result?job_id=' + encodeURIComponent(btJobId));
     await renderBacktest(res);
@@ -1743,7 +1743,7 @@ async function pollBacktest() {
   }
   if (st.state === 'error') {
     el.textContent = 'error: ' + st.error;
-    await pollBacktestDebug(true);
+    if (!btDebugES) await pollBacktestDebug(true);
     stopBacktestDebugStream();
     const met = document.getElementById('btMetrics');
     if (st.traceback) met.textContent = st.traceback;

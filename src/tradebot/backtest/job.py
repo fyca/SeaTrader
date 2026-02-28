@@ -181,9 +181,12 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             def prog(done, total):
                 _write(status_path, {"state": "running", "progress": done, "total": total})
                 last_done = int(_last_prog_log.get("done", -1))
-                if (done == total) or (done - last_done >= 25) or (last_done < 0):
+                if (done == total) or (done - last_done >= 10) or (last_done < 0):
                     _log("simulate_progress", done=done, total=total)
                     _last_prog_log["done"] = int(done)
+
+            def dbg(msg, **fields):
+                _log(f"engine:{msg}", **fields)
 
             intraday_cb = None
             intraday_limit_touch_cb = None
@@ -282,6 +285,7 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     cfg=cfg,
                     params=p,
                     progress_cb=prog,
+                    debug_cb=dbg,
                     intraday_price_cb=intraday_cb,
                     intraday_limit_touch_cb=intraday_limit_touch_cb,
                     risk_intraday_price_cb=risk_intraday_cb,

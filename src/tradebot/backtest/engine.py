@@ -151,6 +151,7 @@ def run_backtest(
     cfg,
     params: BacktestParams,
     progress_cb=None,
+    debug_cb=None,
     intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
     intraday_limit_touch_cb: Callable[[str, pd.Timestamp, str, float], bool] | None = None,
     risk_intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
@@ -698,6 +699,14 @@ def run_backtest(
             out["crypto_risk_on"] = bool(btc_px > btc_ma)
         return out
 
+    def _dbg(msg: str, **fields):
+        if debug_cb is None:
+            return
+        try:
+            debug_cb(msg, **fields)
+        except Exception:
+            pass
+
     for i, day in enumerate(days):
         day_s = day.strftime("%Y-%m-%d")
 
@@ -1083,6 +1092,8 @@ def run_backtest(
         # Rebalance
         do_eq_rebalance = day in eq_rebal_days
         do_cr_rebalance = day in cr_rebal_days
+        if (i == 0) or ((i + 1) % 10 == 0):
+            _dbg("day_tick", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), pending_limits=len(pending_limits), cash=round(float(cash), 2), equity=round(float(equity), 2))
         if do_eq_rebalance or do_cr_rebalance:
             if stopped_until_next_rebalance:
                 # behavior A: stay in cash UNTIL the next scheduled rebalance.
@@ -1154,6 +1165,7 @@ def run_backtest(
 
             eq_sel, _eq_details = eq_strat.select_equities(bars=eq_bars_day, cfg=cfg)
             cr_sel, _cr_details = cr_strat.select_crypto(bars=cr_bars_day, cfg=cfg)
+            _dbg("rebalance_selection", day=day_s, eq_candidates=len(eq_bars_day), cr_candidates=len(cr_bars_day), eq_selected=len(eq_sel), cr_selected=len(cr_sel))
 
             # Optional crypto price floor (per-run param, else config)
             min_cr_px = params.min_crypto_price if params.min_crypto_price is not None else getattr(cfg.limits, "min_crypto_price", None)
@@ -1414,6 +1426,8 @@ def run_backtest(
 
         if progress_cb and (i % 10 == 0 or i == len(days) - 1):
             progress_cb(i + 1, len(days))
+        if (i == len(days) - 1) or ((i + 1) % 10 == 0):
+            _dbg("day_done", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), cash=round(float(cash), 2), equity=round(float(equity), 2))
 
     # metrics
     eq0 = curve[0]["equity"] if curve else params.initial_equity
