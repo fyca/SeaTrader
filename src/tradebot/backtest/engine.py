@@ -1191,11 +1191,47 @@ def run_backtest(
 
             eq_sel: list[str] = []
             cr_sel: list[str] = []
+            _eq_details: dict[str, dict] = {}
+            _cr_details: dict[str, dict] = {}
             if run_eq_select:
                 eq_sel, _eq_details = eq_strat.select_equities(bars=eq_bars_day, cfg=cfg)
             if run_cr_select:
                 cr_sel, _cr_details = cr_strat.select_crypto(bars=cr_bars_day, cfg=cfg)
             _dbg("rebalance_selection", day=day_s, run_eq=run_eq_select, run_cr=run_cr_select, eq_candidates=len(eq_bars_day), cr_candidates=len(cr_bars_day), eq_selected=len(eq_sel), cr_selected=len(cr_sel))
+            if debug_verbose and (run_eq_select or run_cr_select):
+                _dbg("strategy_run", day=day_s, eq_strategy=str(eq_strategy_id), cr_strategy=str(cr_strategy_id), run_eq=run_eq_select, run_cr=run_cr_select)
+                if run_eq_select:
+                    _dbg("eq_selected_symbols", day=day_s, symbols=",".join([str(s) for s in eq_sel[:50]]))
+                    for s in eq_sel[:20]:
+                        d = (_eq_details or {}).get(s) or {}
+                        _dbg(
+                            "eq_indicator_snapshot",
+                            day=day_s,
+                            symbol=str(s),
+                            score=d.get("score"),
+                            reason=d.get("reason") or d.get("reject_reason"),
+                            last_close=d.get("last_close"),
+                            ann_vol=d.get("ann_vol"),
+                            ma_long=d.get("ma_long"),
+                            ma_short=d.get("ma_short"),
+                            rank=d.get("rank"),
+                        )
+                if run_cr_select:
+                    _dbg("cr_selected_symbols", day=day_s, symbols=",".join([str(s) for s in cr_sel[:50]]))
+                    for s in cr_sel[:20]:
+                        d = (_cr_details or {}).get(s) or {}
+                        _dbg(
+                            "cr_indicator_snapshot",
+                            day=day_s,
+                            symbol=str(s),
+                            score=d.get("score"),
+                            reason=d.get("reason") or d.get("reject_reason"),
+                            last_close=d.get("last_close"),
+                            ann_vol=d.get("ann_vol"),
+                            ma_long=d.get("ma_long"),
+                            ma_short=d.get("ma_short"),
+                            rank=d.get("rank"),
+                        )
 
             # Optional crypto price floor (per-run param, else config)
             min_cr_px = params.min_crypto_price if params.min_crypto_price is not None else getattr(cfg.limits, "min_crypto_price", None)
