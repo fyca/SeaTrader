@@ -115,6 +115,10 @@ class BacktestParams:
 
 
 @dataclass(frozen=True)
+class BacktestStopped(Exception):
+    pass
+
+
 class BacktestResult:
     params: dict
     equity_curve: list[dict]
@@ -152,6 +156,7 @@ def run_backtest(
     params: BacktestParams,
     progress_cb=None,
     debug_cb=None,
+    stop_cb=None,
     debug_verbose: bool = False,
     intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
     intraday_limit_touch_cb: Callable[[str, pd.Timestamp, str, float], bool] | None = None,
@@ -774,6 +779,14 @@ def run_backtest(
         return snap
 
     for i, day in enumerate(days):
+        if stop_cb is not None:
+            try:
+                if bool(stop_cb()):
+                    raise BacktestStopped("stopped_by_user")
+            except BacktestStopped:
+                raise
+            except Exception:
+                pass
         day_s = day.strftime("%Y-%m-%d")
         if debug_verbose:
             _dbg("day_start", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), pending_limits=len(pending_limits))

@@ -17,12 +17,13 @@ from tradebot.util.config import load_config
 from tradebot.util.env import load_env
 from tradebot.universe.sp500 import get_sp500_symbols
 from tradebot.universe.crypto import list_tradable_crypto
-from tradebot.backtest.engine import BacktestParams, run_backtest
+from tradebot.backtest.engine import BacktestParams, BacktestStopped, run_backtest
 from tradebot.backtest.cache import load_cached_frames, save_cached_frames
 
 
 BASE = Path("data/backtests")
 LATEST_PATH = BASE / "latest_job_id.txt"
+_STOP_EVENTS: dict[str, threading.Event] = {}
 
 
 def _write(path: Path, obj) -> None:
@@ -54,6 +55,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
     trace_symbols_dir = trace_dir / "symbols"
 
     _write(status_path, {"state": "starting", "progress": 0, "total": 1})
+    stop_event = threading.Event()
+    _STOP_EVENTS[job_id] = stop_event
 
     def _trace(event: str, **fields) -> None:
         try:
@@ -320,6 +323,7 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     params=p,
                     progress_cb=prog,
                     debug_cb=dbg,
+                    stop_cb=stop_event.is_set,
                     debug_verbose=debug_verbose,
                     intraday_price_cb=intraday_cb,
                     intraday_limit_touch_cb=intraday_limit_touch_cb,
@@ -353,12 +357,17 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             _write(result_path, payload)
             _write(status_path, {"state": "done", "progress": 1, "total": 1})
             _log("backtest_done", total_seconds=payload["metrics"]["timing"].get("total_seconds"))
+        except BacktestStopped:
+            _write(status_path, {"state": "stopped", "progress": 0, "total": 1})
+            _log("backtest_stopped")
         except Exception as e:
             import traceback
 
             tb = traceback.format_exc()
             _write(status_path, {"state": "error", "error": str(e), "traceback": tb})
             _log("backtest_error", error=str(e))
+        finally:
+            _STOP_EVENTS.pop(job_id, None)
 
     # record latest job id
     BASE.mkdir(parents=True, exist_ok=True)
@@ -376,6 +385,19 @@ def get_latest_job_id() -> str | None:
     except Exception:
         return None
     return None
+
+
+def stop_backtest(job_id: str) -> dict:
+    ev = _STOP_EVENTS.get(job_id)
+    if ev is None:
+        return {"ok": False, "error": "job_not_running", "job_id": job_id}
+    ev.set()
+    p = BASE / job_id / "status.json"
+    try:
+        _write(p, {"state": "stopping", "progress": 0, "total": 1})
+    except Exception:
+        pass
+    return {"ok": True, "job_id": job_id}
 
 
 def get_status(job_id: str) -> dict:

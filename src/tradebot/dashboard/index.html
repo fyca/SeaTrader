@@ -432,6 +432,10 @@
               <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap;">
                 <button id="btDebugPause" class="secondary" type="button">Pause scroll</button>
                 <label class="muted" style="display:flex; align-items:center; gap:6px; user-select:none;">
+                  <input id="btDebugDecisionOnly" type="checkbox" checked />
+                  Decision events only
+                </label>
+                <label class="muted" style="display:flex; align-items:center; gap:6px; user-select:none;">
                   <input id="btDebugToggle" type="checkbox" />
                   Show real-time debug log
                 </label>
@@ -1429,9 +1433,15 @@ function _appendBacktestDebugLines(lines) {
   if (!box) return;
   if (!Array.isArray(lines) || !lines.length) return;
   const filtered = [];
+  const decisionOnly = Boolean(document.getElementById('btDebugDecisionOnly')?.checked);
+  const decisionHints = ['rebalance_selection','strategy_run','trade_recorded','engine:event','daily_strategy_exit_eval','hourly_strategy_exit_eval','daily_stop_eval','daily_trailing_eval','hourly_trailing_eval','daily_dd_eval','hourly_dd_eval','backtest_done','backtest_error','backtest_stopped'];
   for (const ln of lines) {
     const s = String(ln || '');
     if (!s) continue;
+    if (decisionOnly) {
+      const ok = decisionHints.some(h => s.includes(h));
+      if (!ok) continue;
+    }
     if (s === btDebugLastLine) continue;
     filtered.push(s);
     btDebugLastLine = s;
@@ -1554,6 +1564,27 @@ async function loadBacktestTrace() {
   out.scrollTop = 0;
 }
 
+function setBacktestRunButtonState() {
+  const btn = document.getElementById('btRun');
+  if (!btn) return;
+  const running = Boolean(btJobId);
+  btn.textContent = running ? 'Stop backtest' : 'Run backtest';
+  btn.className = running ? 'secondary' : 'primary';
+}
+
+async function stopBacktest() {
+  if (!btJobId) return;
+  const token = document.getElementById('token')?.value || '';
+  const status = document.getElementById('btStatus');
+  status.textContent = 'stopping…';
+  const r = await fetch('/api/backtest/stop' + (token ? ('?token=' + encodeURIComponent(token)) : ''), {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({job_id: btJobId})
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'failed_to_stop');
+}
+
 async function runBacktest() {
   const status = document.getElementById('btStatus');
   const token = document.getElementById('token')?.value || '';
@@ -1569,6 +1600,7 @@ async function runBacktest() {
   const j = await r.json();
   btJobId = j.job_id;
   btDebugLastJobId = btJobId;
+  setBacktestRunButtonState();
   status.textContent = `job ${btJobId} started`;
   await refreshTraceSymbols(btJobId);
   startBacktestDebugStream(btJobId);
@@ -1810,6 +1842,16 @@ async function pollBacktest() {
     const res = await getJSON('/api/backtest/result?job_id=' + encodeURIComponent(btJobId));
     await renderBacktest(res);
     btJobId = null;
+    setBacktestRunButtonState();
+  }
+  if (st.state === 'stopped' || st.state === 'stopping') {
+    el.textContent = st.state;
+    if (st.state === 'stopped') {
+      if (!btDebugES) await pollBacktestDebug(true);
+      stopBacktestDebugStream();
+      btJobId = null;
+      setBacktestRunButtonState();
+    }
   }
   if (st.state === 'error') {
     el.textContent = 'error: ' + st.error;
@@ -1818,6 +1860,7 @@ async function pollBacktest() {
     const met = document.getElementById('btMetrics');
     if (st.traceback) met.textContent = st.traceback;
     btJobId = null;
+    setBacktestRunButtonState();
   }
 }
 
@@ -4057,8 +4100,15 @@ document.getElementById('exclusionsTable')?.addEventListener('click', async (e) 
 
 document.getElementById('btRun')?.addEventListener('click', (e) => {
   e.preventDefault();
+  if (btJobId) {
+    stopBacktest().catch(err => {
+      document.getElementById('btStatus').textContent = 'stop error: ' + err;
+    });
+    return;
+  }
   runBacktest().catch(err => {
     document.getElementById('btStatus').textContent = 'error: ' + err;
+    setBacktestRunButtonState();
   });
 });
 
@@ -4165,6 +4215,8 @@ document.getElementById('btClearCache')?.addEventListener('click', async (e) => 
     status.textContent = 'error clearing cache: ' + err;
   }
 });
+
+setBacktestRunButtonState();
 
 setInterval(() => {
   main().catch(() => {});
