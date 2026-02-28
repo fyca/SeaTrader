@@ -66,12 +66,12 @@ def create_app(*, config_path: str) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index():
         html_path = Path(__file__).with_name("index.html")
-        return HTMLResponse(html_path.read_text())
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
     @app.get("/builder", response_class=HTMLResponse)
     def builder():
         html_path = Path(__file__).with_name("builder.html")
-        return HTMLResponse(html_path.read_text())
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
     @app.get("/api/health")
     def health():
