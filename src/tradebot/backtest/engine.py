@@ -302,38 +302,67 @@ def run_backtest(
             highs[sym] = pd.Series(dtype=float)
             lows[sym] = pd.Series(dtype=float)
 
+    px_cache: dict[tuple[str, str], float | None] = {}
+    px_open_cache: dict[tuple[str, str], float | None] = {}
+    px_col_cache: dict[tuple[str, str, str], float | None] = {}
+
     def px(sym: str, day: pd.Timestamp) -> float | None:
+        dkey = pd.Timestamp(day).strftime("%Y-%m-%d")
+        key = (str(sym), dkey)
+        if key in px_cache:
+            return px_cache[key]
         s = closes.get(sym)
         if s is None or len(s) == 0:
+            px_cache[key] = None
             return None
         # use last valid close on/before day (skip NaN/zero/invalid tails)
         sub = s.loc[:day]
         if len(sub) == 0:
+            px_cache[key] = None
             return None
         vals = sub.dropna().astype(float)
         if len(vals) == 0:
+            px_cache[key] = None
             return None
         for v in reversed(vals.values.tolist()):
             if np.isfinite(v) and float(v) > 0:
-                return float(v)
+                out = float(v)
+                px_cache[key] = out
+                return out
+        px_cache[key] = None
         return None
 
     def px_open(sym: str, day: pd.Timestamp) -> float | None:
+        dkey = pd.Timestamp(day).strftime("%Y-%m-%d")
+        key = (str(sym), dkey)
+        if key in px_open_cache:
+            return px_open_cache[key]
         s = opens.get(sym)
         if s is None or len(s) == 0:
+            px_open_cache[key] = None
             return None
         sub = s.loc[:day]
         if len(sub) == 0:
+            px_open_cache[key] = None
             return None
         vals = sub.dropna().astype(float)
         if len(vals) == 0:
+            px_open_cache[key] = None
             return None
         for v in reversed(vals.values.tolist()):
             if np.isfinite(v) and float(v) > 0:
-                return float(v)
+                out = float(v)
+                px_open_cache[key] = out
+                return out
+        px_open_cache[key] = None
         return None
 
     def px_col(sym: str, day: pd.Timestamp, col: str) -> float | None:
+        dkey = pd.Timestamp(day).strftime("%Y-%m-%d")
+        key = (str(sym), dkey, str(col))
+        if key in px_col_cache:
+            return px_col_cache[key]
+
         s: pd.Series
         if col == "high":
             s = highs.get(sym, pd.Series(dtype=float))
@@ -346,21 +375,28 @@ def run_backtest(
         else:
             df = bars_all.get(sym)
             if df is None or len(df) == 0 or col not in df.columns:
+                px_col_cache[key] = None
                 return None
             try:
                 s = df[col].astype(float)
             except Exception:
+                px_col_cache[key] = None
                 return None
 
         if s is None or len(s) == 0:
+            px_col_cache[key] = None
             return None
         try:
             sub = s.loc[:day]
             if len(sub) == 0:
+                px_col_cache[key] = None
                 return None
             v = float(sub.iloc[-1])
-            return v if np.isfinite(v) and v > 0 else None
+            out = v if np.isfinite(v) and v > 0 else None
+            px_col_cache[key] = out
+            return out
         except Exception:
+            px_col_cache[key] = None
             return None
 
     def exec_px(sym: str, day: pd.Timestamp) -> float | None:
