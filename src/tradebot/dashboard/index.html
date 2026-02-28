@@ -1447,7 +1447,12 @@ function _appendBacktestDebugLines(lines) {
     btDebugLastLine = s;
   }
   if (!filtered.length) return;
-  box.textContent += (box.textContent ? '\n' : '') + filtered.join('\n');
+
+  const existing = box.textContent ? box.textContent.split('\n') : [];
+  const combined = existing.concat(filtered);
+  const MAX_LINES = 1500;
+  const keep = combined.length > MAX_LINES ? combined.slice(combined.length - MAX_LINES) : combined;
+  box.textContent = keep.join('\n');
   if (btDebugAutoScroll) box.scrollTop = box.scrollHeight;
 }
 
@@ -1555,7 +1560,7 @@ async function loadBacktestTrace() {
   const evFilter = String(document.getElementById('btTraceEventFilter')?.value || '').trim().toLowerCase();
   const url = '/api/backtest/trace?job_id=' + encodeURIComponent(job)
     + (symbol ? ('&symbol=' + encodeURIComponent(symbol)) : '')
-    + '&limit=1200';
+    + '&limit=400';
   const j = await getJSON(url);
   let lines = Array.isArray(j.lines) ? j.lines : [];
   if (evFilter) lines = lines.filter(x => String(x?.event || '').toLowerCase().includes(evFilter));
@@ -4149,8 +4154,10 @@ document.getElementById('btTraceSymbol')?.addEventListener('change', () => {
   loadBacktestTrace().catch(() => {});
 });
 
+let __btTraceFilterTimer = null;
 document.getElementById('btTraceEventFilter')?.addEventListener('input', () => {
-  loadBacktestTrace().catch(() => {});
+  if (__btTraceFilterTimer) clearTimeout(__btTraceFilterTimer);
+  __btTraceFilterTimer = setTimeout(() => loadBacktestTrace().catch(() => {}), 250);
 });
 
 document.getElementById('btRunIter')?.addEventListener('click', async (e) => {
