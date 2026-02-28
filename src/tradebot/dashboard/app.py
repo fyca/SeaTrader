@@ -131,6 +131,29 @@ def create_app(*, config_path: str) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    @app.post("/api/strategy/auto-build/start")
+    async def strategy_auto_build_start(req: Request):
+        body = await req.json()
+        syms = body.get("symbols") or []
+        if isinstance(syms, str):
+            syms = [x.strip() for x in syms.split(",") if x.strip()]
+        years = int(body.get("years") or 5)
+        asset_class = str(body.get("asset_class") or "stocks")
+        from tradebot.strategies.auto_builder import start_auto_build
+        job_id = start_auto_build(symbols=list(syms), years=years, asset_class=asset_class)
+        return {"ok": True, "job_id": job_id}
+
+    @app.get("/api/strategy/auto-build/status")
+    def strategy_auto_build_status(job_id: str):
+        from tradebot.strategies.auto_builder import get_auto_build_status
+        return get_auto_build_status(job_id)
+
+    @app.get("/api/strategy/auto-build/result")
+    def strategy_auto_build_result(job_id: str):
+        from tradebot.strategies.auto_builder import get_auto_build_result
+        res = get_auto_build_result(job_id)
+        return res or {"state": "missing"}
+
     @app.post("/api/strategy/{strategy_id}/preview")
     async def strategy_preview(strategy_id: str, req: Request):
         body = await req.json()

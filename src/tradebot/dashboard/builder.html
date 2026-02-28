@@ -247,6 +247,31 @@
   </div>
 
   <div class="card">
+    <h2>Auto Strategy Builder (multi-symbol)</h2>
+    <div class="muted">Searches a parameter grid across symbols, then aggregates robust parameters into one strategy template.</div>
+    <div class="row" style="margin-top:8px;">
+      <div>
+        <div class="muted">Symbols (comma separated)</div>
+        <input id="abSymbols" placeholder="AAPL,MSFT,NVDA" style="min-width:360px;" />
+      </div>
+      <div>
+        <div class="muted">Lookback years</div>
+        <input id="abYears" type="number" value="5" min="1" max="20" style="width:90px;" />
+      </div>
+      <div>
+        <div class="muted">Asset class</div>
+        <select id="abAsset"><option value="stocks" selected>Stocks</option><option value="crypto">Crypto</option></select>
+      </div>
+      <div>
+        <button id="abRun" class="primary">Run auto-builder</button>
+        <button id="abApply" class="secondary">Apply result to editor</button>
+      </div>
+      <div><span id="abStatus" class="muted"></span></div>
+    </div>
+    <details style="margin-top:8px;"><summary class="muted">Auto-builder result</summary><pre id="abOut"></pre></details>
+  </div>
+
+  <div class="card">
     <h2>Preview</h2>
     <div class="row">
       <div>
@@ -1000,6 +1025,56 @@ async function preview() {
   }
 }
 
+let _abJobId = null;
+let _abLastResult = null;
+
+async function runAutoBuilder() {
+  const st = document.getElementById('abStatus');
+  const out = document.getElementById('abOut');
+  const symbols = String(document.getElementById('abSymbols')?.value || '').trim();
+  const years = Number(document.getElementById('abYears')?.value || '5');
+  const asset_class = String(document.getElementById('abAsset')?.value || 'stocks');
+  if (!symbols) throw new Error('enter symbols');
+  st.textContent = 'starting…';
+  out.textContent = '';
+  const r = await fetch('/api/strategy/auto-build/start', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class})
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const j = await r.json();
+  _abJobId = j.job_id;
+  st.textContent = `job ${_abJobId} running…`;
+}
+
+async function pollAutoBuilder() {
+  if (!_abJobId) return;
+  const st = document.getElementById('abStatus');
+  const out = document.getElementById('abOut');
+  const s = await getJSON('/api/strategy/auto-build/status?job_id=' + encodeURIComponent(_abJobId));
+  st.textContent = `${s.state} ${s.progress||0}/${s.total||0}` + (s.error ? (' • ' + s.error) : '');
+  if (s.state === 'done') {
+    const res = await getJSON('/api/strategy/auto-build/result?job_id=' + encodeURIComponent(_abJobId));
+    _abLastResult = res;
+    out.textContent = JSON.stringify(res, null, 2);
+    _abJobId = null;
+  }
+  if (s.state === 'error' || s.state === 'missing') _abJobId = null;
+}
+
+function applyAutoBuilderResult() {
+  if (!_abLastResult || !_abLastResult.strategy) throw new Error('no result yet');
+  const s = _abLastResult.strategy;
+  document.getElementById('sid').value = s.id || '';
+  document.getElementById('sname').value = s.name || '';
+  document.getElementById('sasset').value = s.asset_class || 'stocks';
+  document.getElementById('stype').value = 'entry';
+  document.getElementById('entry').value = JSON.stringify(s.entry || {all:[]}, null, 2);
+  document.getElementById('exit').value = JSON.stringify(s.exit || {any:[]}, null, 2);
+  document.getElementById('factors').value = JSON.stringify(s.score_factors || [], null, 2);
+  syncCondsFromJson(); syncExitFromJson(); syncFactorsFromJson(); applyBuilderTypeUI();
+  document.getElementById('status').textContent = 'auto-builder result loaded in editor';
+}
+
 async function delStrat() {
   const status = document.getElementById('status');
   try {
@@ -1084,6 +1159,10 @@ document.getElementById('addPresetSlope').addEventListener('click', (e)=>{e.prev
 document.getElementById('addPresetCross').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow({weight: 0.1, value: {left:{kind:'cross_above',fast:50,slow:200}, op:'==', right:1}});});
 document.getElementById('syncFactorsToJson').addEventListener('click', (e)=>{e.preventDefault(); syncFactorsToJson();});
 document.getElementById('syncFactorsFromJson').addEventListener('click', (e)=>{e.preventDefault(); syncFactorsFromJson();});
+
+document.getElementById('abRun')?.addEventListener('click', (e)=>{ e.preventDefault(); runAutoBuilder().catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
+document.getElementById('abApply')?.addEventListener('click', (e)=>{ e.preventDefault(); try { applyAutoBuilderResult(); } catch(err) { document.getElementById('abStatus').textContent = 'error: ' + err; } });
+setInterval(()=>{ pollAutoBuilder().catch(()=>{}); }, 1500);
 </script>
   </div>
 </body>
