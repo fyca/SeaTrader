@@ -438,6 +438,16 @@
               </div>
             </div>
             <pre id="btDebugLog" class="muted" style="display:none; margin-top:8px; max-height:220px; overflow:auto; background:#0f1115; color:#d7dde7; border:1px solid var(--border); border-radius:10px; padding:10px; white-space:pre-wrap;"></pre>
+            <div style="margin-top:10px; border-top:1px solid var(--border); padding-top:10px;">
+              <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap;">
+                <div style="font-weight:700;">Trace viewer</div>
+                <button id="btTraceLoad" class="secondary" type="button">Load trace</button>
+                <select id="btTraceSymbol" style="min-width:170px;"><option value="">Run-level (all symbols)</option></select>
+                <input id="btTraceEventFilter" placeholder="Filter event (optional)" style="min-width:200px;" />
+                <span id="btTraceMeta" class="muted" style="font-size:12px;"></span>
+              </div>
+              <pre id="btTraceLog" class="muted" style="margin-top:8px; max-height:220px; overflow:auto; background:#0b1220; color:#dbe7ff; border:1px solid var(--border); border-radius:10px; padding:10px; white-space:pre-wrap;">(trace not loaded)</pre>
+            </div>
           </div>
 
           <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap: wrap; margin-top:10px;">
@@ -1505,6 +1515,45 @@ async function pollBacktestDebug(force=false) {
   }
 }
 
+async function refreshTraceSymbols(jobId) {
+  const sel = document.getElementById('btTraceSymbol');
+  if (!sel || !jobId) return;
+  try {
+    const j = await getJSON('/api/backtest/trace/symbols?job_id=' + encodeURIComponent(jobId));
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Run-level (all symbols)</option>';
+    for (const s of (j.symbols || [])) {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      sel.appendChild(opt);
+    }
+    if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+  } catch (e) {}
+}
+
+async function loadBacktestTrace() {
+  const out = document.getElementById('btTraceLog');
+  const meta = document.getElementById('btTraceMeta');
+  if (!out) return;
+  const job = btJobId || btDebugLastJobId || window.__lastViewedJobId || '';
+  if (!job) {
+    out.textContent = '(no job selected)';
+    return;
+  }
+  const symbol = document.getElementById('btTraceSymbol')?.value || '';
+  const evFilter = String(document.getElementById('btTraceEventFilter')?.value || '').trim().toLowerCase();
+  const url = '/api/backtest/trace?job_id=' + encodeURIComponent(job)
+    + (symbol ? ('&symbol=' + encodeURIComponent(symbol)) : '')
+    + '&limit=1200';
+  const j = await getJSON(url);
+  let lines = Array.isArray(j.lines) ? j.lines : [];
+  if (evFilter) lines = lines.filter(x => String(x?.event || '').toLowerCase().includes(evFilter));
+  meta.textContent = `${lines.length} events` + (symbol ? ` • ${symbol}` : ' • run-level');
+  out.textContent = lines.map(x => JSON.stringify(x)).join('\n') || '(no trace rows)';
+  out.scrollTop = 0;
+}
+
 async function runBacktest() {
   const status = document.getElementById('btStatus');
   const token = document.getElementById('token')?.value || '';
@@ -1521,6 +1570,7 @@ async function runBacktest() {
   btJobId = j.job_id;
   btDebugLastJobId = btJobId;
   status.textContent = `job ${btJobId} started`;
+  await refreshTraceSymbols(btJobId);
   startBacktestDebugStream(btJobId);
   await pollBacktestDebug(true);
 }
@@ -3461,6 +3511,7 @@ async function main() {
           const res = await getJSON('/api/backtest/result?job_id=' + encodeURIComponent(job));
           window.__lastViewedJobId = job;
           _resetBacktestDebug(job);
+          await refreshTraceSymbols(job);
           await pollBacktestDebug(true);
           await renderBacktest(res);
           document.getElementById('btStatus').textContent = 'viewing ' + job;
@@ -4034,6 +4085,22 @@ document.getElementById('btDebugPause')?.addEventListener('click', (e) => {
     const box = document.getElementById('btDebugLog');
     if (box) box.scrollTop = box.scrollHeight;
   }
+});
+
+document.getElementById('btTraceLoad')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  loadBacktestTrace().catch((err) => {
+    const out = document.getElementById('btTraceLog');
+    if (out) out.textContent = 'trace load error: ' + (err?.message || err);
+  });
+});
+
+document.getElementById('btTraceSymbol')?.addEventListener('change', () => {
+  loadBacktestTrace().catch(() => {});
+});
+
+document.getElementById('btTraceEventFilter')?.addEventListener('input', () => {
+  loadBacktestTrace().catch(() => {});
 });
 
 document.getElementById('btRunIter')?.addEventListener('click', async (e) => {
