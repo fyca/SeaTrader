@@ -9,7 +9,7 @@ import pandas as pd
 
 from tradebot.risk.exits import trend_break_exit
 from tradebot.strategies.registry import get_strategy
-from tradebot.strategies.rule_engine import EvalContext, eval_rule
+from tradebot.strategies.rule_engine import EvalContext, eval_rule, eval_indicator
 
 
 @dataclass(frozen=True)
@@ -740,6 +740,39 @@ def run_backtest(
         except Exception:
             pass
 
+    def _collect_indicator_specs(rule_obj, out: list[dict]) -> None:
+        if isinstance(rule_obj, dict):
+            if "kind" in rule_obj:
+                out.append(rule_obj)
+            for v in rule_obj.values():
+                _collect_indicator_specs(v, out)
+        elif isinstance(rule_obj, list):
+            for it in rule_obj:
+                _collect_indicator_specs(it, out)
+
+    def _indicator_snapshot(rule_obj, cls: pd.Series, ann_factor: float) -> dict[str, float | None]:
+        specs: list[dict] = []
+        _collect_indicator_specs(rule_obj, specs)
+        seen: set[str] = set()
+        snap: dict[str, float | None] = {}
+        ctx = EvalContext(closes=cls, ann_factor=ann_factor)
+        for sp in specs:
+            kind = str(sp.get("kind") or "").lower()
+            if not kind:
+                continue
+            parts = [kind]
+            for k in sorted([k for k in sp.keys() if k != "kind"]):
+                parts.append(f"{k}={sp.get(k)}")
+            key = "|".join(parts)
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                snap[key] = eval_indicator(ctx, sp)
+            except Exception:
+                snap[key] = None
+        return snap
+
     for i, day in enumerate(days):
         day_s = day.strftime("%Y-%m-%d")
         if debug_verbose:
@@ -830,6 +863,8 @@ def run_backtest(
                             avg_cost = positions_avg_cost.get(sym, float(p_intraday))
                             armed = (avg_cost is not None and avg_cost > 0 and peak >= (float(avg_cost) * (1 + float(trail_start))))
                             trail_level = peak * (1 - trail_pct)
+                            if debug_verbose:
+                                _dbg("hourly_trailing_eval", day=day_s, ts=str(ts_local), symbol=sym, price=float(p_intraday), avg_cost=avg_cost, peak=peak, armed=bool(armed), trail_start=float(trail_start), trail_pct=float(trail_pct), trail_level=float(trail_level))
                             if armed and float(p_intraday) <= trail_level:
                                 q = positions_qty.get(sym, 0.0)
                                 sell_px = float(p_intraday) * (1 - params.slippage_bps / 10000.0)
@@ -866,7 +901,8 @@ def run_backtest(
                                             should_exit = False
                                     strategy_eval_cache[cache_key] = bool(should_exit)
                                 if debug_verbose:
-                                    _dbg("hourly_strategy_exit_eval", day=day_s, ts=str(ts_local), symbol=sym, should_exit=bool(should_exit), has_rule=bool(ex_rule), closes_len=len(cls) if 'cls' in locals() else None)
+                                    snap = _indicator_snapshot(ex_rule, cls, ann_factor) if ('cls' in locals() and ex_rule is not None and len(cls) > 0) else {}
+                                    _dbg("hourly_strategy_exit_eval", day=day_s, ts=str(ts_local), symbol=sym, should_exit=bool(should_exit), has_rule=bool(ex_rule), closes_len=len(cls) if 'cls' in locals() else None, indicators=snap)
                                 if should_exit and _can_sell_today(sym):
                                     hourly_debug["strategy_exit_triggered"] += 1
                                     q = positions_qty.get(sym, 0.0)
@@ -908,6 +944,8 @@ def run_backtest(
                             peak_equity = max(peak_equity, float(eq_now))
                             dd = (peak_equity - float(eq_now)) / peak_equity if peak_equity > 0 else 0.0
                             max_observed_dd = max(max_observed_dd, float(dd))
+                            if debug_verbose:
+                                _dbg("hourly_dd_eval", day=day_s, ts=str(ts_local), equity_now=float(eq_now), peak_equity=float(peak_equity), dd=float(dd), threshold=float(params.portfolio_dd_stop))
                             if (not stopped_until_next_rebalance) and dd >= params.portfolio_dd_stop:
                                 dd_stop_events += 1
                                 for sym in list(positions_qty.keys()):
@@ -934,6 +972,8 @@ def run_backtest(
         if params.portfolio_dd_stop is not None and peak_equity > 0 and (eq_risk_freq != "hourly" or cr_risk_freq != "hourly"):
             dd = (peak_equity - equity) / peak_equity
             max_observed_dd = max(max_observed_dd, float(dd))
+            if debug_verbose:
+                _dbg("daily_dd_eval", day=day_s, equity=float(equity), peak_equity=float(peak_equity), dd=float(dd), threshold=float(params.portfolio_dd_stop))
             if (not stopped_until_next_rebalance) and dd >= params.portfolio_dd_stop:
                 dd_stop_events += 1
                 # liquidate everything at risk-check time - slippage
@@ -1000,7 +1040,8 @@ def run_backtest(
                 except Exception:
                     should_exit = False
                 if debug_verbose:
-                    _dbg("daily_strategy_exit_eval", day=day_s, symbol=sym, should_exit=bool(should_exit), closes_len=len(cls), ann_factor=ann_factor)
+                    snap = _indicator_snapshot(ex_rule, cls, ann_factor)
+                    _dbg("daily_strategy_exit_eval", day=day_s, symbol=sym, should_exit=bool(should_exit), closes_len=len(cls), ann_factor=ann_factor, indicators=snap)
                 if not should_exit:
                     continue
 
@@ -1063,6 +1104,8 @@ def run_backtest(
                     avg_cost_for_arm = positions_avg_cost.get(sym, p0)
                     armed = (avg_cost_for_arm is not None and avg_cost_for_arm > 0 and peak >= (float(avg_cost_for_arm) * (1 + float(trail_start))))
                     trail_level = peak * (1 - trail_pct)
+                    if debug_verbose:
+                        _dbg("daily_trailing_eval", day=day_s, symbol=sym, price=float(p0), avg_cost=avg_cost_for_arm, peak=peak, armed=bool(armed), trail_start=float(trail_start), trail_pct=float(trail_pct), trail_level=float(trail_level))
                     if armed and float(p0) <= trail_level:
                         base_px = risk_px(sym, day) or p0
                         sell_px = base_px * (1 - params.slippage_bps / 10000.0)
