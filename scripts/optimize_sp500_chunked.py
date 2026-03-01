@@ -161,6 +161,7 @@ def main():
     wd.mkdir(parents=True, exist_ok=True)
     status_p = wd / f"chunk_{args.chunk_index:02d}_status.json"
     result_p = wd / f"chunk_{args.chunk_index:02d}_result.json"
+    ckpt_p = wd / f"chunk_{args.chunk_index:02d}_checkpoint.json"
 
     syms = load_sp500_symbols()
     random.Random(args.seed).shuffle(syms)
@@ -193,9 +194,21 @@ def main():
 
     cands = candidates()
     scores = []
+    start_idx = 1
+    if args.resume and ckpt_p.exists():
+        try:
+            ck = json.loads(ckpt_p.read_text())
+            start_idx = int(ck.get("last_idx", 0)) + 1
+            scores = list(ck.get("scores", []))
+        except Exception:
+            start_idx = 1
+            scores = []
+
     for idx, cand in enumerate(cands, start=1):
+        if idx < start_idx:
+            continue
         if idx % 10 == 0 or idx == 1 or idx == len(cands):
-            status_p.write_text(json.dumps({"state": "optimizing", "candidate_progress": f"{idx}/{len(cands)}"}, indent=2))
+            status_p.write_text(json.dumps({"state": "optimizing", "candidate_progress": f"{idx}/{len(cands)}", "resumed_from": start_idx}, indent=2))
         try:
             tr = []
             va = []
@@ -217,6 +230,12 @@ def main():
         except Exception:
             continue
 
+        if idx % 25 == 0:
+            try:
+                ckpt_p.write_text(json.dumps({"last_idx": idx, "scores": scores}, indent=2))
+            except Exception:
+                pass
+
     scores = sorted(scores, key=lambda x: x["joint"], reverse=True)
     top = scores[: args.top_n]
     out = {
@@ -227,6 +246,11 @@ def main():
         "top": top,
     }
     result_p.write_text(json.dumps(out, indent=2))
+    try:
+        if ckpt_p.exists():
+            ckpt_p.unlink()
+    except Exception:
+        pass
     status_p.write_text(json.dumps({"state": "done", "result_file": str(result_p)}, indent=2))
     print(json.dumps({"ok": True, "result_file": str(result_p), "top_count": len(top)}, indent=2))
 
