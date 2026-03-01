@@ -1331,6 +1331,35 @@ def create_app(*, config_path: str) -> FastAPI:
             return {"state": "missing"}
         return bt_status(job_id)
 
+    @app.get("/api/backtest/status/stream")
+    def backtest_status_stream(job_id: str | None = None):
+        job_id = job_id or get_latest_job_id()
+        if not job_id:
+            raise HTTPException(status_code=404, detail="missing job_id")
+
+        def _iter_events():
+            last_payload = None
+            while True:
+                st = bt_status(job_id)
+                payload = json.dumps(st, sort_keys=True, default=str)
+                if payload != last_payload:
+                    yield f"data: {payload}\n\n"
+                    last_payload = payload
+
+                state = str((st or {}).get("state") or "")
+                if state in ("done", "stopped", "error", "missing"):
+                    yield f"event: end\ndata: {state}\n\n"
+                    break
+
+                yield "event: keepalive\ndata: ping\n\n"
+                time.sleep(0.25)
+
+        return StreamingResponse(
+            _iter_events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
+
     @app.get("/api/backtest/result")
     def backtest_result(job_id: str | None = None):
         job_id = job_id or get_latest_job_id()

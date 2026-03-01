@@ -1223,6 +1223,7 @@ let btDebugOffset = 0;
 let btDebugLastJobId = null;
 let btDebugPollInFlight = false;
 let btDebugES = null;
+let btStatusES = null;
 let btDebugLastLine = '';
 let btDebugAutoScroll = true;
 
@@ -1456,6 +1457,65 @@ function _appendBacktestDebugLines(lines) {
   if (btDebugAutoScroll) box.scrollTop = box.scrollHeight;
 }
 
+function _setBacktestStatusText(st, prefix='') {
+  const el = document.getElementById('btStatus');
+  if (!el || !st) return;
+  const eqTxt = (st.current_equity != null && Number.isFinite(Number(st.current_equity))) ? ` • PV ${money(Number(st.current_equity))}` : '';
+  const pre = prefix ? `${prefix} ` : '';
+  el.textContent = `${pre}${st.state || 'running'} ${st.progress||0}/${st.total||0}${eqTxt}`.trim();
+}
+
+function stopBacktestStatusStream() {
+  if (btStatusES) {
+    try { btStatusES.close(); } catch(e) {}
+    btStatusES = null;
+  }
+}
+
+function startBacktestStatusStream(jobId) {
+  stopBacktestStatusStream();
+  if (!jobId) return;
+  const es = new EventSource('/api/backtest/status/stream?job_id=' + encodeURIComponent(jobId));
+  btStatusES = es;
+
+  es.onmessage = async (ev) => {
+    let st = null;
+    try { st = JSON.parse(ev?.data || '{}'); } catch(e) { st = null; }
+    if (!st) return;
+    _setBacktestStatusText(st);
+
+    if (st.state === 'done') {
+      if (!btDebugES) await pollBacktestDebug(true);
+      stopBacktestDebugStream();
+      const res = await getJSON('/api/backtest/result?job_id=' + encodeURIComponent(jobId));
+      await renderBacktest(res);
+      btJobId = null;
+      stopBacktestStatusStream();
+      setBacktestRunButtonState();
+      return;
+    }
+    if (st.state === 'stopped' || st.state === 'error' || st.state === 'missing') {
+      if (!btDebugES) await pollBacktestDebug(true);
+      stopBacktestDebugStream();
+      if (st.state === 'error' && st.traceback) {
+        const met = document.getElementById('btMetrics');
+        if (met) met.textContent = st.traceback;
+      }
+      btJobId = null;
+      stopBacktestStatusStream();
+      setBacktestRunButtonState();
+    }
+  };
+
+  es.addEventListener('end', () => {
+    stopBacktestStatusStream();
+  });
+
+  es.onerror = () => {
+    // fallback pollBacktest() remains active
+  };
+}
+
 function stopBacktestDebugStream() {
   if (btDebugES) {
     try { btDebugES.close(); } catch(e) {}
@@ -1494,6 +1554,7 @@ function _resetBacktestDebug(jobId = null) {
   const pauseBtn = document.getElementById('btDebugPause');
   if (pauseBtn) pauseBtn.textContent = 'Pause scroll';
   stopBacktestDebugStream();
+  stopBacktestStatusStream();
   if (box) box.textContent = '';
 }
 
@@ -1608,6 +1669,7 @@ async function runBacktest() {
   setBacktestRunButtonState();
   status.textContent = `job ${btJobId} started`;
   await refreshTraceSymbols(btJobId);
+  startBacktestStatusStream(btJobId);
   startBacktestDebugStream(btJobId);
   await pollBacktestDebug(true);
 }
@@ -1835,6 +1897,7 @@ async function runBacktestIteration() {
 
 async function pollBacktest() {
   if (!btJobId) return;
+  if (btStatusES) return;
   const st = await getJSON('/api/backtest/status?job_id=' + encodeURIComponent(btJobId));
   const el = document.getElementById('btStatus');
   if (st.state === 'running' || st.state === 'fetching_data' || st.state === 'fetching_crypto') {
