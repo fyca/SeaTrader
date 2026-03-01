@@ -329,6 +329,14 @@ def _evaluate_candidate_parity(*, cfg_obj, bars_by_symbol: dict[str, pd.DataFram
             pass
 
 
+def _fmt_eta(seconds: float) -> str:
+    s = max(0, int(seconds))
+    d, r = divmod(s, 86400)
+    h, r = divmod(r, 3600)
+    m, sec = divmod(r, 60)
+    return f"{d}d {h}h {m}m {sec}s"
+
+
 def _fetch_with_timeout(fetch_fn, timeout_s: float = 25.0):
     box = {"res": None, "err": None}
 
@@ -440,11 +448,16 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
 
                 best = None
                 evals_symbol = 0
-                upd(state="running", phase="optimizing", current_symbol=sym, detail=f"optimizing 0/{len(candidates)} candidates")
+                eval_start = time.perf_counter()
+                upd(state="running", phase="optimizing", current_symbol=sym, detail=f"optimizing 0/{len(candidates)} candidates • ETA unknown")
                 for cfg in candidates:
                     evals_symbol += 1
                     if (evals_symbol == 1) or (evals_symbol % 50 == 0) or (evals_symbol == len(candidates)):
-                        upd(state="running", phase="optimizing", current_symbol=sym, detail=f"optimizing {evals_symbol}/{len(candidates)} candidates")
+                        elapsed = max(1e-9, time.perf_counter() - eval_start)
+                        rate = evals_symbol / elapsed
+                        rem = max(0, len(candidates) - evals_symbol)
+                        eta = _fmt_eta(rem / rate) if rate > 1e-9 else "unknown"
+                        upd(state="running", phase="optimizing", current_symbol=sym, detail=f"optimizing {evals_symbol}/{len(candidates)} candidates • ETA {eta}")
                     fold_scores: list[float] = []
                     fold_train_scores: list[float] = []
                     fold_valid_scores: list[float] = []
