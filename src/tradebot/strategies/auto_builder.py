@@ -384,6 +384,7 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
             candidates = _candidate_configs(search_mode)
 
             per_symbol_best: list[dict] = []
+            symbol_frames: dict[str, pd.DataFrame] = {}
             done = 0
             total_evals = 0
             for sym in symbols:
@@ -423,6 +424,7 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                     upd(progress=done, state="running", phase="running", current_symbol=sym, detail="insufficient bars")
                     continue
 
+                symbol_frames[sym] = df
                 close = df["close"].dropna().astype(float)
                 n = len(close)
                 fcnt = max(1, int(folds))
@@ -533,22 +535,62 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 upd(state="error", phase="error", error="no viable symbol results")
                 return
 
-            top = sorted(per_symbol_best, key=lambda x: float(x.get("objective") or -1e9), reverse=True)
-            topk = top[: max(3, min(len(top), 10))]
-            agg = {
-                "ma_long": int(np.median([x.get("ma_long", 200) for x in topk])),
-                "ma_short": int(np.median([x.get("ma_short", 50) for x in topk])),
-                "exit_n": int(np.median([x.get("exit_n", 100) for x in topk])),
-                "ma_kind": max({str(x.get("ma_kind", "sma")) for x in topk}, key=lambda k: sum(1 for z in topk if str(z.get("ma_kind", "sma")) == k)),
-                "exit_kind": max({str(x.get("exit_kind", "sma")) for x in topk}, key=lambda k: sum(1 for z in topk if str(z.get("exit_kind", "sma")) == k)),
-                "filter_type": max({str(x.get("filter_type", "none")) for x in topk}, key=lambda k: sum(1 for z in topk if str(z.get("filter_type", "none")) == k)),
-                "exit_type": max({str(x.get("exit_type", "ma")) for x in topk}, key=lambda k: sum(1 for z in topk if str(z.get("exit_type", "ma")) == k)),
-            }
-            best0 = topk[0]
-            for k in ["rsi_max", "roc_n", "roc_min", "vol_n", "vol_max", "breakout_n", "dist_n", "dist_max", "ret1d_min", "lowest_n", "rebound_min", "exit_rsi", "exit_roc_n", "exit_roc_min", "exit_break_n"]:
-                if k in best0:
-                    agg[k] = best0[k]
+            # Stage 2: take each symbol's best config and cross-test across all symbols;
+            # pick the config with the strongest average objective across the full symbol set.
+            candidate_pool: list[dict] = []
+            seen_cfg: set[str] = set()
+            for r in sorted(per_symbol_best, key=lambda x: float(x.get("objective") or -1e9), reverse=True):
+                cfg = {k: r.get(k) for k in [
+                    "ma_kind", "ma_long", "ma_short", "filter_type", "exit_type", "exit_n", "exit_kind",
+                    "rsi_max", "roc_n", "roc_min", "vol_n", "vol_max", "breakout_n", "dist_n", "dist_max",
+                    "ret1d_min", "lowest_n", "rebound_min", "exit_rsi", "exit_roc_n", "exit_roc_min", "exit_break_n",
+                ] if k in r}
+                key = str(sorted(cfg.items()))
+                if key in seen_cfg:
+                    continue
+                seen_cfg.add(key)
+                candidate_pool.append(cfg)
 
+            cross_scores: list[dict] = []
+            for idx, cfg in enumerate(candidate_pool, start=1):
+                upd(state="running", phase="cross_testing", detail=f"cross-testing {idx}/{len(candidate_pool)} candidate configs")
+                objs: list[float] = []
+                tr_counts: list[int] = []
+                for sym2, df2 in symbol_frames.items():
+                    c2 = df2["close"].dropna().astype(float)
+                    if parity_mode and cfg_obj is not None:
+                        rr = _evaluate_candidate_parity(
+                            cfg_obj=cfg_obj,
+                            bars_by_symbol={sym2: df2},
+                            symbol=sym2,
+                            asset_class=asset_class,
+                            cand_cfg=cfg,
+                            params_overrides=params_overrides,
+                            start=pd.Timestamp(c2.index[0]).strftime("%Y-%m-%d"),
+                            end=pd.Timestamp(c2.index[-1]).strftime("%Y-%m-%d"),
+                        )
+                    else:
+                        rr = _simulate_symbol(c2, cfg)
+                    if not rr.get("ok"):
+                        continue
+                    m = rr.get("metrics") or {}
+                    objs.append(_objective(m, objective))
+                    tr_counts.append(int(rr.get("trades") or 0))
+                if not objs:
+                    continue
+                cross_scores.append({
+                    "cfg": cfg,
+                    "objective": float(np.mean(objs)),
+                    "symbols_tested": int(len(objs)),
+                    "avg_trades": float(np.mean(tr_counts)) if tr_counts else 0.0,
+                })
+
+            if not cross_scores:
+                upd(state="error", phase="error", error="no viable cross-symbol candidates")
+                return
+
+            cross_scores = sorted(cross_scores, key=lambda x: float(x.get("objective") or -1e9), reverse=True)
+            agg = dict(cross_scores[0]["cfg"])
             spec = _build_spec(agg, asset_class=asset_class)
             out = {
                 "symbols": symbols,
@@ -565,6 +607,7 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 "aggregate_params": agg,
                 "strategy": spec,
                 "per_symbol_best": per_symbol_best,
+                "cross_symbol_top": cross_scores[:10],
             }
             upd(state="done", phase="done", progress=max(1, len(symbols)), total=max(1, len(symbols)), result=out, current_symbol=None, detail="complete")
         except Exception as e:
