@@ -406,7 +406,7 @@
               </div>
               <div id="btPvTimelineMeta" class="muted" style="font-size:12px;">waiting for run…</div>
             </div>
-            <svg id="btPvTimelineChart" viewBox="0 0 1000 170" preserveAspectRatio="none" style="width:100%; height:170px; margin-top:8px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2);"></svg>
+            <svg id="btPvTimelineChart" viewBox="0 0 1000 210" preserveAspectRatio="none" style="width:100%; height:210px; margin-top:8px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2);"></svg>
           </div>
 
           <div class="subcard" style="margin-top:10px;">
@@ -1472,6 +1472,25 @@ function _appendBacktestDebugLines(lines) {
   if (btDebugAutoScroll) box.scrollTop = box.scrollHeight;
 }
 
+function _fmtTimelineDate(d) {
+  if (!(d instanceof Date) || !Number.isFinite(d.getTime())) return '—';
+  const mm = String(d.getMonth() + 1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${mm}-${dd}`;
+}
+
+function _timelineDateForPoint(p) {
+  const s = String(document.getElementById('btStart')?.value || '').trim();
+  const e = String(document.getElementById('btEnd')?.value || '').trim();
+  const sd = new Date(s + 'T00:00:00');
+  const ed = new Date(e + 'T00:00:00');
+  if (!Number.isFinite(sd.getTime()) || !Number.isFinite(ed.getTime())) return null;
+  const prog = Number(p?.p || 0);
+  const tot = Math.max(1, Number(p?.t || 1));
+  const frac = Math.max(0, Math.min(1, prog / tot));
+  return new Date(sd.getTime() + (ed.getTime() - sd.getTime()) * frac);
+}
+
 function _renderBtPvTimeline() {
   const wrap = document.getElementById('btPvTimelineWrap');
   const chart = document.getElementById('btPvTimelineChart');
@@ -1487,35 +1506,63 @@ function _renderBtPvTimeline() {
     return;
   }
 
-  const w = 1000, h = 170, pad = 10;
-  let minY = Math.min(...pts.map(p => p.v));
-  let maxY = Math.max(...pts.map(p => p.v));
-  if (!Number.isFinite(minY) || !Number.isFinite(maxY)) {
-    chart.innerHTML = '';
-    meta.textContent = 'waiting for run…';
-    return;
-  }
-  if (Math.abs(maxY - minY) < 1e-9) {
-    minY -= 1; maxY += 1;
-  }
-  const xDen = Math.max(1, pts.length - 1);
-  const ySpan = (maxY - minY) || 1;
-  const mapX = (i) => pad + (i / xDen) * (w - pad*2);
-  const mapY = (v) => h - pad - ((v - minY) / ySpan) * (h - pad*2);
+  const w = 1000, h = 210;
+  const leftPad = 72, rightPad = 14, topPad = 10, bottomPad = 34;
+  const plotW = w - leftPad - rightPad;
+  const plotH = h - topPad - bottomPad;
 
+  let maxYObserved = Math.max(...pts.map(p => p.v));
+  if (!Number.isFinite(maxYObserved) || maxYObserved <= 0) maxYObserved = 1;
+  const minY = 0;
+  const maxY = maxYObserved * 1.10;
+  const ySpan = (maxY - minY) || 1;
+
+  const xDen = Math.max(1, pts.length - 1);
+  const mapX = (i) => leftPad + (i / xDen) * plotW;
+  const mapY = (v) => topPad + (1 - ((v - minY) / ySpan)) * plotH;
+
+  const stroke = (pts[pts.length - 1].v >= pts[0].v) ? '#16a34a' : '#dc2626';
   const d = pts.map((p,i)=>`${i===0?'M':'L'}${mapX(i).toFixed(2)},${mapY(p.v).toFixed(2)}`).join(' ');
   const last = pts[pts.length - 1];
   const cy = mapY(last.v);
   const cx = mapX(pts.length - 1);
 
+  const yTicks = 5;
+  const yGrid = [];
+  const yLabels = [];
+  for (let i=0;i<=yTicks;i++) {
+    const frac = i / yTicks;
+    const yVal = maxY - frac * (maxY - minY);
+    const yy = topPad + frac * plotH;
+    yGrid.push(`<line x1="${leftPad}" y1="${yy.toFixed(2)}" x2="${(w-rightPad)}" y2="${yy.toFixed(2)}" stroke="var(--border)" stroke-width="1" opacity="0.55"/>`);
+    yLabels.push(`<text x="${leftPad - 8}" y="${(yy+4).toFixed(2)}" text-anchor="end" font-size="11" fill="var(--muted)">${Math.round(yVal).toLocaleString()}</text>`);
+  }
+
+  const xTicks = Math.min(8, Math.max(2, pts.length));
+  const xGrid = [];
+  const xLabels = [];
+  for (let i=0;i<xTicks;i++) {
+    const idx = Math.round((i/(xTicks-1)) * (pts.length-1));
+    const xx = mapX(idx);
+    const dt = _timelineDateForPoint(pts[idx]);
+    xGrid.push(`<line x1="${xx.toFixed(2)}" y1="${topPad}" x2="${xx.toFixed(2)}" y2="${(topPad+plotH)}" stroke="var(--border)" stroke-width="1" opacity="0.25"/>`);
+    xLabels.push(`<text x="${xx.toFixed(2)}" y="${(h-10).toFixed(2)}" text-anchor="middle" font-size="11" fill="var(--muted)">${_fmtTimelineDate(dt)}</text>`);
+  }
+
   chart.innerHTML = `
-    <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-    <circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="3.5" fill="var(--accent)"></circle>
+    ${yGrid.join('')}
+    ${xGrid.join('')}
+    <rect x="${leftPad}" y="${topPad}" width="${plotW}" height="${plotH}" fill="transparent" stroke="var(--border)" stroke-width="1"></rect>
+    <path d="${d}" fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+    <circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="3.5" fill="${stroke}"></circle>
+    ${yLabels.join('')}
+    ${xLabels.join('')}
   `;
+
   const startV = pts[0].v;
   const delta = last.v - startV;
   const chg = startV ? (delta / startV) : 0;
-  meta.textContent = `points ${pts.length} • start ${money(startV)} • now ${money(last.v)} • Δ ${money(delta)} (${chg>=0?'+':''}${pct(chg)})`;
+  meta.textContent = `points ${pts.length} • start ${money(startV)} • now ${money(last.v)} • Δ ${money(delta)} (${chg>=0?'+':''}${pct(chg)}) • y-range 0 to ${money(maxY)}`;
 }
 
 function _resetBtPvTimeline() {
