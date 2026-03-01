@@ -440,9 +440,11 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
 
                 best = None
                 evals_symbol = 0
-                upd(state="running", phase="optimizing", current_symbol=sym, detail=f"optimizing {len(candidates)} candidates")
+                upd(state="running", phase="optimizing", current_symbol=sym, detail=f"optimizing 0/{len(candidates)} candidates")
                 for cfg in candidates:
                     evals_symbol += 1
+                    if (evals_symbol == 1) or (evals_symbol % 50 == 0) or (evals_symbol == len(candidates)):
+                        upd(state="running", phase="optimizing", current_symbol=sym, detail=f"optimizing {evals_symbol}/{len(candidates)} candidates")
                     fold_scores: list[float] = []
                     fold_train_scores: list[float] = []
                     fold_valid_scores: list[float] = []
