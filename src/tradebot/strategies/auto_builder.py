@@ -598,6 +598,50 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
             cross_scores = sorted(cross_scores, key=lambda x: float(x.get("objective") or -1e9), reverse=True)
             agg = dict(cross_scores[0]["cfg"])
             spec = _build_spec(agg, asset_class=asset_class)
+
+            # Stage 3: optimize preset-level risk controls (entry/exit is only part of preset quality)
+            risk_best = None
+            risk_grid = [
+                {"per_asset_stop_loss_pct": None, "trailing_stop_stocks_enabled": False, "portfolio_dd_stop": None},
+                {"per_asset_stop_loss_pct": 0.10, "trailing_stop_stocks_enabled": False, "portfolio_dd_stop": None},
+                {"per_asset_stop_loss_pct": 0.15, "trailing_stop_stocks_enabled": False, "portfolio_dd_stop": 0.20},
+                {"per_asset_stop_loss_pct": 0.15, "trailing_stop_stocks_enabled": True, "trailing_stop_stocks_start_gain_pct": 0.05, "trailing_stop_stocks_pct": 0.02, "portfolio_dd_stop": 0.20},
+                {"per_asset_stop_loss_pct": 0.12, "trailing_stop_stocks_enabled": True, "trailing_stop_stocks_start_gain_pct": 0.04, "trailing_stop_stocks_pct": 0.025, "portfolio_dd_stop": 0.15},
+            ]
+            if parity_mode and cfg_obj is not None:
+                for i, rg in enumerate(risk_grid, start=1):
+                    upd(state="running", phase="preset_optimizing", detail=f"preset risk {i}/{len(risk_grid)}")
+                    vals: list[float] = []
+                    for sym2, df2 in symbol_frames.items():
+                        rr = _evaluate_candidate_parity(
+                            cfg_obj=cfg_obj,
+                            bars_by_symbol={sym2: df2},
+                            symbol=sym2,
+                            asset_class=asset_class,
+                            cand_cfg=agg,
+                            params_overrides={**params_overrides, **rg},
+                            start=pd.Timestamp(df2.index[0]).strftime("%Y-%m-%d"),
+                            end=pd.Timestamp(df2.index[-1]).strftime("%Y-%m-%d"),
+                        )
+                        if not rr.get("ok"):
+                            continue
+                        vals.append(_objective(rr.get("metrics") or {}, objective))
+                    if not vals:
+                        continue
+                    row = {"params": rg, "objective": float(np.mean(vals)), "symbols_tested": len(vals)}
+                    if risk_best is None or float(row["objective"]) > float(risk_best["objective"]):
+                        risk_best = row
+
+            preset_params = dict(params_overrides)
+            preset_params.update({
+                "asset_mode": "equities" if asset_class == "stocks" else "crypto",
+                "strategy_id": spec["id"],
+                "strategy_id_equities": spec["id"],
+                "strategy_id_crypto": spec["id"],
+            })
+            if risk_best:
+                preset_params.update(risk_best["params"])
+
             out = {
                 "symbols": symbols,
                 "years": years,
@@ -612,6 +656,11 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 "total_evaluations": int(total_evals),
                 "aggregate_params": agg,
                 "strategy": spec,
+                "generated_preset": {
+                    "name": f"AUTO_PRESET_{asset_class}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+                    "params": preset_params,
+                    "risk_selection": risk_best,
+                },
                 "per_symbol_best": per_symbol_best,
                 "cross_symbol_top": cross_scores[:10],
             }

@@ -290,6 +290,15 @@
         <button id="abStop" class="secondary">Stop</button>
         <button id="abApply" class="secondary">Apply result to editor</button>
         <button id="abSave" class="secondary">Save generated strategy</button>
+        <button id="abSavePreset" class="secondary">Save generated preset</button>
+      </div>
+      <div>
+        <div class="muted">Preset name</div>
+        <input id="abPresetName" placeholder="AUTO_PRESET" style="min-width:180px;" />
+      </div>
+      <div>
+        <div class="muted">Token (for preset save)</div>
+        <input id="abToken" placeholder="optional token" style="min-width:180px;" />
       </div>
       <div><span id="abStatus" class="muted"></span></div>
     </div>
@@ -1122,6 +1131,16 @@ async function saveAutoBuilderResult() {
   await save();
 }
 
+async function saveAutoBuilderPreset() {
+  if (!_abLastResult || !_abLastResult.generated_preset) throw new Error('no generated preset yet');
+  const gp = _abLastResult.generated_preset;
+  const name = String(document.getElementById('abPresetName')?.value || '').trim() || gp.name || 'AUTO_PRESET';
+  const token = String(document.getElementById('abToken')?.value || '').trim();
+  const url = '/api/backtest/presets/save' + (token ? ('?token=' + encodeURIComponent(token)) : '');
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, params: gp.params || {}})});
+  if (!r.ok) throw new Error(await r.text());
+}
+
 async function delStrat() {
   const status = document.getElementById('status');
   try {
@@ -1211,6 +1230,7 @@ document.getElementById('abRun')?.addEventListener('click', (e)=>{ e.preventDefa
 document.getElementById('abStop')?.addEventListener('click', (e)=>{ e.preventDefault(); stopAutoBuilder().then(()=>{ document.getElementById('abStatus').textContent = 'stopping…'; }).catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
 document.getElementById('abApply')?.addEventListener('click', (e)=>{ e.preventDefault(); try { applyAutoBuilderResult(); } catch(err) { document.getElementById('abStatus').textContent = 'error: ' + err; } });
 document.getElementById('abSave')?.addEventListener('click', (e)=>{ e.preventDefault(); saveAutoBuilderResult().then(()=>{ document.getElementById('abStatus').textContent = 'generated strategy saved'; }).catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
+document.getElementById('abSavePreset')?.addEventListener('click', (e)=>{ e.preventDefault(); saveAutoBuilderPreset().then(()=>{ document.getElementById('abStatus').textContent = 'generated preset saved'; }).catch(err => { document.getElementById('abStatus').textContent = 'error: ' + err; }); });
 setInterval(()=>{ pollAutoBuilder().catch(()=>{}); }, 1500);
 </script>
   </div>
