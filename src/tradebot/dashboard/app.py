@@ -185,7 +185,7 @@ def create_app(*, config_path: str) -> FastAPI:
     @app.post("/api/strategy/{strategy_id}/preview")
     async def strategy_preview(strategy_id: str, req: Request):
         body = await req.json()
-        symbol = str(body.get("symbol") or "").strip()
+        symbol = str(body.get("symbol") or "").strip().upper()
         if not symbol:
             raise HTTPException(status_code=400, detail="Missing symbol")
 
@@ -201,15 +201,51 @@ def create_app(*, config_path: str) -> FastAPI:
         clients = make_alpaca_clients(env)
 
         # fetch recent bars for just this symbol
-        is_crypto = "/" in symbol
-        if is_crypto:
-            bars = fetch_crypto_bars(clients.crypto, [symbol], lookback_days=420)
-            df = bars.get(symbol)
-            ann_factor = 365.0
+        # Accept common crypto variants in preview input: BTC/USD, BTCUSD, BTC-USD, BTCUSD.PERP
+        sym_input = symbol
+        crypto_candidates = [sym_input]
+        if "/" not in sym_input:
+            compact = sym_input.replace("-", "").replace("_", "")
+            if compact.endswith("USD") and len(compact) > 3:
+                base = compact[:-3]
+                crypto_candidates.append(f"{base}/USD")
+        # de-dup while preserving order
+        seen = set()
+        crypto_candidates = [x for x in crypto_candidates if not (x in seen or seen.add(x))]
+
+        df = None
+        ann_factor = 252.0
+        used_symbol = sym_input
+
+        # Try stock first for stock-like symbols, otherwise crypto first
+        try_stock_first = ("/" not in sym_input)
+
+        def _try_stock(sym: str):
+            b = fetch_stock_bars(clients.stocks, [sym], lookback_days=420)
+            return b.get(sym)
+
+        def _try_crypto(sym: str):
+            b = fetch_crypto_bars(clients.crypto, [sym], lookback_days=420)
+            return b.get(sym)
+
+        if try_stock_first:
+            df = _try_stock(sym_input)
+            if df is None or len(df) == 0 or "close" not in df.columns:
+                for cs in crypto_candidates:
+                    df = _try_crypto(cs)
+                    if df is not None and len(df) and "close" in df.columns:
+                        ann_factor = 365.0
+                        used_symbol = cs
+                        break
         else:
-            bars = fetch_stock_bars(clients.stocks, [symbol], lookback_days=420)
-            df = bars.get(symbol)
-            ann_factor = 252.0
+            for cs in crypto_candidates:
+                df = _try_crypto(cs)
+                if df is not None and len(df) and "close" in df.columns:
+                    ann_factor = 365.0
+                    used_symbol = cs
+                    break
+            if df is None or len(df) == 0 or "close" not in df.columns:
+                df = _try_stock(sym_input)
 
         if df is None or len(df) == 0 or "close" not in df.columns:
             raise HTTPException(status_code=400, detail="No bars for symbol")
@@ -238,7 +274,8 @@ def create_app(*, config_path: str) -> FastAPI:
 
         return {
             "symbol": symbol,
-            "is_crypto": is_crypto,
+            "resolved_symbol": used_symbol,
+            "is_crypto": bool(ann_factor == 365.0),
             "entry_ok": entry_ok,
             "exit_ok": exit_ok,
             "score": float(score),
