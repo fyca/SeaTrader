@@ -185,6 +185,16 @@ def run_backtest(
     eq_hourly_checks = set(params.risk_check_hourly_checks_equities or ["stop_loss", "dd_stop"])
     cr_hourly_checks = set(params.risk_check_hourly_checks_crypto or ["stop_loss", "dd_stop"])
 
+    use_hourly_progress = bool(eq_risk_freq == "hourly" or cr_risk_freq == "hourly")
+    hourly_minutes_set: set[int] = set()
+    if eq_risk_freq == "hourly":
+        hourly_minutes_set.add(int(eq_risk_minute))
+    if cr_risk_freq == "hourly":
+        hourly_minutes_set.add(int(cr_risk_minute))
+    hourly_slots_per_day = max(1, 24 * max(1, len(hourly_minutes_set))) if use_hourly_progress else 1
+    progress_total_steps = int(len(days) * hourly_slots_per_day) if use_hourly_progress else int(len(days))
+    progress_steps_done = 0
+
     # Equity trading sessions from available stock bars (captures weekends/holidays closure).
     eq_trade_days: set[pd.Timestamp] = set()
     try:
@@ -850,14 +860,10 @@ def run_backtest(
 
         # Hourly risk checks (intraday): run selected checks at configured minute; skip if no matching bar.
         if params.execution_time_mode == "intraday" and (eq_risk_freq == "hourly" or cr_risk_freq == "hourly"):
-            hourly_minutes: set[int] = set()
-            if eq_risk_freq == "hourly":
-                hourly_minutes.add(int(eq_risk_minute))
-            if cr_risk_freq == "hourly":
-                hourly_minutes.add(int(cr_risk_minute))
+            hourly_minutes = sorted(hourly_minutes_set)
 
             for hr in range(24):
-                for mm in sorted(hourly_minutes):
+                for mm in hourly_minutes:
                     ts_local = pd.Timestamp(day).replace(hour=hr, minute=int(mm), second=0, microsecond=0)
                     hourly_debug["slots_considered"] += 1
                     if debug_verbose:
@@ -1000,6 +1006,10 @@ def run_backtest(
                                 stopped_until_next_rebalance = True
                                 dd_stop_trigger_day = day
                                 break
+
+                    if progress_cb and use_hourly_progress:
+                        progress_steps_done += 1
+                        progress_cb(progress_steps_done, progress_total_steps, float(cash))
 
         # Portfolio DD stop: liquidate to cash until next rebalance
         if params.portfolio_dd_stop is not None and peak_equity > 0 and (eq_risk_freq != "hourly" or cr_risk_freq != "hourly"):
@@ -1262,8 +1272,8 @@ def run_backtest(
                         "holdings": holdings,
                         "regime": _regime(day),
                     })
-                    if progress_cb:
-                        progress_cb(i + 1, len(days), float(equity))
+                    if progress_cb and (not use_hourly_progress):
+                        progress_cb(i + 1, progress_total_steps, float(equity))
                     continue
                 stopped_until_next_rebalance = False
                 dd_stop_trigger_day = None
@@ -1605,8 +1615,8 @@ def run_backtest(
             "regime": _regime(day),
         })
 
-        if progress_cb:
-            progress_cb(i + 1, len(days), float(equity))
+        if progress_cb and (not use_hourly_progress):
+            progress_cb(i + 1, progress_total_steps, float(equity))
         if debug_verbose:
             _dbg("day_end", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), cash=round(float(cash), 2), equity=round(float(equity), 2))
         elif (i == len(days) - 1) or ((i + 1) % 10 == 0):
