@@ -48,6 +48,10 @@ def close(closes: pd.Series) -> float | None:
 class EvalContext:
     closes: pd.Series
     ann_factor: float
+    highs: pd.Series | None = None
+    lows: pd.Series | None = None
+    opens: pd.Series | None = None
+    volumes: pd.Series | None = None
 
 
 def eval_indicator(ctx: EvalContext, spec: dict) -> float | None:
@@ -85,17 +89,17 @@ def eval_indicator(ctx: EvalContext, spec: dict) -> float | None:
     if kind == "macd_hist":
         return indicator_service.macd_hist(ctx.closes, int(spec.get("fast", 12)), int(spec.get("slow", 26)), int(spec.get("signal", 9)))
     if kind == "atr":
-        return indicator_service.atr(ctx.closes, int(spec.get("n", 14)))
+        return indicator_service.atr(ctx.closes, int(spec.get("n", 14)), highs=ctx.highs, lows=ctx.lows)
     if kind == "adx":
-        return indicator_service.adx(ctx.closes, int(spec.get("n", 14)))
+        return indicator_service.adx(ctx.closes, int(spec.get("n", 14)), highs=ctx.highs, lows=ctx.lows)
     if kind == "stoch_k":
-        return indicator_service.stoch_k(ctx.closes, int(spec.get("n", 14)))
+        return indicator_service.stoch_k(ctx.closes, int(spec.get("n", 14)), highs=ctx.highs, lows=ctx.lows)
     if kind == "stoch_d":
-        return indicator_service.stoch_d(ctx.closes, int(spec.get("n", 14)), int(spec.get("d", 3)))
+        return indicator_service.stoch_d(ctx.closes, int(spec.get("n", 14)), int(spec.get("d", 3)), highs=ctx.highs, lows=ctx.lows)
     if kind == "cci":
-        return indicator_service.cci(ctx.closes, int(spec.get("n", 20)))
+        return indicator_service.cci(ctx.closes, int(spec.get("n", 20)), highs=ctx.highs, lows=ctx.lows)
     if kind == "vwap":
-        return indicator_service.vwap(ctx.closes)
+        return indicator_service.vwap(ctx.closes, highs=ctx.highs, lows=ctx.lows, volumes=ctx.volumes)
 
     # Derived / preset-style indicators
     if kind == "dist_sma":

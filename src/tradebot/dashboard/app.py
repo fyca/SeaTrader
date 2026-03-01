@@ -255,7 +255,11 @@ def create_app(*, config_path: str) -> FastAPI:
             raise HTTPException(status_code=400, detail="No bars for symbol")
 
         closes = df["close"].dropna()
-        ctx = EvalContext(closes=closes, ann_factor=ann_factor)
+        highs = df["high"].dropna() if "high" in df.columns else None
+        lows = df["low"].dropna() if "low" in df.columns else None
+        opens = df["open"].dropna() if "open" in df.columns else None
+        volumes = df["volume"].dropna() if "volume" in df.columns else None
+        ctx = EvalContext(closes=closes, ann_factor=ann_factor, highs=highs, lows=lows, opens=opens, volumes=volumes)
 
         entry_ok = bool(eval_rule(ctx, entry))
         exit_ok = bool(eval_rule(ctx, exit_rule))

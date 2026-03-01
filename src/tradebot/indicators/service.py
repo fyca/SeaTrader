@@ -226,23 +226,66 @@ class IndicatorService:
     def macd_hist(self, closes: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> float | None:
         return self._last_valid(self._get(closes, "macd_hist", int(fast), int(slow), int(signal)))
 
-    def atr(self, closes: pd.Series, n: int = 14) -> float | None:
-        return self._last_valid(self._get(closes, "atr", int(n)))
+    def atr(self, closes: pd.Series, n: int = 14, *, highs: pd.Series | None = None, lows: pd.Series | None = None) -> float | None:
+        c = closes.dropna().astype(float)
+        h = highs.reindex(c.index).astype(float) if highs is not None and len(highs) else c
+        l = lows.reindex(c.index).astype(float) if lows is not None and len(lows) else c
+        prev_c = c.shift(1)
+        tr = pd.concat([(h - l).abs(), (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
+        return self._last_valid(tr.rolling(int(n)).mean())
 
-    def adx(self, closes: pd.Series, n: int = 14) -> float | None:
-        return self._last_valid(self._get(closes, "adx", int(n)))
+    def adx(self, closes: pd.Series, n: int = 14, *, highs: pd.Series | None = None, lows: pd.Series | None = None) -> float | None:
+        c = closes.dropna().astype(float)
+        h = highs.reindex(c.index).astype(float) if highs is not None and len(highs) else c
+        l = lows.reindex(c.index).astype(float) if lows is not None and len(lows) else c
+        up_move = h.diff()
+        down_move = -l.diff()
+        plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+        minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+        prev_c = c.shift(1)
+        tr = pd.concat([(h - l).abs(), (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
+        atr = tr.rolling(int(n)).mean()
+        plus_di = 100.0 * (plus_dm.rolling(int(n)).mean() / atr.replace(0, np.nan))
+        minus_di = 100.0 * (minus_dm.rolling(int(n)).mean() / atr.replace(0, np.nan))
+        dx = 100.0 * ((plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan))
+        adx = dx.rolling(int(n)).mean()
+        return self._last_valid(adx)
 
-    def stoch_k(self, closes: pd.Series, n: int = 14) -> float | None:
-        return self._last_valid(self._get(closes, "stoch_k", int(n)))
+    def stoch_k(self, closes: pd.Series, n: int = 14, *, highs: pd.Series | None = None, lows: pd.Series | None = None) -> float | None:
+        c = closes.dropna().astype(float)
+        h = highs.reindex(c.index).astype(float) if highs is not None and len(highs) else c
+        l = lows.reindex(c.index).astype(float) if lows is not None and len(lows) else c
+        lo = l.rolling(int(n)).min(); hi = h.rolling(int(n)).max()
+        k = 100.0 * ((c - lo) / (hi - lo).replace(0, np.nan))
+        return self._last_valid(k)
 
-    def stoch_d(self, closes: pd.Series, n: int = 14, d: int = 3) -> float | None:
-        return self._last_valid(self._get(closes, "stoch_d", int(n), int(d)))
+    def stoch_d(self, closes: pd.Series, n: int = 14, d: int = 3, *, highs: pd.Series | None = None, lows: pd.Series | None = None) -> float | None:
+        c = closes.dropna().astype(float)
+        h = highs.reindex(c.index).astype(float) if highs is not None and len(highs) else c
+        l = lows.reindex(c.index).astype(float) if lows is not None and len(lows) else c
+        lo = l.rolling(int(n)).min(); hi = h.rolling(int(n)).max()
+        k = 100.0 * ((c - lo) / (hi - lo).replace(0, np.nan))
+        return self._last_valid(k.rolling(int(d)).mean())
 
-    def cci(self, closes: pd.Series, n: int = 20) -> float | None:
-        return self._last_valid(self._get(closes, "cci", int(n)))
+    def cci(self, closes: pd.Series, n: int = 20, *, highs: pd.Series | None = None, lows: pd.Series | None = None) -> float | None:
+        c = closes.dropna().astype(float)
+        h = highs.reindex(c.index).astype(float) if highs is not None and len(highs) else c
+        l = lows.reindex(c.index).astype(float) if lows is not None and len(lows) else c
+        tp = (h + l + c) / 3.0
+        ma = tp.rolling(int(n)).mean()
+        md = (tp - ma).abs().rolling(int(n)).mean()
+        cci = (tp - ma) / (0.015 * md.replace(0, np.nan))
+        return self._last_valid(cci)
 
-    def vwap(self, closes: pd.Series) -> float | None:
-        return self._last_valid(self._get(closes, "vwap"))
+    def vwap(self, closes: pd.Series, *, highs: pd.Series | None = None, lows: pd.Series | None = None, volumes: pd.Series | None = None) -> float | None:
+        c = closes.dropna().astype(float)
+        h = highs.reindex(c.index).astype(float) if highs is not None and len(highs) else c
+        l = lows.reindex(c.index).astype(float) if lows is not None and len(lows) else c
+        v = volumes.reindex(c.index).astype(float) if volumes is not None and len(volumes) else pd.Series(1.0, index=c.index)
+        tp = (h + l + c) / 3.0
+        num = (tp * v).cumsum()
+        den = v.cumsum().replace(0, np.nan)
+        return self._last_valid(num / den)
 
 
 indicator_service = IndicatorService()
