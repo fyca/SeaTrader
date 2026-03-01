@@ -476,6 +476,10 @@
               <input id="btEnd" placeholder="YYYY-MM-DD" />
             </div>
             <div>
+              <div class="muted">Starting portfolio value</div>
+              <input id="btInitialEquity" type="number" min="1000" step="1000" value="100000" style="width:170px;" />
+            </div>
+            <div>
               <div class="muted">Strategy (legacy/global)</div>
               <select id="btStrategy" style="width:260px;"></select>
             </div>
@@ -1343,6 +1347,8 @@ function syncRiskFrequencyUI() {
 function collectBacktestRequestBody() {
   const start = document.getElementById('btStart')?.value;
   const end = document.getElementById('btEnd')?.value;
+  const initialEquityRaw = Number(document.getElementById('btInitialEquity')?.value || '100000');
+  const initial_equity = (Number.isFinite(initialEquityRaw) && initialEquityRaw > 0) ? initialEquityRaw : 100000;
   const strategy_id = (document.getElementById('btStrategy')?.value || 'baseline_trendvol');
   const execution_time_mode = 'intraday';
   const execution_time = 'close';
@@ -1417,7 +1423,7 @@ function collectBacktestRequestBody() {
     limit_fallback_to_market_open_equities, limit_fallback_to_market_open_crypto,
     limit_fallback_to_market_open: (limit_fallback_to_market_open_equities || limit_fallback_to_market_open_crypto),
     limit_fallback_time_local: execution_time_local_equities,
-    initial_equity: 100000, strategy_id, strategy_id_equities, strategy_id_crypto,
+    initial_equity, strategy_id, strategy_id_equities, strategy_id_crypto,
     exit_strategy_id_equities, exit_strategy_id_crypto, exit_enabled_equities, exit_enabled_crypto,
     execution_time_mode, execution_time,
     execution_time_local, execution_time_local_equities, execution_time_local_crypto,
@@ -3497,6 +3503,7 @@ async function main() {
   function applyBTParamsToUI(p) {
     if (!p) return;
     const setVal = (id, v) => { const el=document.getElementById(id); if(el && v!==undefined && v!==null) el.value=String(v); };
+    setVal('btInitialEquity', p.initial_equity ?? 100000);
     setVal('btStrategy', p.strategy_id);
     setVal('btEqEntryStrategy', p.strategy_id_equities || p.strategy_id);
     setVal('btCrEntryStrategy', p.strategy_id_crypto || p.strategy_id);
