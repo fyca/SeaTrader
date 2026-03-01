@@ -216,13 +216,19 @@ def _build_spec(params: dict, asset_class: str = "stocks") -> dict:
     }
 
 
-def _candidate_configs(search_mode: str) -> list[dict]:
+def _candidate_configs(search_mode: str, indicator_families: list[str] | None = None) -> list[dict]:
     mode = str(search_mode or "standard").lower()
     ma_longs = [100, 150, 200] if mode != "exhaustive" else [80, 100, 120, 150, 180, 200, 250]
     ma_shorts = [20, 50] if mode != "exhaustive" else [10, 20, 30, 50, 80]
     exit_ns = [50, 100, 150] if mode != "exhaustive" else [20, 50, 80, 100, 150, 200]
     ma_kinds = ["sma"] if mode != "exhaustive" else ["sma", "ema"]
     filter_types = ["rsi"] if mode != "exhaustive" else ["none", "rsi", "roc", "ann_vol", "breakout", "dist_sma", "ret_1d", "lowest"]
+    if indicator_families:
+        allowed = {str(x).strip().lower() for x in indicator_families if str(x).strip()}
+        # always allow "none" baseline unless user explicitly excludes by only-empty input
+        filter_types = [ft for ft in filter_types if ft in allowed or (ft == "none" and "none" in allowed)]
+        if not filter_types:
+            filter_types = ["rsi"]
     exit_types = ["ma"] if mode != "exhaustive" else ["ma", "rsi", "roc", "breakdown"]
 
     out: list[dict] = []
@@ -356,7 +362,7 @@ def _fetch_with_timeout(fetch_fn, timeout_s: float = 25.0):
     return box["res"]
 
 
-def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks", objective: str = "balanced", min_trades: int = 8, train_ratio: float = 0.7, folds: int = 3, search_mode: str = "standard", parity_mode: bool = True, base_params: dict | None = None, config_path: str | None = None) -> str:
+def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "stocks", objective: str = "balanced", min_trades: int = 8, train_ratio: float = 0.7, folds: int = 3, search_mode: str = "standard", indicator_families: list[str] | None = None, parity_mode: bool = True, base_params: dict | None = None, config_path: str | None = None) -> str:
     job_id = str(uuid.uuid4())
     now = _now()
     with _LOCK:
@@ -381,7 +387,7 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
             params_overrides = dict(base_params or {})
             end_dt = datetime.now(timezone.utc)
             start_dt = end_dt - timedelta(days=int(years) * 365)
-            candidates = _candidate_configs(search_mode)
+            candidates = _candidate_configs(search_mode, indicator_families=indicator_families)
 
             per_symbol_best: list[dict] = []
             symbol_frames: dict[str, pd.DataFrame] = {}
@@ -651,6 +657,7 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 "train_ratio": float(train_ratio),
                 "folds": int(folds),
                 "search_mode": str(search_mode),
+                "indicator_families": list(indicator_families or []),
                 "parity_mode": bool(parity_mode),
                 "candidate_count": int(len(candidates)),
                 "total_evaluations": int(total_evals),

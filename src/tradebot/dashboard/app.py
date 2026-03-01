@@ -145,6 +145,9 @@ def create_app(*, config_path: str) -> FastAPI:
         folds = int(body.get("folds") or 3)
         search_mode = str(body.get("search_mode") or "standard")
         parity_mode = bool(body.get("parity_mode", True))
+        indicator_families = body.get("indicator_families") or []
+        if isinstance(indicator_families, str):
+            indicator_families = [x.strip() for x in indicator_families.split(",") if x.strip()]
         base_params = body.get("base_params") or {}
         from tradebot.strategies.auto_builder import start_auto_build
         job_id = start_auto_build(
@@ -157,6 +160,7 @@ def create_app(*, config_path: str) -> FastAPI:
             folds=folds,
             search_mode=search_mode,
             parity_mode=parity_mode,
+            indicator_families=list(indicator_families),
             base_params=base_params,
             config_path=config_path,
         )

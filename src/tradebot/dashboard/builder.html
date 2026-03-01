@@ -286,6 +286,10 @@
         <label class="muted" style="display:flex; align-items:center; gap:6px; margin-top:18px;"><input id="abParity" type="checkbox" checked /> Parity mode (use backtest engine)</label>
       </div>
       <div>
+        <div class="muted">Indicator families (csv)</div>
+        <input id="abIndicators" placeholder="none,rsi,roc,ann_vol,breakout,dist_sma,ret_1d,lowest" style="min-width:360px;" />
+      </div>
+      <div>
         <button id="abRun" class="primary">Run auto-builder</button>
         <button id="abStop" class="secondary">Stop</button>
         <button id="abApply" class="secondary">Apply result to editor</button>
@@ -1074,11 +1078,12 @@ async function runAutoBuilder() {
   const folds = Number(document.getElementById('abFolds')?.value || '3');
   const search_mode = String(document.getElementById('abSearchMode')?.value || 'standard');
   const parity_mode = Boolean(document.getElementById('abParity')?.checked);
+  const indicator_families = String(document.getElementById('abIndicators')?.value || '').split(',').map(x=>x.trim()).filter(Boolean);
   if (!symbols) throw new Error('enter symbols');
   st.textContent = 'starting…';
   out.textContent = '';
   const r = await fetch('/api/strategy/auto-build/start', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class, objective, min_trades, train_ratio, folds, search_mode, parity_mode})
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbols, years, asset_class, objective, min_trades, train_ratio, folds, search_mode, parity_mode, indicator_families})
   });
   if (!r.ok) throw new Error(await r.text());
   const j = await r.json();
