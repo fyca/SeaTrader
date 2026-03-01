@@ -173,6 +173,13 @@
       <button id="pRsiOS">RSI14 &lt; 30</button>
       <button id="pRsiOk">RSI14 &lt; 70</button>
       <button id="pRsiRange">RSI14 40–70</button>
+      <button id="pAdx">ADX14 &gt; 20</button>
+      <button id="pMacd">MACD_HIST &gt; 0</button>
+      <button id="pBbandTrend">CLOSE &gt; BB_UPPER20</button>
+      <button id="pStoch">STOCH_K14 &gt; STOCH_D14</button>
+      <button id="pCci">CCI20 &gt; 0</button>
+      <button id="pVwap">CLOSE &gt; VWAP</button>
+      <button id="pMom">MOM10 &gt; 0</button>
     </div>
 
     <div id="ruleTree" style="margin-top:10px;"></div>
@@ -202,6 +209,13 @@
       <button id="xTrend">CLOSE &lt; SMA200</button>
       <button id="xRsiOB">RSI14 &gt; 70</button>
       <button id="xRsiExtreme">RSI14 &gt; 80</button>
+      <button id="xMacdFlip">MACD_HIST &lt; 0</button>
+      <button id="xBbandRevert">CLOSE &lt; BB_LOWER20</button>
+      <button id="xStochBreak">STOCH_K14 &lt; STOCH_D14</button>
+      <button id="xAdxWeak">ADX14 &lt; 15</button>
+      <button id="xCciWeak">CCI20 &lt; -100</button>
+      <button id="xVwapLoss">CLOSE &lt; VWAP</button>
+      <button id="xMomDown">MOM10 &lt; 0</button>
     </div>
 
     <div id="exitRuleTree" style="margin-top:10px;"></div>
@@ -1232,6 +1246,13 @@ const _entryPresets = {
     {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'>', right:40},
     {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'<', right:70},
   ]),
+  pAdx: {type:'cond', id:newId(), left:{kind:'adx',n:14}, op:'>', right:20},
+  pMacd: {type:'cond', id:newId(), left:{kind:'macd_hist'}, op:'>', right:0},
+  pBbandTrend: {type:'cond', id:newId(), left:{kind:'close'}, op:'>', right:{kind:'bb_upper',n:20}},
+  pStoch: {type:'cond', id:newId(), left:{kind:'stoch_k',n:14}, op:'>', right:{kind:'stoch_d',n:14}},
+  pCci: {type:'cond', id:newId(), left:{kind:'cci',n:20}, op:'>', right:0},
+  pVwap: {type:'cond', id:newId(), left:{kind:'close'}, op:'>', right:{kind:'vwap'}},
+  pMom: {type:'cond', id:newId(), left:{kind:'mom',n:10}, op:'>', right:0},
 };
 for (const k of Object.keys(_entryPresets)) {
   document.getElementById(k).addEventListener('click', (e)=>{e.preventDefault(); ruleModel.children.push(_entryPresets[k]); renderRuleTree();});
@@ -1248,6 +1269,13 @@ const _exitPresets = {
   xTrend: {type:'cond', id:newId(), left:{kind:'close'}, op:'<', right:{kind:'sma',n:200}},
   xRsiOB: {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'>', right:70},
   xRsiExtreme: {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'>', right:80},
+  xMacdFlip: {type:'cond', id:newId(), left:{kind:'macd_hist'}, op:'<', right:0},
+  xBbandRevert: {type:'cond', id:newId(), left:{kind:'close'}, op:'<', right:{kind:'bb_lower',n:20}},
+  xStochBreak: {type:'cond', id:newId(), left:{kind:'stoch_k',n:14}, op:'<', right:{kind:'stoch_d',n:14}},
+  xAdxWeak: {type:'cond', id:newId(), left:{kind:'adx',n:14}, op:'<', right:15},
+  xCciWeak: {type:'cond', id:newId(), left:{kind:'cci',n:20}, op:'<', right:-100},
+  xVwapLoss: {type:'cond', id:newId(), left:{kind:'close'}, op:'<', right:{kind:'vwap'}},
+  xMomDown: {type:'cond', id:newId(), left:{kind:'mom',n:10}, op:'<', right:0},
 };
 for (const k of Object.keys(_exitPresets)) {
   document.getElementById(k).addEventListener('click', (e)=>{e.preventDefault(); exitModel.children.push(_exitPresets[k]); renderExitTree();});
