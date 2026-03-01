@@ -161,6 +161,14 @@
     </div>
 
     <div class="row" style="margin-top:8px;">
+      <span class="muted">Entry preset bundles:</span>
+      <button id="pBundleTrend">Trend-following bundle</button>
+      <button id="pBundleMeanRev">Mean-reversion bundle</button>
+      <button id="pBundleBreakout">Breakout bundle</button>
+      <button id="pBundleMomentum">Momentum bundle</button>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
       <span class="muted">Entry presets:</span>
       <button id="pTrend">SMA50 &gt; SMA200</button>
       <button id="pCloseAbove">CLOSE &gt; SMA200</button>
@@ -202,6 +210,14 @@
       <button id="syncExitToJson">Sync → JSON</button>
       <button id="syncExitFromJson">Load ← JSON</button>
       <span id="exitStatus" class="muted"></span>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
+      <span class="muted">Exit preset bundles:</span>
+      <button id="xBundleTrend">Trend risk-off bundle</button>
+      <button id="xBundleMeanRev">Mean-reversion exit bundle</button>
+      <button id="xBundleBreakout">Breakout failure bundle</button>
+      <button id="xBundleMomentum">Momentum decay bundle</button>
     </div>
 
     <div class="row" style="margin-top:8px;">
@@ -1258,6 +1274,44 @@ for (const k of Object.keys(_entryPresets)) {
   document.getElementById(k).addEventListener('click', (e)=>{e.preventDefault(); ruleModel.children.push(_entryPresets[k]); renderRuleTree();});
 }
 
+function addEntryBundleTrend() {
+  ruleModel.children.push(makeGroup('all', [
+    {type:'cond', id:newId(), left:{kind:'sma',n:50}, op:'>', right:{kind:'sma',n:200}},
+    {type:'cond', id:newId(), left:{kind:'adx',n:14}, op:'>', right:20},
+    {type:'cond', id:newId(), left:{kind:'macd_hist'}, op:'>', right:0},
+  ]));
+  renderRuleTree();
+}
+function addEntryBundleMeanRev() {
+  ruleModel.children.push(makeGroup('all', [
+    {type:'cond', id:newId(), left:{kind:'close'}, op:'<', right:{kind:'bb_lower',n:20}},
+    {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'<', right:35},
+    {type:'cond', id:newId(), left:{kind:'cci',n:20}, op:'<', right:-100},
+  ]));
+  renderRuleTree();
+}
+function addEntryBundleBreakout() {
+  ruleModel.children.push(makeGroup('all', [
+    {type:'cond', id:newId(), left:{kind:'close'}, op:'>=', right:{kind:'highest',n:20}},
+    {type:'cond', id:newId(), left:{kind:'adx',n:14}, op:'>', right:18},
+    {type:'cond', id:newId(), left:{kind:'ann_vol',n:20}, op:'<', right:1.0},
+  ]));
+  renderRuleTree();
+}
+function addEntryBundleMomentum() {
+  ruleModel.children.push(makeGroup('all', [
+    {type:'cond', id:newId(), left:{kind:'mom',n:10}, op:'>', right:0},
+    {type:'cond', id:newId(), left:{kind:'stoch_k',n:14}, op:'>', right:{kind:'stoch_d',n:14}},
+    {type:'cond', id:newId(), left:{kind:'close'}, op:'>', right:{kind:'vwap'}},
+  ]));
+  renderRuleTree();
+}
+
+document.getElementById('pBundleTrend')?.addEventListener('click', (e)=>{e.preventDefault(); addEntryBundleTrend();});
+document.getElementById('pBundleMeanRev')?.addEventListener('click', (e)=>{e.preventDefault(); addEntryBundleMeanRev();});
+document.getElementById('pBundleBreakout')?.addEventListener('click', (e)=>{e.preventDefault(); addEntryBundleBreakout();});
+document.getElementById('pBundleMomentum')?.addEventListener('click', (e)=>{e.preventDefault(); addEntryBundleMomentum();});
+
 // Exit controls
 document.getElementById('addExitRootCond').addEventListener('click', (e)=>{e.preventDefault(); exitModel.children.push(makeDefaultCond()); renderExitTree();});
 document.getElementById('addExitRootGroup').addEventListener('click', (e)=>{e.preventDefault(); exitModel.children.push(makeGroup('any', [])); renderExitTree();});
@@ -1280,6 +1334,44 @@ const _exitPresets = {
 for (const k of Object.keys(_exitPresets)) {
   document.getElementById(k).addEventListener('click', (e)=>{e.preventDefault(); exitModel.children.push(_exitPresets[k]); renderExitTree();});
 }
+
+function addExitBundleTrend() {
+  exitModel.children.push(makeGroup('any', [
+    {type:'cond', id:newId(), left:{kind:'close'}, op:'<', right:{kind:'sma',n:200}},
+    {type:'cond', id:newId(), left:{kind:'macd_hist'}, op:'<', right:0},
+    {type:'cond', id:newId(), left:{kind:'adx',n:14}, op:'<', right:15},
+  ]));
+  renderExitTree();
+}
+function addExitBundleMeanRev() {
+  exitModel.children.push(makeGroup('any', [
+    {type:'cond', id:newId(), left:{kind:'rsi',n:14}, op:'>', right:70},
+    {type:'cond', id:newId(), left:{kind:'close'}, op:'>', right:{kind:'bb_upper',n:20}},
+    {type:'cond', id:newId(), left:{kind:'cci',n:20}, op:'>', right:100},
+  ]));
+  renderExitTree();
+}
+function addExitBundleBreakout() {
+  exitModel.children.push(makeGroup('any', [
+    {type:'cond', id:newId(), left:{kind:'close'}, op:'<=', right:{kind:'lowest',n:20}},
+    {type:'cond', id:newId(), left:{kind:'roc',n:20}, op:'<', right:-0.06},
+    {type:'cond', id:newId(), left:{kind:'close'}, op:'<', right:{kind:'vwap'}},
+  ]));
+  renderExitTree();
+}
+function addExitBundleMomentum() {
+  exitModel.children.push(makeGroup('any', [
+    {type:'cond', id:newId(), left:{kind:'mom',n:10}, op:'<', right:0},
+    {type:'cond', id:newId(), left:{kind:'stoch_k',n:14}, op:'<', right:{kind:'stoch_d',n:14}},
+    {type:'cond', id:newId(), left:{kind:'macd_hist'}, op:'<', right:0},
+  ]));
+  renderExitTree();
+}
+
+document.getElementById('xBundleTrend')?.addEventListener('click', (e)=>{e.preventDefault(); addExitBundleTrend();});
+document.getElementById('xBundleMeanRev')?.addEventListener('click', (e)=>{e.preventDefault(); addExitBundleMeanRev();});
+document.getElementById('xBundleBreakout')?.addEventListener('click', (e)=>{e.preventDefault(); addExitBundleBreakout();});
+document.getElementById('xBundleMomentum')?.addEventListener('click', (e)=>{e.preventDefault(); addExitBundleMomentum();});
 
 // Factors
 document.getElementById('addFactor').addEventListener('click', (e)=>{e.preventDefault(); addFactorRow(null);});
