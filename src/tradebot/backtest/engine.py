@@ -1262,7 +1262,7 @@ def run_backtest(
                         "holdings": holdings,
                         "regime": _regime(day),
                     })
-                    if progress_cb and (i % 10 == 0 or i == len(days) - 1):
+                    if progress_cb:
                         progress_cb(i + 1, len(days), float(equity))
                     continue
                 stopped_until_next_rebalance = False
@@ -1605,7 +1605,7 @@ def run_backtest(
             "regime": _regime(day),
         })
 
-        if progress_cb and (i % 10 == 0 or i == len(days) - 1):
+        if progress_cb:
             progress_cb(i + 1, len(days), float(equity))
         if debug_verbose:
             _dbg("day_end", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), cash=round(float(cash), 2), equity=round(float(equity), 2))

@@ -1737,7 +1737,7 @@ async function waitBacktestJob(jobId, onTick) {
     const st = await getJSON('/api/backtest/status?job_id=' + encodeURIComponent(jobId));
     if (onTick) onTick(st);
     if (st.state === 'done' || st.state === 'error' || st.state === 'missing') return st;
-    await new Promise(res => setTimeout(res, 1200));
+    await new Promise(res => setTimeout(res, 300));
   }
 }
 
@@ -4229,9 +4229,12 @@ setBacktestRunButtonState();
 
 setInterval(() => {
   main().catch(() => {});
-  pollBacktest().catch(() => {});
   pollActionJob().catch(() => {});
 }, 10_000);
+
+setInterval(() => {
+  if (btJobId) pollBacktest().catch(() => {});
+}, 1_000);
 
 setInterval(() => {
   if (btJobId && !btDebugES) pollBacktestDebug().catch(() => {});
