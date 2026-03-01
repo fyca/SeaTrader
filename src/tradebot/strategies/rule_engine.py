@@ -70,6 +70,32 @@ def eval_indicator(ctx: EvalContext, spec: dict) -> float | None:
         return ret_1d(ctx.closes)
     if kind == "ann_vol":
         return ann_vol(ctx.closes, int(spec.get("n", 20)), ctx.ann_factor)
+    if kind == "mom":
+        return indicator_service.mom(ctx.closes, int(spec.get("n", 10)))
+    if kind == "bb_upper":
+        return indicator_service.bb_upper(ctx.closes, int(spec.get("n", 20)), float(spec.get("k", 2.0)))
+    if kind == "bb_lower":
+        return indicator_service.bb_lower(ctx.closes, int(spec.get("n", 20)), float(spec.get("k", 2.0)))
+    if kind == "bb_width":
+        return indicator_service.bb_width(ctx.closes, int(spec.get("n", 20)), float(spec.get("k", 2.0)))
+    if kind == "macd_line":
+        return indicator_service.macd_line(ctx.closes, int(spec.get("fast", 12)), int(spec.get("slow", 26)))
+    if kind == "macd_signal":
+        return indicator_service.macd_signal(ctx.closes, int(spec.get("fast", 12)), int(spec.get("slow", 26)), int(spec.get("signal", 9)))
+    if kind == "macd_hist":
+        return indicator_service.macd_hist(ctx.closes, int(spec.get("fast", 12)), int(spec.get("slow", 26)), int(spec.get("signal", 9)))
+    if kind == "atr":
+        return indicator_service.atr(ctx.closes, int(spec.get("n", 14)))
+    if kind == "adx":
+        return indicator_service.adx(ctx.closes, int(spec.get("n", 14)))
+    if kind == "stoch_k":
+        return indicator_service.stoch_k(ctx.closes, int(spec.get("n", 14)))
+    if kind == "stoch_d":
+        return indicator_service.stoch_d(ctx.closes, int(spec.get("n", 14)), int(spec.get("d", 3)))
+    if kind == "cci":
+        return indicator_service.cci(ctx.closes, int(spec.get("n", 20)))
+    if kind == "vwap":
+        return indicator_service.vwap(ctx.closes)
 
     # Derived / preset-style indicators
     if kind == "dist_sma":

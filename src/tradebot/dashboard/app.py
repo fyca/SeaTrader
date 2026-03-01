@@ -270,6 +270,14 @@ def create_app(*, config_path: str) -> FastAPI:
             {"kind": "rsi", "n": 14},
             {"kind": "ann_vol", "n": 20},
             {"kind": "highest", "n": 20},
+            {"kind": "mom", "n": 10},
+            {"kind": "bb_width", "n": 20},
+            {"kind": "macd_hist"},
+            {"kind": "atr", "n": 14},
+            {"kind": "adx", "n": 14},
+            {"kind": "stoch_k", "n": 14},
+            {"kind": "cci", "n": 20},
+            {"kind": "vwap"},
         ]:
             try:
                 indicators[f"{ind['kind']}:{ind.get('n','')}"] = eval_indicator(ctx, ind)

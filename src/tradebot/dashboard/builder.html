@@ -417,6 +417,19 @@ function indicatorOptions() {
     {kind:'roc', label:'ROC(n) (close/close[-n]-1)', needsN:true},
     {kind:'ret_1d', label:'RET_1D (daily return)', needsN:false},
     {kind:'ann_vol', label:'ANN_VOL(n)', needsN:true},
+    {kind:'mom', label:'MOM(n)', needsN:true},
+    {kind:'bb_upper', label:'BB_UPPER(n)', needsN:true},
+    {kind:'bb_lower', label:'BB_LOWER(n)', needsN:true},
+    {kind:'bb_width', label:'BB_WIDTH(n)', needsN:true},
+    {kind:'macd_line', label:'MACD_LINE', needsN:false},
+    {kind:'macd_signal', label:'MACD_SIGNAL', needsN:false},
+    {kind:'macd_hist', label:'MACD_HIST', needsN:false},
+    {kind:'atr', label:'ATR(n)', needsN:true},
+    {kind:'adx', label:'ADX(n)', needsN:true},
+    {kind:'stoch_k', label:'STOCH_K(n)', needsN:true},
+    {kind:'stoch_d', label:'STOCH_D(n)', needsN:true},
+    {kind:'cci', label:'CCI(n)', needsN:true},
+    {kind:'vwap', label:'VWAP', needsN:false},
 
     // Presets / derived
     {kind:'dist_sma', label:'DIST_SMA(n) (close/sma-1)', needsN:true},
@@ -512,6 +525,19 @@ function fmtInd(spec) {
   if (k==='roc') return `ROC(${n})`;
   if (k==='ret_1d') return 'RET_1D';
   if (k==='ann_vol') return `ANN_VOL(${n||20})`;
+  if (k==='mom') return `MOM(${n||10})`;
+  if (k==='bb_upper') return `BB_UPPER(${n||20})`;
+  if (k==='bb_lower') return `BB_LOWER(${n||20})`;
+  if (k==='bb_width') return `BB_WIDTH(${n||20})`;
+  if (k==='macd_line') return `MACD_LINE(12,26)`;
+  if (k==='macd_signal') return `MACD_SIGNAL(12,26,9)`;
+  if (k==='macd_hist') return `MACD_HIST(12,26,9)`;
+  if (k==='atr') return `ATR(${n||14})`;
+  if (k==='adx') return `ADX(${n||14})`;
+  if (k==='stoch_k') return `STOCH_K(${n||14})`;
+  if (k==='stoch_d') return `STOCH_D(${n||14})`;
+  if (k==='cci') return `CCI(${n||20})`;
+  if (k==='vwap') return 'VWAP';
   if (k==='dist_sma') return `DIST_SMA(${n})`;
   if (k==='breakout') return `BREAKOUT(${n||20})`;
   if (k==='cross_above') return `CROSS_ABOVE(${spec?.fast},${spec?.slow})`;

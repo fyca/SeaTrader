@@ -60,6 +60,70 @@ class IndicatorService:
         elif kind == "lowest":
             n = int(params[0])
             out = s.rolling(n).min()
+        elif kind == "mom":
+            n = int(params[0])
+            out = s - s.shift(n)
+        elif kind == "bb_mid":
+            n = int(params[0])
+            out = s.rolling(n).mean()
+        elif kind == "bb_upper":
+            n = int(params[0]); k = float(params[1])
+            m = s.rolling(n).mean(); sd = s.rolling(n).std(ddof=0)
+            out = m + k * sd
+        elif kind == "bb_lower":
+            n = int(params[0]); k = float(params[1])
+            m = s.rolling(n).mean(); sd = s.rolling(n).std(ddof=0)
+            out = m - k * sd
+        elif kind == "bb_width":
+            n = int(params[0]); k = float(params[1])
+            m = s.rolling(n).mean(); sd = s.rolling(n).std(ddof=0)
+            up = m + k * sd
+            lo = m - k * sd
+            out = (up - lo) / m.replace(0, np.nan)
+        elif kind == "macd_line":
+            fast = int(params[0]); slow = int(params[1])
+            ef = s.ewm(span=fast, adjust=False).mean()
+            es = s.ewm(span=slow, adjust=False).mean()
+            out = ef - es
+        elif kind == "macd_signal":
+            fast = int(params[0]); slow = int(params[1]); sig = int(params[2])
+            ef = s.ewm(span=fast, adjust=False).mean()
+            es = s.ewm(span=slow, adjust=False).mean()
+            ml = ef - es
+            out = ml.ewm(span=sig, adjust=False).mean()
+        elif kind == "macd_hist":
+            fast = int(params[0]); slow = int(params[1]); sig = int(params[2])
+            ef = s.ewm(span=fast, adjust=False).mean()
+            es = s.ewm(span=slow, adjust=False).mean()
+            ml = ef - es
+            ms = ml.ewm(span=sig, adjust=False).mean()
+            out = ml - ms
+        elif kind == "atr":
+            n = int(params[0])
+            tr = s.diff().abs()
+            out = tr.rolling(n).mean()
+        elif kind == "adx":
+            n = int(params[0])
+            tr = s.diff().abs().rolling(n).mean()
+            dm = s.diff().clip(lower=0).rolling(n).mean()
+            out = 100.0 * (dm / tr.replace(0, np.nan)).fillna(0.0)
+        elif kind == "stoch_k":
+            n = int(params[0])
+            lo = s.rolling(n).min(); hi = s.rolling(n).max()
+            out = 100.0 * ((s - lo) / (hi - lo).replace(0, np.nan))
+        elif kind == "stoch_d":
+            n = int(params[0]); d = int(params[1])
+            lo = s.rolling(n).min(); hi = s.rolling(n).max()
+            k = 100.0 * ((s - lo) / (hi - lo).replace(0, np.nan))
+            out = k.rolling(d).mean()
+        elif kind == "cci":
+            n = int(params[0])
+            tp = s
+            ma = tp.rolling(n).mean()
+            md = (tp - ma).abs().rolling(n).mean()
+            out = (tp - ma) / (0.015 * md.replace(0, np.nan))
+        elif kind == "vwap":
+            out = s.expanding().mean()
         else:
             raise ValueError(f"unknown indicator kind: {kind}")
 
@@ -140,6 +204,45 @@ class IndicatorService:
         if len(s) < n + 2:
             return None
         return self._last_valid(self._get(s, "rsi", int(n)))
+
+    def mom(self, closes: pd.Series, n: int = 10) -> float | None:
+        return self._last_valid(self._get(closes, "mom", int(n)))
+
+    def bb_upper(self, closes: pd.Series, n: int = 20, k: float = 2.0) -> float | None:
+        return self._last_valid(self._get(closes, "bb_upper", int(n), float(k)))
+
+    def bb_lower(self, closes: pd.Series, n: int = 20, k: float = 2.0) -> float | None:
+        return self._last_valid(self._get(closes, "bb_lower", int(n), float(k)))
+
+    def bb_width(self, closes: pd.Series, n: int = 20, k: float = 2.0) -> float | None:
+        return self._last_valid(self._get(closes, "bb_width", int(n), float(k)))
+
+    def macd_line(self, closes: pd.Series, fast: int = 12, slow: int = 26) -> float | None:
+        return self._last_valid(self._get(closes, "macd_line", int(fast), int(slow)))
+
+    def macd_signal(self, closes: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> float | None:
+        return self._last_valid(self._get(closes, "macd_signal", int(fast), int(slow), int(signal)))
+
+    def macd_hist(self, closes: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> float | None:
+        return self._last_valid(self._get(closes, "macd_hist", int(fast), int(slow), int(signal)))
+
+    def atr(self, closes: pd.Series, n: int = 14) -> float | None:
+        return self._last_valid(self._get(closes, "atr", int(n)))
+
+    def adx(self, closes: pd.Series, n: int = 14) -> float | None:
+        return self._last_valid(self._get(closes, "adx", int(n)))
+
+    def stoch_k(self, closes: pd.Series, n: int = 14) -> float | None:
+        return self._last_valid(self._get(closes, "stoch_k", int(n)))
+
+    def stoch_d(self, closes: pd.Series, n: int = 14, d: int = 3) -> float | None:
+        return self._last_valid(self._get(closes, "stoch_d", int(n), int(d)))
+
+    def cci(self, closes: pd.Series, n: int = 20) -> float | None:
+        return self._last_valid(self._get(closes, "cci", int(n)))
+
+    def vwap(self, closes: pd.Series) -> float | None:
+        return self._last_valid(self._get(closes, "vwap"))
 
 
 indicator_service = IndicatorService()

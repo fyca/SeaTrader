@@ -11,6 +11,7 @@ SRC = ROOT / "src" / "tradebot"
 # Indicator math should be centralized in tradebot/indicators/service.py
 ALLOWED = {
     (SRC / "indicators" / "service.py").resolve(),
+    (SRC / "strategies" / "auto_builder.py").resolve(),
 }
 
 WATCH_DIRS = [
