@@ -1514,8 +1514,9 @@ function _renderBtPvTimeline() {
   let maxYObserved = Math.max(...pts.map(p => p.v));
   if (!Number.isFinite(maxYObserved) || maxYObserved <= 0) maxYObserved = 1;
   const startV = pts[0].v;
-  const minY = startV * 0.90;
-  const maxY = maxYObserved * 1.50;
+  const minY = startV;
+  let maxY = maxYObserved;
+  if (!(maxY > minY)) maxY = minY * 1.001;
   const ySpan = (maxY - minY) || 1;
 
   const xDen = Math.max(1, pts.length - 1);
@@ -1577,7 +1578,7 @@ function _renderBtPvTimeline() {
 
   const delta = last.v - startV;
   const chg = startV ? (delta / startV) : 0;
-  meta.textContent = `points ${pts.length} • start ${money(startV)} • now ${money(last.v)} • Δ ${money(delta)} (${chg>=0?'+':''}${pct(chg)}) • y-range ${money(minY)} to ${money(maxY)} (start-10% to max+50%)`;
+  meta.textContent = `points ${pts.length} • start ${money(startV)} • now ${money(last.v)} • Δ ${money(delta)} (${chg>=0?'+':''}${pct(chg)}) • y-range ${money(minY)} to ${money(maxY)} (start to peak)`;
 }
 
 function _resetBtPvTimeline() {
