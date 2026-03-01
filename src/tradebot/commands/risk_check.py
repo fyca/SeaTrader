@@ -282,7 +282,11 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
             if user_exit_eq:
                 try:
                     from tradebot.strategies.rule_engine import EvalContext, eval_rule
-                    ctx = EvalContext(closes=closes, ann_factor=252.0)
+                    highs = df["high"].dropna() if "high" in df.columns else None
+                    lows = df["low"].dropna() if "low" in df.columns else None
+                    opens = df["open"].dropna() if "open" in df.columns else None
+                    volumes = df["volume"].dropna() if "volume" in df.columns else None
+                    ctx = EvalContext(closes=closes, ann_factor=252.0, highs=highs, lows=lows, opens=opens, volumes=volumes)
                     if eval_rule(ctx, user_exit_eq):
                         exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": "user_exit_rule", "last_close": last_px})
                         continue
@@ -332,7 +336,11 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
             if user_exit_cr:
                 try:
                     from tradebot.strategies.rule_engine import EvalContext, eval_rule
-                    ctx = EvalContext(closes=closes, ann_factor=365.0)
+                    highs = df["high"].dropna() if "high" in df.columns else None
+                    lows = df["low"].dropna() if "low" in df.columns else None
+                    opens = df["open"].dropna() if "open" in df.columns else None
+                    volumes = df["volume"].dropna() if "volume" in df.columns else None
+                    ctx = EvalContext(closes=closes, ann_factor=365.0, highs=highs, lows=lows, opens=opens, volumes=volumes)
                     if eval_rule(ctx, user_exit_cr):
                         exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": "user_exit_rule", "last_close": last_px})
                         continue

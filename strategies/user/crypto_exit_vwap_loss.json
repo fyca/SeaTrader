@@ -1,0 +1,24 @@
+{
+  "asset_class": "crypto",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "vwap"
+        }
+      }
+    ]
+  },
+  "id": "crypto_exit_vwap_loss",
+  "name": "Crypto Exit VWAP Loss",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

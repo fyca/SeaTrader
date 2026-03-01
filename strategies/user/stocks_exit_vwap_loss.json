@@ -1,0 +1,24 @@
+{
+  "asset_class": "stocks",
+  "entry": {
+    "all": []
+  },
+  "exit": {
+    "any": [
+      {
+        "left": {
+          "kind": "close"
+        },
+        "op": "<",
+        "right": {
+          "kind": "vwap"
+        }
+      }
+    ]
+  },
+  "id": "stocks_exit_vwap_loss",
+  "name": "Stocks Exit VWAP Loss",
+  "score_factors": [],
+  "type": "exit",
+  "version": 1
+}

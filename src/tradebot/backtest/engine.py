@@ -755,12 +755,30 @@ def run_backtest(
             for it in rule_obj:
                 _collect_indicator_specs(it, out)
 
-    def _indicator_snapshot(rule_obj, cls: pd.Series, ann_factor: float) -> dict[str, float | None]:
+    def _eval_ctx_until_day(sym: str, day: pd.Timestamp, ann_factor: float) -> EvalContext | None:
+        df = bars_all.get(sym)
+        if df is None or len(df) == 0:
+            return None
+        try:
+            dfx = df.loc[:day]
+        except Exception:
+            return None
+        if dfx is None or len(dfx) == 0 or "close" not in dfx.columns:
+            return None
+        cls = dfx["close"].dropna().astype(float)
+        if len(cls) == 0:
+            return None
+        highs = dfx["high"].dropna().astype(float) if "high" in dfx.columns else None
+        lows = dfx["low"].dropna().astype(float) if "low" in dfx.columns else None
+        opens = dfx["open"].dropna().astype(float) if "open" in dfx.columns else None
+        vols = dfx["volume"].dropna().astype(float) if "volume" in dfx.columns else None
+        return EvalContext(closes=cls, ann_factor=ann_factor, highs=highs, lows=lows, opens=opens, volumes=vols)
+
+    def _indicator_snapshot(rule_obj, ctx: EvalContext) -> dict[str, float | None]:
         specs: list[dict] = []
         _collect_indicator_specs(rule_obj, specs)
         seen: set[str] = set()
         snap: dict[str, float | None] = {}
-        ctx = EvalContext(closes=cls, ann_factor=ann_factor)
         for sp in specs:
             kind = str(sp.get("kind") or "").lower()
             if not kind:
@@ -905,17 +923,19 @@ def run_backtest(
                                 else:
                                     cls = closes_until_day(sym, day)
                                     should_exit = False
-                                    if len(cls) >= 5:
+                                    ann_factor = 365.0 if is_crypto else 252.0
+                                    ctx = _eval_ctx_until_day(sym, day, ann_factor)
+                                    if ctx is not None and len(ctx.closes) >= 5:
                                         hourly_debug["strategy_exit_evaluated"] += 1
-                                        ann_factor = 365.0 if is_crypto else 252.0
                                         try:
-                                            should_exit = bool(eval_rule(EvalContext(closes=cls, ann_factor=ann_factor), ex_rule))
+                                            should_exit = bool(eval_rule(ctx, ex_rule))
                                         except Exception:
                                             should_exit = False
                                     strategy_eval_cache[cache_key] = bool(should_exit)
                                 if debug_verbose:
-                                    snap = _indicator_snapshot(ex_rule, cls, ann_factor) if ('cls' in locals() and ex_rule is not None and len(cls) > 0) else {}
-                                    _dbg("hourly_strategy_exit_eval", day=day_s, ts=str(ts_local), symbol=sym, should_exit=bool(should_exit), has_rule=bool(ex_rule), closes_len=len(cls) if 'cls' in locals() else None, indicators=snap)
+                                    _ctx = _eval_ctx_until_day(sym, day, ann_factor if 'ann_factor' in locals() else (365.0 if is_crypto else 252.0))
+                                    snap = _indicator_snapshot(ex_rule, _ctx) if (_ctx is not None and ex_rule is not None and len(_ctx.closes) > 0) else {}
+                                    _dbg("hourly_strategy_exit_eval", day=day_s, ts=str(ts_local), symbol=sym, should_exit=bool(should_exit), has_rule=bool(ex_rule), closes_len=(len(_ctx.closes) if _ctx is not None else None), indicators=snap)
                                 if should_exit and _can_sell_today(sym):
                                     hourly_debug["strategy_exit_triggered"] += 1
                                     q = positions_qty.get(sym, 0.0)
@@ -1043,18 +1063,18 @@ def run_backtest(
                 ex_rule = cr_exit_rule if is_crypto else eq_exit_rule
                 if ex_rule is None:
                     continue
-                cls = closes_until_day(sym, day)
-                if len(cls) < 5:
-                    continue
                 ann_factor = 365.0 if is_crypto else 252.0
+                ctx = _eval_ctx_until_day(sym, day, ann_factor)
+                if ctx is None or len(ctx.closes) < 5:
+                    continue
                 should_exit = False
                 try:
-                    should_exit = bool(eval_rule(EvalContext(closes=cls, ann_factor=ann_factor), ex_rule))
+                    should_exit = bool(eval_rule(ctx, ex_rule))
                 except Exception:
                     should_exit = False
                 if debug_verbose:
-                    snap = _indicator_snapshot(ex_rule, cls, ann_factor)
-                    _dbg("daily_strategy_exit_eval", day=day_s, symbol=sym, should_exit=bool(should_exit), closes_len=len(cls), ann_factor=ann_factor, indicators=snap)
+                    snap = _indicator_snapshot(ex_rule, ctx)
+                    _dbg("daily_strategy_exit_eval", day=day_s, symbol=sym, should_exit=bool(should_exit), closes_len=len(ctx.closes), ann_factor=ann_factor, indicators=snap)
                 if not should_exit:
                     continue
 
@@ -1243,7 +1263,7 @@ def run_backtest(
                         "regime": _regime(day),
                     })
                     if progress_cb and (i % 10 == 0 or i == len(days) - 1):
-                        progress_cb(i + 1, len(days))
+                        progress_cb(i + 1, len(days), float(equity))
                     continue
                 stopped_until_next_rebalance = False
                 dd_stop_trigger_day = None
@@ -1586,7 +1606,7 @@ def run_backtest(
         })
 
         if progress_cb and (i % 10 == 0 or i == len(days) - 1):
-            progress_cb(i + 1, len(days))
+            progress_cb(i + 1, len(days), float(equity))
         if debug_verbose:
             _dbg("day_end", day=day_s, idx=i + 1, total=len(days), positions=len(positions_qty), cash=round(float(cash), 2), equity=round(float(equity), 2))
         elif (i == len(days) - 1) or ((i + 1) % 10 == 0):

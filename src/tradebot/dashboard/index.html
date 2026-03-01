@@ -1780,7 +1780,8 @@ async function runBacktestIteration() {
     const jobId = j.job_id;
 
     const st = await waitBacktestJob(jobId, (x) => {
-      status.textContent = `iteration ${i+1}/${times.length}: ${t} - ${x.state} ${x.progress||0}/${x.total||0}`;
+      const eqTxt = (x.current_equity != null && Number.isFinite(Number(x.current_equity))) ? ` • PV ${money(Number(x.current_equity))}` : '';
+      status.textContent = `iteration ${i+1}/${times.length}: ${t} - ${x.state} ${x.progress||0}/${x.total||0}${eqTxt}`;
     });
 
     if (st.state !== 'done') {
@@ -1837,7 +1838,8 @@ async function pollBacktest() {
   const st = await getJSON('/api/backtest/status?job_id=' + encodeURIComponent(btJobId));
   const el = document.getElementById('btStatus');
   if (st.state === 'running' || st.state === 'fetching_data' || st.state === 'fetching_crypto') {
-    el.textContent = `${st.state} ${st.progress||0}/${st.total||0}`;
+    const eqTxt = (st.current_equity != null && Number.isFinite(Number(st.current_equity))) ? ` • PV ${money(Number(st.current_equity))}` : '';
+    el.textContent = `${st.state} ${st.progress||0}/${st.total||0}${eqTxt}`;
     if (!btDebugES) await pollBacktestDebug();
   }
   if (st.state === 'done') {

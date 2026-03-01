@@ -215,11 +215,17 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             )
             _last_prog_log = {"done": -1}
 
-            def prog(done, total):
-                _write(status_path, {"state": "running", "progress": done, "total": total})
+            def prog(done, total, current_equity=None):
+                st = {"state": "running", "progress": done, "total": total}
+                if current_equity is not None:
+                    try:
+                        st["current_equity"] = float(current_equity)
+                    except Exception:
+                        pass
+                _write(status_path, st)
                 last_done = int(_last_prog_log.get("done", -1))
                 if (done == total) or (done - last_done >= 10) or (last_done < 0):
-                    _log("simulate_progress", done=done, total=total)
+                    _log("simulate_progress", done=done, total=total, current_equity=st.get("current_equity"))
                     _last_prog_log["done"] = int(done)
 
             def dbg(msg, **fields):
