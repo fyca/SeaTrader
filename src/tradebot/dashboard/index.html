@@ -1513,7 +1513,8 @@ function _renderBtPvTimeline() {
 
   let maxYObserved = Math.max(...pts.map(p => p.v));
   if (!Number.isFinite(maxYObserved) || maxYObserved <= 0) maxYObserved = 1;
-  const minY = 0;
+  const startV = pts[0].v;
+  const minY = startV * 0.90;
   const maxY = maxYObserved * 1.50;
   const ySpan = (maxY - minY) || 1;
 
@@ -1574,10 +1575,9 @@ function _renderBtPvTimeline() {
     ${xLabels.join('')}
   `;
 
-  const startV = pts[0].v;
   const delta = last.v - startV;
   const chg = startV ? (delta / startV) : 0;
-  meta.textContent = `points ${pts.length} • start ${money(startV)} • now ${money(last.v)} • Δ ${money(delta)} (${chg>=0?'+':''}${pct(chg)}) • y-range 0 to ${money(maxY)} (max+50%)`;
+  meta.textContent = `points ${pts.length} • start ${money(startV)} • now ${money(last.v)} • Δ ${money(delta)} (${chg>=0?'+':''}${pct(chg)}) • y-range ${money(minY)} to ${money(maxY)} (start-10% to max+50%)`;
 }
 
 function _resetBtPvTimeline() {
