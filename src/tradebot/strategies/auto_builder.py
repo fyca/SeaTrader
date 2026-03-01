@@ -605,15 +605,53 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
             agg = dict(cross_scores[0]["cfg"])
             spec = _build_spec(agg, asset_class=asset_class)
 
-            # Stage 3: optimize preset-level risk controls (entry/exit is only part of preset quality)
+            # Stage 3: optimize preset-level controls (Phase A knob coverage)
             risk_best = None
-            risk_grid = [
-                {"per_asset_stop_loss_pct": None, "trailing_stop_stocks_enabled": False, "portfolio_dd_stop": None},
-                {"per_asset_stop_loss_pct": 0.10, "trailing_stop_stocks_enabled": False, "portfolio_dd_stop": None},
-                {"per_asset_stop_loss_pct": 0.15, "trailing_stop_stocks_enabled": False, "portfolio_dd_stop": 0.20},
-                {"per_asset_stop_loss_pct": 0.15, "trailing_stop_stocks_enabled": True, "trailing_stop_stocks_start_gain_pct": 0.05, "trailing_stop_stocks_pct": 0.02, "portfolio_dd_stop": 0.20},
-                {"per_asset_stop_loss_pct": 0.12, "trailing_stop_stocks_enabled": True, "trailing_stop_stocks_start_gain_pct": 0.04, "trailing_stop_stocks_pct": 0.025, "portfolio_dd_stop": 0.15},
+            risk_grid: list[dict] = []
+            rebalance_modes = ["target_notional", "no_add_to_losers"]
+            liquidation_modes = ["liquidate_non_selected", "hold_until_exit"]
+            eq_risk_freqs = ["daily", "hourly"]
+            cr_risk_freqs = ["daily", "hourly"]
+            exec_modes = ["daily", "intraday"]
+            stop_losses = [None, 0.10, 0.15]
+            dd_stops = [None, 0.15, 0.20]
+            trail_anchors = ["highest_since_entry", "highest_close_since_entry"]
+            trail_profiles = [
+                {"enabled": False, "start": 0.05, "pct": 0.02},
+                {"enabled": True, "start": 0.04, "pct": 0.025},
+                {"enabled": True, "start": 0.05, "pct": 0.02},
             ]
+
+            for rb in rebalance_modes:
+                for liq in liquidation_modes:
+                    for eq_rf in eq_risk_freqs:
+                        for cr_rf in cr_risk_freqs:
+                            for exm in exec_modes:
+                                for sl in stop_losses:
+                                    for dd in dd_stops:
+                                        for anc in trail_anchors:
+                                            for tp in trail_profiles:
+                                                risk_grid.append({
+                                                    "rebalance_mode": rb,
+                                                    "liquidation_mode": liq,
+                                                    "risk_freq_equities": eq_rf,
+                                                    "risk_freq_crypto": cr_rf,
+                                                    "execution_time_mode": exm,
+                                                    "per_asset_stop_loss_pct": sl,
+                                                    "portfolio_dd_stop": dd,
+                                                    "trailing_stop_anchor": anc,
+                                                    "trailing_stop_stocks_enabled": bool(tp["enabled"]),
+                                                    "trailing_stop_crypto_enabled": bool(tp["enabled"]),
+                                                    "trailing_stop_stocks_start_gain_pct": float(tp["start"]),
+                                                    "trailing_stop_crypto_start_gain_pct": float(tp["start"]),
+                                                    "trailing_stop_stocks_pct": float(tp["pct"]),
+                                                    "trailing_stop_crypto_pct": float(tp["pct"]),
+                                                })
+
+            # guardrail against runaway runtime in parity mode
+            if len(risk_grid) > 180:
+                risk_grid = risk_grid[:180]
+
             if parity_mode and cfg_obj is not None:
                 for i, rg in enumerate(risk_grid, start=1):
                     upd(state="running", phase="preset_optimizing", detail=f"preset risk {i}/{len(risk_grid)}")
@@ -670,6 +708,7 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 },
                 "per_symbol_best": per_symbol_best,
                 "cross_symbol_top": cross_scores[:10],
+                "preset_grid_count": int(len(risk_grid)),
             }
             upd(state="done", phase="done", progress=max(1, len(symbols)), total=max(1, len(symbols)), result=out, current_symbol=None, detail="complete")
         except Exception as e:
