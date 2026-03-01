@@ -526,6 +526,12 @@ def start_auto_build(*, symbols: list[str], years: int = 5, asset_class: str = "
                 total_evals += int(evals_symbol)
                 if best is not None:
                     best["evaluations"] = int(evals_symbol)
+                    try:
+                        best["symbol_start_price"] = float(close.iloc[0])
+                        best["symbol_end_price"] = float(close.iloc[-1])
+                        best["symbol_return"] = float((float(close.iloc[-1]) / float(close.iloc[0]) - 1.0) if float(close.iloc[0]) > 0 else 0.0)
+                    except Exception:
+                        pass
                     per_symbol_best.append(best)
 
                 done += 1
