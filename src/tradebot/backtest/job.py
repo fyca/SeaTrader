@@ -99,11 +99,23 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             _write(status_path, {"state": "fetching_data", "progress": 0, "total": 1})
             _log("phase", state="fetching_data")
             cfg = load_config(config_path)
-            # Optional backtest-only liquidity override from dashboard controls.
+            # Optional backtest-only limit/liquidity overrides from dashboard controls.
             try:
                 adv_override = params.get("min_avg_crypto_dollar_volume_20d")
                 if adv_override is not None:
                     cfg.limits.min_avg_crypto_dollar_volume_20d = float(adv_override)
+            except Exception:
+                pass
+            try:
+                eq_max = params.get("max_equity_positions")
+                if eq_max is not None:
+                    cfg.limits.max_equity_positions = int(eq_max)
+            except Exception:
+                pass
+            try:
+                cr_max = params.get("max_crypto_positions")
+                if cr_max is not None:
+                    cfg.limits.max_crypto_positions = int(cr_max)
             except Exception:
                 pass
             env = load_env()

@@ -110,7 +110,9 @@ class BacktestParams:
     universe_mode: Literal["full", "single"] = "full"
     symbol: str | None = None
     min_crypto_price: float | None = None
-    # Optional backtest-only override for liquidity gate.
+    # Optional backtest-only overrides for universe sizing/liquidity gates.
+    max_equity_positions: int | None = None
+    max_crypto_positions: int | None = None
     min_avg_crypto_dollar_volume_20d: float | None = None
 
 

@@ -510,6 +510,14 @@
               <select id="btCrExitEnabled" style="width:140px;"><option value="false">Off</option><option value="true">On</option></select>
             </div>
             <div>
+              <div class="muted">Max stock positions</div>
+              <input id="btMaxEqPos" type="number" min="1" step="1" placeholder="e.g. 10" style="width:140px;" />
+            </div>
+            <div>
+              <div class="muted">Max crypto positions</div>
+              <input id="btMaxCrPos" type="number" min="1" step="1" placeholder="e.g. 5" style="width:140px;" />
+            </div>
+            <div>
               <div class="muted">Execution mode</div>
               <select id="btExecMode" style="width:180px;" disabled>
                 <option value="intraday" selected>Intraday (1m bars)</option>
@@ -1398,6 +1406,10 @@ function collectBacktestRequestBody() {
   const stopLoss = (document.getElementById('btStopLoss')?.value || '').trim();
   const minCryptoRaw = (document.getElementById('btMinCryptoPrice')?.value || '').trim();
   const min_crypto_price = minCryptoRaw ? Number(minCryptoRaw) : null;
+  const maxEqRaw = (document.getElementById('btMaxEqPos')?.value || '').trim();
+  const maxCrRaw = (document.getElementById('btMaxCrPos')?.value || '').trim();
+  const max_equity_positions = maxEqRaw ? Number(maxEqRaw) : null;
+  const max_crypto_positions = maxCrRaw ? Number(maxCrRaw) : null;
   const min_avg_crypto_dollar_volume_20d = Number(document.getElementById('btMinCryptoAdv')?.value || '5000000');
   const symFloorRaw = (document.getElementById('btSymFloor')?.value || '').trim();
   const symbol_pnl_floor_pct = symFloorRaw ? Number(symFloorRaw) : null;
@@ -1442,7 +1454,7 @@ function collectBacktestRequestBody() {
     trailing_stop_stocks_enabled, trailing_stop_crypto_enabled,
     trailing_stop_stocks_start_gain_pct, trailing_stop_crypto_start_gain_pct,
     trailing_stop_stocks_pct, trailing_stop_crypto_pct, trailing_stop_anchor,
-    min_crypto_price, min_avg_crypto_dollar_volume_20d,
+    min_crypto_price, max_equity_positions, max_crypto_positions, min_avg_crypto_dollar_volume_20d,
     symbol_pnl_floor_pct, symbol_pnl_floor_liquidate, symbol_pnl_floor_include_unrealized,
     debug_verbose
   };
@@ -3594,6 +3606,8 @@ async function main() {
     setVal('btDDPreset', p.portfolio_dd_stop);
     setVal('btSymFloor', p.symbol_pnl_floor_pct);
     setVal('btMinCryptoPrice', p.min_crypto_price);
+    setVal('btMaxEqPos', p.max_equity_positions);
+    setVal('btMaxCrPos', p.max_crypto_positions);
     setVal('btMinCryptoAdv', p.min_avg_crypto_dollar_volume_20d ?? 5000000);
     const liq = document.getElementById('btSymFloorLiquidate');
     if (liq && p.symbol_pnl_floor_liquidate!==undefined) liq.checked = Boolean(p.symbol_pnl_floor_liquidate);
