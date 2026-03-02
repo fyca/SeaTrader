@@ -246,6 +246,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             intraday_cb = None
             intraday_limit_touch_cb = None
             risk_intraday_cb = None
+            intraday_bar_cb = None
+            risk_intraday_bar_cb = None
             if getattr(p, "execution_time_mode", "daily") == "intraday":
                 _log("intraday_mode_enabled", execution_tz=p.execution_tz)
                 from tradebot.backtest.intraday import IntradayPriceProvider
@@ -314,6 +316,16 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                         return prov.price(sym, ts)
                     return prov.price_at_local_ts(sym, ts, exact_minute=True)
 
+                def intraday_bar_cb(sym, ts_local):
+                    is_crypto = "/" in str(sym)
+                    prov = (prov_cr if is_crypto else prov_eq)
+                    return prov.bar_at_local_ts(sym, pd.Timestamp(ts_local), exact_minute=False)
+
+                def risk_intraday_bar_cb(sym, ts_local):
+                    is_crypto = "/" in str(sym)
+                    prov = (risk_prov_cr if is_crypto else risk_prov_eq)
+                    return prov.bar_at_local_ts(sym, pd.Timestamp(ts_local), exact_minute=True)
+
             t_prepare_end = time.perf_counter()
             t_sim_start = t_prepare_end
 
@@ -346,6 +358,8 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                     intraday_price_cb=intraday_cb,
                     intraday_limit_touch_cb=intraday_limit_touch_cb,
                     risk_intraday_price_cb=risk_intraday_cb,
+                    intraday_bar_cb=intraday_bar_cb,
+                    risk_intraday_bar_cb=risk_intraday_bar_cb,
                 )
             finally:
                 _hb_stop.set()

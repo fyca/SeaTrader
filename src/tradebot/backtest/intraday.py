@@ -98,6 +98,38 @@ class IntradayPriceProvider:
         except Exception:
             return None
 
+    def bar_at_local_ts(self, sym: str, ts_local: pd.Timestamp, *, exact_minute: bool = False) -> dict | None:
+        day = pd.Timestamp(ts_local).normalize()
+        df = self._day_bars(sym, day)
+        if df is None or len(df) == 0:
+            return None
+        try:
+            ts = pd.Timestamp(ts_local)
+            dt_local = datetime(ts.year, ts.month, ts.day, ts.hour, ts.minute, tzinfo=self._tz)
+            target = pd.to_datetime(dt_local.astimezone(ZoneInfo("UTC")))
+            if exact_minute:
+                row = df.loc[df.index == target]
+                if len(row) == 0:
+                    return None
+                r = row.iloc[-1]
+                t = target
+            else:
+                df2 = df.loc[:target]
+                if len(df2) == 0:
+                    return None
+                r = df2.iloc[-1]
+                t = df2.index[-1]
+            return {
+                "ts_utc": str(pd.Timestamp(t)),
+                "open": float(r["open"]) if "open" in r else None,
+                "high": float(r["high"]) if "high" in r else None,
+                "low": float(r["low"]) if "low" in r else None,
+                "close": float(r["close"]) if "close" in r else None,
+                "volume": float(r["volume"]) if "volume" in r else None,
+            }
+        except Exception:
+            return None
+
     def limit_touched(self, sym: str, day: pd.Timestamp, side: str, limit_px: float) -> bool:
         df = self._day_bars(sym, day)
         if df is None or len(df) == 0:

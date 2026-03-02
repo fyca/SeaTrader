@@ -163,6 +163,8 @@ def run_backtest(
     intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
     intraday_limit_touch_cb: Callable[[str, pd.Timestamp, str, float], bool] | None = None,
     risk_intraday_price_cb: Callable[[str, pd.Timestamp], float | None] | None = None,
+    intraday_bar_cb: Callable[[str, pd.Timestamp], dict | None] | None = None,
+    risk_intraday_bar_cb: Callable[[str, pd.Timestamp], dict | None] | None = None,
 ) -> BacktestResult:
     """Simple long-only backtest using daily closes.
 
@@ -599,26 +601,46 @@ def run_backtest(
                 e.setdefault("fill_ts_local", f"{day_s} {t_local}")
 
                 # Attach bar envelope used for forensic checks.
-                df0 = bars_all.get(sym)
-                if df0 is not None and len(df0) > 0:
-                    dkey = pd.Timestamp(day_s)
-                    row = None
-                    if dkey in df0.index:
-                        row = df0.loc[dkey]
-                        if isinstance(row, pd.DataFrame):
-                            row = row.iloc[-1]
-                    else:
-                        day_df = df0.loc[df0.index.normalize() == dkey]
-                        if len(day_df):
-                            row = day_df.iloc[-1]
-                    if row is not None:
-                        e.setdefault("bar_open", float(row.get("open")) if "open" in row else None)
-                        e.setdefault("bar_high", float(row.get("high")) if "high" in row else None)
-                        e.setdefault("bar_low", float(row.get("low")) if "low" in row else None)
-                        e.setdefault("bar_close", float(row.get("close")) if "close" in row else None)
-                        e.setdefault("bar_volume", float(row.get("volume")) if "volume" in row else None)
-                        e.setdefault("bar_source", "daily_backtest_bars")
-                        e.setdefault("bar_date", day_s)
+                intraday_bar = None
+                try:
+                    ts_local = pd.Timestamp(str(e.get("fill_ts_local")))
+                    if str(e.get("fill_source")) == "risk_check" and risk_intraday_bar_cb is not None:
+                        intraday_bar = risk_intraday_bar_cb(sym, ts_local)
+                    elif str(e.get("fill_source")).startswith("intraday") and intraday_bar_cb is not None:
+                        intraday_bar = intraday_bar_cb(sym, ts_local)
+                except Exception:
+                    intraday_bar = None
+
+                if intraday_bar is not None:
+                    e.setdefault("bar_open", intraday_bar.get("open"))
+                    e.setdefault("bar_high", intraday_bar.get("high"))
+                    e.setdefault("bar_low", intraday_bar.get("low"))
+                    e.setdefault("bar_close", intraday_bar.get("close"))
+                    e.setdefault("bar_volume", intraday_bar.get("volume"))
+                    e.setdefault("bar_ts_utc", intraday_bar.get("ts_utc"))
+                    e.setdefault("bar_source", "intraday_1m")
+                    e.setdefault("bar_date", day_s)
+                else:
+                    df0 = bars_all.get(sym)
+                    if df0 is not None and len(df0) > 0:
+                        dkey = pd.Timestamp(day_s)
+                        row = None
+                        if dkey in df0.index:
+                            row = df0.loc[dkey]
+                            if isinstance(row, pd.DataFrame):
+                                row = row.iloc[-1]
+                        else:
+                            day_df = df0.loc[df0.index.normalize() == dkey]
+                            if len(day_df):
+                                row = day_df.iloc[-1]
+                        if row is not None:
+                            e.setdefault("bar_open", float(row.get("open")) if "open" in row else None)
+                            e.setdefault("bar_high", float(row.get("high")) if "high" in row else None)
+                            e.setdefault("bar_low", float(row.get("low")) if "low" in row else None)
+                            e.setdefault("bar_close", float(row.get("close")) if "close" in row else None)
+                            e.setdefault("bar_volume", float(row.get("volume")) if "volume" in row else None)
+                            e.setdefault("bar_source", "daily_backtest_bars")
+                            e.setdefault("bar_date", day_s)
         except Exception:
             pass
 
