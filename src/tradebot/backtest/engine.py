@@ -574,11 +574,31 @@ def run_backtest(
                 pass
 
     def _event(e: dict) -> None:
-        # Attach forensic bar snapshot (when available) so fills can be audited later
+        # Attach forensic bar + timing snapshot so fills can be audited later.
         try:
             sym = str(e.get("symbol") or "").strip()
             day_s = str(e.get("date") or "").strip()
+            is_crypto = "/" in sym
             if sym and day_s:
+                # Fill timing metadata (inferred from execution/risk schedules).
+                reason = str(e.get("reason") or "")
+                risk_reasons = {
+                    "strategy_exit_rule", "per_asset_stop_loss", "portfolio_dd_stop",
+                    "trailing_stop_stocks", "trailing_stop_crypto", "symbol_pnl_floor_exclude",
+                }
+                if reason in risk_reasons:
+                    t_local = (params.risk_check_time_local_crypto if is_crypto else params.risk_check_time_local_equities) or params.risk_check_time_local
+                    e.setdefault("fill_source", "risk_check")
+                else:
+                    if params.execution_time_mode == "intraday":
+                        t_local = (params.execution_time_local_crypto if is_crypto else params.execution_time_local_equities) or params.execution_time_local
+                        e.setdefault("fill_source", "intraday_exec")
+                    else:
+                        t_local = "09:30" if str(params.execution_time) == "open" else "16:00"
+                        e.setdefault("fill_source", f"daily_{params.execution_time}")
+                e.setdefault("fill_ts_local", f"{day_s} {t_local}")
+
+                # Attach bar envelope used for forensic checks.
                 df0 = bars_all.get(sym)
                 if df0 is not None and len(df0) > 0:
                     dkey = pd.Timestamp(day_s)
@@ -598,6 +618,7 @@ def run_backtest(
                         e.setdefault("bar_close", float(row.get("close")) if "close" in row else None)
                         e.setdefault("bar_volume", float(row.get("volume")) if "volume" in row else None)
                         e.setdefault("bar_source", "daily_backtest_bars")
+                        e.setdefault("bar_date", day_s)
         except Exception:
             pass
 

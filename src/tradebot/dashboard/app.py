@@ -1429,11 +1429,14 @@ def create_app(*, config_path: str) -> FastAPI:
                     "date": e.get("date"),
                     "type": e.get("type"),
                     "reason": e.get("reason"),
+                    "fill_source": e.get("fill_source"),
+                    "fill_ts_local": e.get("fill_ts_local"),
                     "price": px,
                     "bar_low": lo,
                     "bar_high": hi,
                     "bar_open": e.get("bar_open"),
                     "bar_close": e.get("bar_close"),
+                    "bar_date": e.get("bar_date"),
                 })
 
         summary = {
