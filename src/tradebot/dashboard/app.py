@@ -1368,6 +1368,91 @@ def create_app(*, config_path: str) -> FastAPI:
         res = bt_result(job_id)
         return res or {"state": "missing"}
 
+    @app.get("/api/backtest/forensic")
+    def backtest_forensic(job_id: str | None = None):
+        job_id = job_id or get_latest_job_id()
+        if not job_id:
+            return {"state": "missing"}
+        res = bt_result(job_id)
+        if not res:
+            return {"state": "missing"}
+
+        events = [e for e in (res.get("events") or []) if str(e.get("type") or "") in ("buy", "sell")]
+        if not events:
+            return {"ok": True, "job_id": job_id, "summary": {"events": 0}}
+
+        # Position arithmetic check
+        pos: dict[str, float] = {}
+        oversell = []
+        for i, e in enumerate(events):
+            sym = str(e.get("symbol") or "")
+            qty = float(e.get("qty") or 0.0)
+            typ = str(e.get("type") or "")
+            cur = float(pos.get(sym, 0.0))
+            if typ == "buy":
+                pos[sym] = cur + qty
+            elif typ == "sell":
+                if qty - cur > 1e-8:
+                    oversell.append({"idx": i, "symbol": sym, "date": e.get("date"), "have": cur, "sell_qty": qty, "reason": e.get("reason")})
+                pos[sym] = max(0.0, cur - qty)
+
+        # Fill-vs-bar check (requires forensic bar fields in events)
+        with_bar = 0
+        in_range = 0
+        out_of_range = []
+        no_bar = 0
+        for i, e in enumerate(events):
+            px = e.get("price")
+            lo = e.get("bar_low")
+            hi = e.get("bar_high")
+            if px is None:
+                continue
+            try:
+                px = float(px)
+            except Exception:
+                continue
+            if lo is None or hi is None:
+                no_bar += 1
+                continue
+            try:
+                lo = float(lo); hi = float(hi)
+            except Exception:
+                no_bar += 1
+                continue
+            with_bar += 1
+            if (lo * 0.999) <= px <= (hi * 1.001):
+                in_range += 1
+            else:
+                out_of_range.append({
+                    "idx": i,
+                    "symbol": e.get("symbol"),
+                    "date": e.get("date"),
+                    "type": e.get("type"),
+                    "reason": e.get("reason"),
+                    "price": px,
+                    "bar_low": lo,
+                    "bar_high": hi,
+                    "bar_open": e.get("bar_open"),
+                    "bar_close": e.get("bar_close"),
+                })
+
+        summary = {
+            "events": len(events),
+            "oversell_count": len(oversell),
+            "fills_with_bar_context": with_bar,
+            "fills_in_bar_range": in_range,
+            "fills_out_of_bar_range": len(out_of_range),
+            "fills_missing_bar_context": no_bar,
+        }
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "summary": summary,
+            "oversell_samples": oversell[:50],
+            "out_of_range_samples": out_of_range[:80],
+            "note": "Bar-context checks require newer backtests that include bar_* fields in events.",
+        }
+
     @app.get("/api/backtest/log")
     def backtest_log(job_id: str | None = None, offset: int = 0, limit: int = 200):
         job_id = job_id or get_latest_job_id()

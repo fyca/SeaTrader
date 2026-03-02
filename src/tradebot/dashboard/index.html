@@ -458,11 +458,13 @@
               <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap;">
                 <div style="font-weight:700;">Trace viewer</div>
                 <button id="btTraceLoad" class="secondary" type="button">Load trace</button>
+                <button id="btForensicRun" class="secondary" type="button">Run forensic fill check</button>
                 <select id="btTraceSymbol" style="min-width:170px;"><option value="">Run-level (all symbols)</option></select>
                 <input id="btTraceEventFilter" placeholder="Filter event (optional)" style="min-width:200px;" />
                 <span id="btTraceMeta" class="muted" style="font-size:12px;"></span>
               </div>
               <pre id="btTraceLog" class="muted" style="margin-top:8px; max-height:220px; overflow:auto; background:#0b1220; color:#dbe7ff; border:1px solid var(--border); border-radius:10px; padding:10px; white-space:pre-wrap;">(trace not loaded)</pre>
+              <pre id="btForensicLog" class="muted" style="margin-top:8px; max-height:220px; overflow:auto; background:#101417; color:#dff7e6; border:1px solid var(--border); border-radius:10px; padding:10px; white-space:pre-wrap;">(forensic check not run)</pre>
             </div>
           </div>
 
@@ -1777,6 +1779,40 @@ async function loadBacktestTrace() {
   meta.textContent = `${lines.length} events` + (symbol ? ` • ${symbol}` : ' • run-level');
   out.textContent = lines.map(x => JSON.stringify(x)).join('\n') || '(no trace rows)';
   out.scrollTop = 0;
+}
+
+async function loadBacktestForensic() {
+  const out = document.getElementById('btForensicLog');
+  if (!out) return;
+  const job = btJobId || btDebugLastJobId || window.__lastViewedJobId || '';
+  if (!job) {
+    out.textContent = '(no job selected)';
+    return;
+  }
+  out.textContent = 'running forensic check…';
+  try {
+    const j = await getJSON('/api/backtest/forensic?job_id=' + encodeURIComponent(job));
+    const s = j.summary || {};
+    const hdr = [
+      `job: ${j.job_id || job}`,
+      `events: ${s.events ?? 0}`,
+      `oversell_count: ${s.oversell_count ?? 0}`,
+      `fills_with_bar_context: ${s.fills_with_bar_context ?? 0}`,
+      `fills_in_bar_range: ${s.fills_in_bar_range ?? 0}`,
+      `fills_out_of_bar_range: ${s.fills_out_of_bar_range ?? 0}`,
+      `fills_missing_bar_context: ${s.fills_missing_bar_context ?? 0}`,
+      j.note ? `note: ${j.note}` : ''
+    ].filter(Boolean).join('\n');
+
+    const samples = {
+      oversell_samples: j.oversell_samples || [],
+      out_of_range_samples: j.out_of_range_samples || []
+    };
+    out.textContent = hdr + '\n\n' + JSON.stringify(samples, null, 2);
+    out.scrollTop = 0;
+  } catch (e) {
+    out.textContent = 'forensic check failed: ' + e;
+  }
 }
 
 function setBacktestRunButtonState() {
@@ -4363,6 +4399,14 @@ document.getElementById('btTraceLoad')?.addEventListener('click', (e) => {
   loadBacktestTrace().catch((err) => {
     const out = document.getElementById('btTraceLog');
     if (out) out.textContent = 'trace load error: ' + (err?.message || err);
+  });
+});
+
+document.getElementById('btForensicRun')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  loadBacktestForensic().catch((err) => {
+    const out = document.getElementById('btForensicLog');
+    if (out) out.textContent = 'forensic load error: ' + (err?.message || err);
   });
 });
 

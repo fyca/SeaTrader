@@ -551,6 +551,33 @@ def run_backtest(
                 pass
 
     def _event(e: dict) -> None:
+        # Attach forensic bar snapshot (when available) so fills can be audited later
+        try:
+            sym = str(e.get("symbol") or "").strip()
+            day_s = str(e.get("date") or "").strip()
+            if sym and day_s:
+                df0 = bars_all.get(sym)
+                if df0 is not None and len(df0) > 0:
+                    dkey = pd.Timestamp(day_s)
+                    row = None
+                    if dkey in df0.index:
+                        row = df0.loc[dkey]
+                        if isinstance(row, pd.DataFrame):
+                            row = row.iloc[-1]
+                    else:
+                        day_df = df0.loc[df0.index.normalize() == dkey]
+                        if len(day_df):
+                            row = day_df.iloc[-1]
+                    if row is not None:
+                        e.setdefault("bar_open", float(row.get("open")) if "open" in row else None)
+                        e.setdefault("bar_high", float(row.get("high")) if "high" in row else None)
+                        e.setdefault("bar_low", float(row.get("low")) if "low" in row else None)
+                        e.setdefault("bar_close", float(row.get("close")) if "close" in row else None)
+                        e.setdefault("bar_volume", float(row.get("volume")) if "volume" in row else None)
+                        e.setdefault("bar_source", "daily_backtest_bars")
+        except Exception:
+            pass
+
         events.append(e)
         if debug_verbose:
             try:
