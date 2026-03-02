@@ -454,6 +454,27 @@ def run_backtest(
         hourly_price_cache[key] = v
         return v
 
+    def _clamp_fill_px(sym: str, day: pd.Timestamp, px_in: float, side: str) -> float:
+        """Clamp simulated fills to daily bar envelope for realism.
+
+        - buy fills cannot exceed day high
+        - sell fills cannot go below day low
+        """
+        try:
+            p = float(px_in)
+            lo = px_low(sym, day)
+            hi = px_high(sym, day)
+            if (lo is None) or (hi is None):
+                return p
+            lo = float(lo); hi = float(hi)
+            if side == "buy":
+                return float(min(max(p, lo), hi))
+            if side == "sell":
+                return float(max(min(p, hi), lo))
+            return float(min(max(p, lo), hi))
+        except Exception:
+            return float(px_in)
+
     def _trail_cfg(sym: str) -> tuple[bool, float, float | None]:
         is_crypto = "/" in sym
         if is_crypto:
@@ -609,6 +630,7 @@ def run_backtest(
                 continue
             base_px = risk_px(sym, day) or p0
             sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+            sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
             q = positions_qty.get(sym, 0.0)
             if (not bool(params.allow_same_day_roundtrip)) and str(positions_entry_date.get(sym) or "") == day.strftime("%Y-%m-%d"):
                 continue
@@ -932,6 +954,7 @@ def run_backtest(
                             if armed and float(p_intraday) <= trail_level:
                                 q = positions_qty.get(sym, 0.0)
                                 sell_px = float(p_intraday) * (1 - params.slippage_bps / 10000.0)
+                                sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                                 cash += q * sell_px
                                 avg_cost = positions_avg_cost.get(sym, float(p_intraday))
                                 entry_date = positions_entry_date.get(sym)
@@ -973,6 +996,7 @@ def run_backtest(
                                     hourly_debug["strategy_exit_triggered"] += 1
                                     q = positions_qty.get(sym, 0.0)
                                     sell_px = p_intraday * (1 - params.slippage_bps / 10000.0)
+                                    sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                                     cash += q * sell_px
                                     avg_cost = positions_avg_cost.get(sym, p_intraday)
                                     entry_date = positions_entry_date.get(sym)
@@ -988,6 +1012,7 @@ def run_backtest(
                             if avg_cost is not None and avg_cost > 0 and (p_intraday / avg_cost - 1.0) <= -float(params.per_asset_stop_loss_pct) and _can_sell_today(sym):
                                 q = positions_qty.get(sym, 0.0)
                                 sell_px = p_intraday * (1 - params.slippage_bps / 10000.0)
+                                sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                                 cash += q * sell_px
                                 entry_date = positions_entry_date.get(sym)
                                 pnl = (sell_px - avg_cost) * q
@@ -1019,6 +1044,7 @@ def run_backtest(
                                     if p0 is None:
                                         continue
                                     sell_px = p0 * (1 - params.slippage_bps / 10000.0)
+                                    sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                                     q = positions_qty.get(sym, 0.0)
                                     if not _can_sell_today(sym):
                                         continue
@@ -1053,6 +1079,7 @@ def run_backtest(
                         continue
                     base_px = risk_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+                    sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                     q = positions_qty.get(sym, 0.0)
                     if not _can_sell_today(sym):
                         continue
@@ -1120,6 +1147,7 @@ def run_backtest(
                     continue
                 base_px = risk_px(sym, day) or p0
                 sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+                sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                 q = positions_qty.get(sym, 0.0)
                 if not _can_sell_today(sym):
                     continue
@@ -1179,6 +1207,7 @@ def run_backtest(
                     if armed and float(p0) <= trail_level:
                         base_px = risk_px(sym, day) or p0
                         sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+                        sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                         q = positions_qty.get(sym, 0.0)
                         if not _can_sell_today(sym):
                             continue
@@ -1215,6 +1244,7 @@ def run_backtest(
                     # stop out full position at risk-check time - slippage
                     base_px = risk_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+                    sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                     q = positions_qty.get(sym, 0.0)
                     if not _can_sell_today(sym):
                         continue
@@ -1436,6 +1466,7 @@ def run_backtest(
                         continue
                     base_px = exec_px(sym, day) or p0
                     sell_px = base_px * (1 - params.slippage_bps / 10000.0)
+                    sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                     q = positions_qty.get(sym, 0.0)
                     if not _can_sell_today(sym):
                         continue
@@ -1514,6 +1545,7 @@ def run_backtest(
                         _event({"type":"order", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "side":"buy", "limit_px":float(limit_px), "notional":float(desired_notional), "reason":"limit_placed"})
                     else:
                         buy_px = base_px * (1 + params.slippage_bps / 10000.0)
+                        buy_px = _clamp_fill_px(sym, day, buy_px, "buy")
 
                         # desired add in notional terms at base_px
                         desired_q = (deltaN / base_px) if base_px else 0.0
@@ -1573,6 +1605,7 @@ def run_backtest(
                         _event({"type":"order", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "side":"sell", "limit_px":float(limit_px), "qty":float(q_sub), "reason":"limit_placed"})
                     else:
                         sell_px = p_exec * (1 - params.slippage_bps / 10000.0)
+                        sell_px = _clamp_fill_px(sym, day, sell_px, "sell")
                         proceeds = q_sub * sell_px
                         cash += proceeds
 
