@@ -1,0 +1,44 @@
+{
+  "id": "stocks_entry_Breakout_Trend_20d",
+  "name": "stock-entry-Breakout Trend (20D high + trend/vol filter)",
+  "type": "entry",
+  "asset_class": "stocks",
+  "entry": {
+    "all": [
+      {
+        "left": {"kind": "close"},
+        "op": ">=",
+        "right": {"kind": "highest", "n": 20}
+      },
+      {
+        "left": {"kind": "close"},
+        "op": ">",
+        "right": {"kind": "sma", "n": 200}
+      },
+      {
+        "left": {"kind": "close"},
+        "op": ">",
+        "right": {"kind": "sma", "n": 50}
+      },
+      {
+        "left": {"kind": "ann_vol", "n": 20},
+        "op": "<",
+        "right": 0.65
+      }
+    ]
+  },
+  "score_factors": [
+    {
+      "weight": 1.0,
+      "value": {"kind": "dist_sma", "n": 50}
+    },
+    {
+      "weight": 0.8,
+      "value": {"kind": "roc", "n": 50}
+    },
+    {
+      "weight": -0.4,
+      "value": {"kind": "ann_vol", "n": 20}
+    }
+  ]
+}

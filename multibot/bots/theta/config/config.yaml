@@ -16,6 +16,13 @@ risk:
   max_drawdown_freeze: 0.2
   warn_drawdown: 0.1
   per_asset_stop_loss_pct: 0.05
+  trailing_stop_stocks_enabled: false
+  trailing_stop_crypto_enabled: false
+  trailing_stop_stocks_start_gain_pct: 0.05
+  trailing_stop_crypto_start_gain_pct: 0.05
+  trailing_stop_stocks_pct: 0.02
+  trailing_stop_crypto_pct: 0.02
+  trailing_stop_anchor: highest_since_entry
   block_same_day_roundtrip: true
   portfolio_dd_stop: 0.2
   dd_stop_behavior: freeze
@@ -51,7 +58,7 @@ execution:
   fallback_time_local: 06:30
   fallback_grace_seconds: 20
   extended_hours_start_time_local: 06:00
-  max_orders_per_run: 25
+  max_orders_per_run: 35
   max_single_order_notional_usd: null
   max_total_notional_usd: null
 scheduling:
@@ -67,6 +74,10 @@ scheduling:
     risk_check_frequency: daily
     risk_check_day: MON
     risk_check_time_local: 06:30
+    risk_check_minute_of_hour: 5
+    risk_check_hourly_checks:
+    - stop_loss
+    - dd_stop
   crypto:
     rebalance_frequency: daily
     rebalance_day: MON
@@ -74,6 +85,10 @@ scheduling:
     risk_check_frequency: daily
     risk_check_day: MON
     risk_check_time_local: 00:00
+    risk_check_minute_of_hour: 5
+    risk_check_hourly_checks:
+    - stop_loss
+    - dd_stop
 universe:
   equity_benchmark_symbols:
   - SPY
@@ -86,3 +101,16 @@ rebalance:
   symbol_pnl_floor_pct: -0.5
   symbol_pnl_floor_liquidate: true
   symbol_pnl_floor_include_unrealized: true
+strategies:
+  stocks:
+    entry_strategy:
+      id: Fast_Momentum_Aggressive
+      version: null
+    exit_strategy: null
+    exit_enabled: false
+  crypto:
+    entry_strategy:
+      id: Fast_Momentum_Aggressive
+      version: null
+    exit_strategy: null
+    exit_enabled: false

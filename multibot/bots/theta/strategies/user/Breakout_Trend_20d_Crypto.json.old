@@ -1,0 +1,40 @@
+{
+  "id": "Breakout_Trend_20d_Crypto",
+  "name": "Breakout Trend (20D high + trend/vol filter) - Crypto",
+  "type": "entry",
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {"kind": "breakout", "n": 20},
+        "op": "==",
+        "right": 1
+      },
+      {
+        "left": {"kind": "close"},
+        "op": ">",
+        "right": {"kind": "sma", "n": 120}
+      },
+      {
+        "left": {"kind": "sma_slope", "n": 30, "lookback": 5},
+        "op": ">",
+        "right": 0
+      },
+      {
+        "left": {"kind": "ann_vol", "n": 20},
+        "op": "<",
+        "right": 2.0
+      }
+    ]
+  },
+  "score_factors": [
+    {
+      "weight": 1.0,
+      "value": {"kind": "dist_sma", "n": 120}
+    },
+    {
+      "weight": -0.25,
+      "value": {"kind": "ann_vol", "n": 20}
+    }
+  ]
+}

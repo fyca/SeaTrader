@@ -1,0 +1,44 @@
+{
+  "id": "crypto_entry_Breakout_Trend_20d",
+  "name": "crypto-entry-Breakout Trend (20D high + trend/vol filter)",
+  "type": "entry",
+  "asset_class": "crypto",
+  "entry": {
+    "all": [
+      {
+        "left": {"kind": "close"},
+        "op": ">=",
+        "right": {"kind": "highest", "n": 20}
+      },
+      {
+        "left": {"kind": "close"},
+        "op": ">",
+        "right": {"kind": "sma", "n": 120}
+      },
+      {
+        "left": {"kind": "close"},
+        "op": ">",
+        "right": {"kind": "sma", "n": 30}
+      },
+      {
+        "left": {"kind": "ann_vol", "n": 20},
+        "op": "<",
+        "right": 2.0
+      }
+    ]
+  },
+  "score_factors": [
+    {
+      "weight": 1.0,
+      "value": {"kind": "dist_sma", "n": 30}
+    },
+    {
+      "weight": 0.8,
+      "value": {"kind": "roc", "n": 50}
+    },
+    {
+      "weight": -0.4,
+      "value": {"kind": "ann_vol", "n": 20}
+    }
+  ]
+}

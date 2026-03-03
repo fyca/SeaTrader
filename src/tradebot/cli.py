@@ -62,6 +62,10 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
 
     # config can force dry_run; env can also force dry_run
     dry_run = bool(cfg.dry_run or env.dry_run)
+    
+    # Helper to identify crypto symbols (both "/" and "USD" suffix formats)
+    def is_crypto_sym(sym: str) -> bool:
+        return "/" in str(sym) or str(sym).endswith("USD")
 
     clients = make_alpaca_clients(env)
 
@@ -121,9 +125,9 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     else:
         eq_symbols = eq_all
 
-    # Crypto: default to USD-quoted pairs only
+    # Crypto: default to USD-quoted pairs only (both formats: BTC/USD and BCHUSD)
     cr_all = cfg.universe.crypto_symbols_allowlist or [x.symbol for x in cr_univ]
-    cr_symbols = [s for s in cr_all if s.endswith("/USD")]
+    cr_symbols = [s for s in cr_all if str(s).endswith("USD")]
 
     # Limit data pulls to manageable sizes
     eq_symbols = eq_symbols[:500]
@@ -145,8 +149,15 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     eq_strat = get_strategy(eq_strategy_id)
     cr_strat = get_strategy(cr_strategy_id)
 
-    eq_sel, eq_sig_details = eq_strat.select_equities(bars=eq_bars, cfg=cfg)
-    cr_sel, cr_sig_details = cr_strat.select_crypto(bars=cr_bars, cfg=cfg)
+    try:
+        eq_sel, eq_sig_details = eq_strat.select_equities(bars=eq_bars, cfg=cfg)
+    except Exception as e:
+        raise RuntimeError(f"Equities strategy '{eq_strategy_id}' failed: {type(e).__name__}: {e}") from e
+    
+    try:
+        cr_sel, cr_sig_details = cr_strat.select_crypto(bars=cr_bars, cfg=cfg)
+    except Exception as e:
+        raise RuntimeError(f"Crypto strategy '{cr_strategy_id}' failed: {type(e).__name__}: {e}") from e
 
     # Optional crypto price floor (settings.limits.min_crypto_price)
     min_cr_px = getattr(cfg.limits, "min_crypto_price", None)
@@ -244,11 +255,13 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     target_map = {t.symbol: float(t.notional_usd) for t in targets}
     class_map = {t.symbol: t.asset_class for t in targets}
     if run_asset_mode == "equities":
-        target_map = {k:v for k,v in target_map.items() if "/" not in k}
-        class_map = {k:v for k,v in class_map.items() if "/" not in k}
+        # Keep only equities: not crypto
+        target_map = {k:v for k,v in target_map.items() if not is_crypto_sym(k)}
+        class_map = {k:v for k,v in class_map.items() if not is_crypto_sym(k)}
     elif run_asset_mode == "crypto":
-        target_map = {k:v for k,v in target_map.items() if "/" in k}
-        class_map = {k:v for k,v in class_map.items() if "/" in k}
+        # Keep only crypto
+        target_map = {k:v for k,v in target_map.items() if is_crypto_sym(k)}
+        class_map = {k:v for k,v in class_map.items() if is_crypto_sym(k)}
 
     # 5) Current positions (notional)
     current_positions = clients.trading.get_all_positions()
@@ -282,39 +295,52 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                 pass
 
     # Strict asset-mode isolation: ignore out-of-scope holdings entirely.
-    # crypto mode only sees crypto symbols; equities mode only sees equity symbols.
+    # crypto mode only sees crypto symbols (/ or USD suffix); equities mode only sees equity symbols.
     if run_asset_mode == "equities":
-        current_map = {k: v for k, v in current_map.items() if "/" not in str(k)}
-        avg_entry_map = {k: v for k, v in avg_entry_map.items() if "/" not in str(k)}
-        cur_price_map = {k: v for k, v in cur_price_map.items() if "/" not in str(k)}
-        sell_qty_by_symbol = {k: v for k, v in sell_qty_by_symbol.items() if "/" not in str(k)}
+        current_map = {k: v for k, v in current_map.items() if not is_crypto_sym(k)}
+        avg_entry_map = {k: v for k, v in avg_entry_map.items() if not is_crypto_sym(k)}
+        cur_price_map = {k: v for k, v in cur_price_map.items() if not is_crypto_sym(k)}
+        sell_qty_by_symbol = {k: v for k, v in sell_qty_by_symbol.items() if not is_crypto_sym(k)}
     elif run_asset_mode == "crypto":
-        current_map = {k: v for k, v in current_map.items() if "/" in str(k)}
-        avg_entry_map = {k: v for k, v in avg_entry_map.items() if "/" in str(k)}
-        cur_price_map = {k: v for k, v in cur_price_map.items() if "/" in str(k)}
-        sell_qty_by_symbol = {k: v for k, v in sell_qty_by_symbol.items() if "/" in str(k)}
+        current_map = {k: v for k, v in current_map.items() if is_crypto_sym(k)}
+        avg_entry_map = {k: v for k, v in avg_entry_map.items() if is_crypto_sym(k)}
+        cur_price_map = {k: v for k, v in cur_price_map.items() if is_crypto_sym(k)}
+        sell_qty_by_symbol = {k: v for k, v in sell_qty_by_symbol.items() if is_crypto_sym(k)}
 
     # liquidation_mode parity
     if cfg.rebalance.liquidation_mode == "hold_until_exit":
         for sym, cur in current_map.items():
-            if run_asset_mode == "equities" and "/" in sym:
+            if run_asset_mode == "equities" and is_crypto_sym(sym):
                 continue
-            if run_asset_mode == "crypto" and "/" not in sym:
+            if run_asset_mode == "crypto" and not is_crypto_sym(sym):
                 continue
             if sym not in target_map:
                 target_map[sym] = float(cur)
-                class_map.setdefault(sym, "crypto" if "/" in sym else "equity")
+                asset_class = "crypto" if is_crypto_sym(sym) else "equity"
+                class_map.setdefault(sym, asset_class)
 
     # immediate liquidation for excluded symbols
     if cfg.rebalance.symbol_pnl_floor_liquidate and excluded:
         for sym in excluded:
-            if run_asset_mode == "equities" and "/" in sym:
+            if run_asset_mode == "equities" and is_crypto_sym(sym):
                 continue
-            if run_asset_mode == "crypto" and "/" not in sym:
+            if run_asset_mode == "crypto" and not is_crypto_sym(sym):
                 continue
             if sym in current_map:
                 target_map[sym] = 0.0
-                class_map.setdefault(sym, "crypto" if "/" in sym else "equity")
+                asset_class = "crypto" if is_crypto_sym(sym) else "equity"
+                class_map.setdefault(sym, asset_class)
+
+    # Fallback: ensure all current positions have asset_class assigned
+    # (for liquidate_non_selected and other modes that don't explicitly set class_map)
+    # Note: crypto can be "/" (BTC/USD) or "XXXUSD" (BTCUSD) format
+    for sym in current_map:
+        if run_asset_mode == "equities" and is_crypto_sym(sym):
+            continue
+        if run_asset_mode == "crypto" and not is_crypto_sym(sym):
+            continue
+        asset_class = "crypto" if is_crypto_sym(sym) else "equity"
+        class_map.setdefault(sym, asset_class)
 
     print("[rebalance] Phase 5/6: building order plan…")
     # 6) Plan orders

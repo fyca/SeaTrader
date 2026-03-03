@@ -32,22 +32,28 @@ def _ref_for(cfg: BotConfig, asset_class: AssetClass, policy_type: PolicyType) -
 def resolve_policy(cfg: BotConfig, *, asset_class: AssetClass, policy_type: PolicyType) -> ResolvedPolicy:
     """Resolve policy with backward-compatible fallback.
 
-    - If per-asset builder ref is configured, load user strategy JSON as payload.
+    - If per-asset builder ref is configured, use get_strategy() which checks built-in first, then user.
     - Otherwise use legacy registry strategy object from cfg.strategy_id.
     """
     ref = _ref_for(cfg, asset_class, policy_type)
     if ref and ref.id:
-        spec = load_user_strategy(ref.id)
+        strategy_id = ref.id
+        # get_strategy handles both built-in registry and user strategies
+        strat = get_strategy(strategy_id)
+        
+        # Determine source: legacy built-in or builder
+        source = "legacy" if (hasattr(strat, 'id') and strat.id == strategy_id) else "builder"
+        
         return ResolvedPolicy(
             asset_class=asset_class,
             policy_type=policy_type,
-            source="builder",
-            strategy_id=ref.id,
+            source=source,
+            strategy_id=strategy_id,
             version=ref.version,
-            payload=spec,
+            payload=strat,
         )
 
-    # legacy fallback
+    # legacy fallback: use cfg.strategy_id
     strat = get_strategy(cfg.strategy_id)
     return ResolvedPolicy(
         asset_class=asset_class,

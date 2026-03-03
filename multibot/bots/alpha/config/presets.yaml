@@ -108,6 +108,122 @@ presets:
     min_avg_crypto_dollar_volume_20d: 100000
     symbol_pnl_floor_liquidate: true
     symbol_pnl_floor_include_unrealized: true
+- name: Working Safe V2
+  bot:
+    strategy_id: breakout_trend
+    risk:
+      per_asset_stop_loss_pct: 0.1
+      trailing_stop_stocks_enabled: false
+      trailing_stop_crypto_enabled: false
+      trailing_stop_stocks_start_gain_pct: 0.05
+      trailing_stop_crypto_start_gain_pct: 0.05
+      trailing_stop_stocks_pct: 0.02
+      trailing_stop_crypto_pct: 0.02
+      trailing_stop_anchor: highest_since_entry
+    rebalance:
+      rebalance_mode: target_notional
+      liquidation_mode: liquidate_non_selected
+      symbol_pnl_floor_pct: -0.5
+      symbol_pnl_floor_liquidate: true
+      symbol_pnl_floor_include_unrealized: true
+    scheduling:
+      weekly_rebalance_day: MON
+      daily_risk_check_time_local: '12:30'
+      equities:
+        risk_check_time_local: 06:30
+        rebalance_frequency: weekly
+        rebalance_day: MON
+        risk_check_frequency: daily
+        risk_check_day: MON
+        risk_check_minute_of_hour: 5
+        risk_check_hourly_checks:
+        - stop_loss
+        - dd_stop
+        rebalance_time_local: 06:30
+      crypto:
+        risk_check_time_local: 00:00
+        rebalance_frequency: daily
+        rebalance_day: MON
+        risk_check_frequency: daily
+        risk_check_day: MON
+        risk_check_minute_of_hour: 5
+        risk_check_hourly_checks:
+        - stop_loss
+        - dd_stop
+        rebalance_time_local: 00:00
+      weekly_rebalance_time_local: 06:30
+      timezone: America/Los_Angeles
+    execution:
+      fallback_to_market_at_open: true
+      fallback_time_local: 06:30
+      equities:
+        order_type: limit
+        limit_offset_bps: 10.0
+      crypto:
+        order_type: market
+        limit_offset_bps: 10.0
+  backtest:
+    strategy_id: breakout_trend
+    strategy_id_equities: breakout_trend
+    strategy_id_crypto: breakout_trend
+    exit_strategy_id_equities: stocks_exit_capital_protect
+    exit_strategy_id_crypto: null
+    exit_enabled_equities: true
+    exit_enabled_crypto: false
+    execution_time_mode: intraday
+    execution_time: close
+    execution_time_local: 06:30
+    execution_time_local_equities: 06:30
+    execution_time_local_crypto: 00:00
+    risk_check_time_local: '12:30'
+    risk_check_time_local_equities: 06:30
+    risk_check_time_local_crypto: 00:00
+    execution_tz: America/Los_Angeles
+    asset_mode: both
+    rebalance: weekly
+    rebalance_day: MON
+    rebalance_frequency_equities: weekly
+    rebalance_day_equities: MON
+    rebalance_frequency_crypto: daily
+    rebalance_day_crypto: MON
+    risk_check_frequency_equities: daily
+    risk_check_day_equities: MON
+    risk_check_minute_of_hour_equities: 5
+    risk_check_hourly_checks_equities:
+    - stop_loss
+    - dd_stop
+    risk_check_frequency_crypto: daily
+    risk_check_day_crypto: MON
+    risk_check_minute_of_hour_crypto: 5
+    risk_check_hourly_checks_crypto:
+    - stop_loss
+    - dd_stop
+    rebalance_mode: target_notional
+    liquidation_mode: liquidate_non_selected
+    slippage_bps: 10
+    order_type_equities: limit
+    order_type_crypto: market
+    limit_offset_bps_equities: 10
+    limit_offset_bps_crypto: 10
+    limit_fallback_to_market_open_equities: true
+    limit_fallback_to_market_open_crypto: true
+    limit_fallback_to_market_open: true
+    limit_fallback_time_local: 06:30
+    per_asset_stop_loss_pct: 0.1
+    trailing_stop_stocks_enabled: false
+    trailing_stop_crypto_enabled: false
+    trailing_stop_stocks_start_gain_pct: 0.05
+    trailing_stop_crypto_start_gain_pct: 0.05
+    trailing_stop_stocks_pct: 0.02
+    trailing_stop_crypto_pct: 0.02
+    trailing_stop_anchor: highest_since_entry
+    allow_same_day_roundtrip: false
+    portfolio_dd_stop: null
+    symbol_pnl_floor_pct: -0.5
+    min_crypto_price: null
+    min_avg_crypto_dollar_volume_20d: 100000
+    symbol_pnl_floor_liquidate: true
+    symbol_pnl_floor_include_unrealized: true
 - name: default_safe_weekly
   bot:
     strategy_id: baseline_trendvol
@@ -158,9 +274,9 @@ presets:
     strategy_id: baseline_trendvol
     execution_time_mode: intraday
     execution_time: close
-    execution_time_local: '06:30'
-    execution_time_local_equities: '06:30'
-    execution_time_local_crypto: '06:30'
+    execution_time_local: 06:30
+    execution_time_local_equities: 06:30
+    execution_time_local_crypto: 06:30
     risk_check_time_local: '12:30'
     risk_check_time_local_equities: '12:30'
     risk_check_time_local_crypto: '12:30'
