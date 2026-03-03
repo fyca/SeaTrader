@@ -778,6 +778,7 @@
             <tbody id="btTrades"></tbody>
           </table>
         </div>
+        <div id="btTradeDetail" class="muted" style="margin-top:8px;">(click a trade row to view entry/exit bar details)</div>
       </div>
       </div>
       <!-- backtest presets moved to top -->
@@ -2656,6 +2657,7 @@ async function renderBacktest(res) {
 
   // Trades table
   const tb = document.getElementById('btTrades');
+  const td = document.getElementById('btTradeDetail');
   if (tb) {
     tb.innerHTML = '';
     const trades = res.trades || [];
@@ -2672,6 +2674,22 @@ async function renderBacktest(res) {
       const xp = (t.exit_price!=null) ? ('$' + Number(t.exit_price).toFixed(2)) : '—';
       const pp = (t.pnl_pct!=null) ? pct(t.pnl_pct) : '—';
       tr.innerHTML = `<td>${t.symbol}</td><td>${t.entry_date||'—'}</td><td>${t.exit_date||'—'}</td><td>${Number(t.qty||0).toFixed(4)}</td><td>${ep}</td><td>${xp}</td><td>${money(pnl)}</td><td>${pp}</td><td>${t.reason||''}</td>`;
+      tr.style.cursor = 'pointer';
+      tr.onclick = () => {
+        if (!td) return;
+        const ebo = (t.entry_bar_open!=null) ? money(t.entry_bar_open) : '—';
+        const ebh = (t.entry_bar_high!=null) ? money(t.entry_bar_high) : '—';
+        const ebl = (t.entry_bar_low!=null) ? money(t.entry_bar_low) : '—';
+        const ebc = (t.entry_bar_close!=null) ? money(t.entry_bar_close) : '—';
+        const xbo = (t.exit_bar_open!=null) ? money(t.exit_bar_open) : '—';
+        const xbh = (t.exit_bar_high!=null) ? money(t.exit_bar_high) : '—';
+        const xbl = (t.exit_bar_low!=null) ? money(t.exit_bar_low) : '—';
+        const xbc = (t.exit_bar_close!=null) ? money(t.exit_bar_close) : '—';
+        td.innerHTML = `<div><b>${t.symbol||''}</b> • ${t.reason||''}</div>`
+          + `<div class="muted">Entry: ${t.entry_date||'—'} ${t.entry_time||'—'} • Exit: ${t.exit_date||'—'} ${t.exit_time||'—'}</div>`
+          + `<div class="muted" style="margin-top:4px;">Entry bar (${t.entry_bar_source||'—'}): O ${ebo} H ${ebh} L ${ebl} C ${ebc}</div>`
+          + `<div class="muted">Exit bar (${t.exit_bar_source||'—'}): O ${xbo} H ${xbh} L ${xbl} C ${xbc}</div>`;
+      };
       tb.appendChild(tr);
     }
     if (tb.children.length === 0) {
