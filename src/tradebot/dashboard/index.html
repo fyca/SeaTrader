@@ -2632,18 +2632,8 @@ async function renderBacktest(res) {
       const dayTrades = (res.trades || []);
       const dayTradeActions = [];
       for (const t of dayTrades) {
-        if (String(t.entry_date||'') === String(date)) {
-          dayTradeActions.push({
-            action: 'BUY',
-            symbol: t.symbol || '',
-            time: t.entry_time || '—',
-            price: t.entry_price,
-            qty: t.qty,
-            reason: t.reason || '',
-            bar_source: t.entry_bar_source,
-            bo: t.entry_bar_open, bh: t.entry_bar_high, bl: t.entry_bar_low, bc: t.entry_bar_close,
-          });
-        }
+        // res.trades are realized trade records (sell-side outcomes),
+        // so action should be SELL and keyed by exit_date.
         if (String(t.exit_date||'') === String(date)) {
           dayTradeActions.push({
             action: 'SELL',
