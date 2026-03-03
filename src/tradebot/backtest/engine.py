@@ -459,26 +459,28 @@ def run_backtest(
         hourly_price_cache[key] = v
         return v
 
-    def _clamp_fill_px(sym: str, day: pd.Timestamp, px_in: float, side: str) -> float:
-        """Clamp simulated fills to daily bar envelope for realism.
+    def _bar_extreme_fill_px(sym: str, day: pd.Timestamp, side: str, default_px: float) -> float:
+        """Worst-case bar-extreme execution model.
 
-        - buy fills cannot exceed day high
-        - sell fills cannot go below day low
+        Model #1 (requested):
+        - buys fill at day high
+        - sells fill at day low
+        Applies in both daily and intraday modes for conservative consistency.
         """
         try:
-            p = float(px_in)
             lo = px_low(sym, day)
             hi = px_high(sym, day)
-            if (lo is None) or (hi is None):
-                return p
-            lo = float(lo); hi = float(hi)
-            if side == "buy":
-                return float(min(max(p, lo), hi))
-            if side == "sell":
-                return float(max(min(p, hi), lo))
-            return float(min(max(p, lo), hi))
+            if side == "buy" and hi is not None:
+                return float(hi)
+            if side == "sell" and lo is not None:
+                return float(lo)
+            return float(default_px)
         except Exception:
-            return float(px_in)
+            return float(default_px)
+
+    def _clamp_fill_px(sym: str, day: pd.Timestamp, px_in: float, side: str) -> float:
+        # Keep API surface stable, but route to bar-extreme model.
+        return _bar_extreme_fill_px(sym, day, side, px_in)
 
     def _trail_cfg(sym: str) -> tuple[bool, float, float | None]:
         is_crypto = "/" in sym
@@ -783,12 +785,12 @@ def run_backtest(
         nonlocal cash
         sym = str(po.get("symbol"))
         side = str(po.get("side"))
-        # Fill time: rebalance at market open (09:30:00) for equities; use actual fill time for limit fills
-        if reason in ("limit_fallback_market_open", "limit_fill"):
-            fill_time = "09:30:00"  # market open
-        else:
-            fill_time = "09:30:00"  # default to market open for rebalance fills
-        
+        # Fill time: rebalance at market open (09:30:00)
+        fill_time = "09:30:00"
+
+        # Apply bar-extreme execution model for all pending fills.
+        fill_px = _bar_extreme_fill_px(sym, day, side, float(fill_px))
+
         if side == "buy":
             notional = float(po.get("notional") or 0.0)
             q_add = (notional / fill_px) if fill_px > 0 else 0.0
