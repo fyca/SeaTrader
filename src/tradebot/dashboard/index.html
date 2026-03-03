@@ -2631,9 +2631,25 @@ async function renderBacktest(res) {
       // Trade-level drilldown for this day (from realized trades ledger)
       const dayTrades = (res.trades || []);
       const dayTradeActions = [];
+
+      // BUY executions from day events (these are the actual buy fills)
+      for (const e of evs) {
+        if (String(e.type||'').toLowerCase() !== 'buy') continue;
+        dayTradeActions.push({
+          action: 'BUY',
+          symbol: e.symbol || '',
+          time: (String(e.fill_ts_local||'').split(' ')[1] || '09:30:00'),
+          price: e.price,
+          qty: e.qty,
+          reason: e.reason || '',
+          pnl: null,
+          bar_source: e.bar_source,
+          bo: e.bar_open, bh: e.bar_high, bl: e.bar_low, bc: e.bar_close,
+        });
+      }
+
+      // SELL executions from realized trades (sell-side outcomes), keyed by exit_date
       for (const t of dayTrades) {
-        // res.trades are realized trade records (sell-side outcomes),
-        // so action should be SELL and keyed by exit_date.
         if (String(t.exit_date||'') === String(date)) {
           dayTradeActions.push({
             action: 'SELL',
@@ -2648,6 +2664,13 @@ async function renderBacktest(res) {
           });
         }
       }
+      dayTradeActions.sort((a,b) => {
+        const sa = String(a.symbol||'');
+        const sb = String(b.symbol||'');
+        if (sa !== sb) return sa.localeCompare(sb);
+        return String(a.time||'').localeCompare(String(b.time||''));
+      });
+
       const tradeRowsHtml = dayTradeActions.length ? dayTradeActions.map(a => {
         const px = (a.price!=null) ? money(a.price) : '—';
         const qty = (a.qty!=null) ? Number(a.qty).toFixed(6) : '—';
