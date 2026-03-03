@@ -1614,7 +1614,6 @@ def run_backtest(
                             "fallback": _fallback_for(sym),
                         }
                         pending_limits.append(po)
-                        _event({"type":"order", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "side":"buy", "limit_px":float(limit_px), "notional":float(desired_notional), "reason":"limit_placed"})
                         # Same-day processing for newly placed limits (avoid next-day-only fills on daily backtests)
                         if _limit_touched(sym, day, "buy", float(limit_px)):
                             _apply_pending_fill(po, day=day, fill_px=float(limit_px), reason="limit_fill")
@@ -1688,7 +1687,6 @@ def run_backtest(
                             "fallback": _fallback_for(sym),
                         }
                         pending_limits.append(po)
-                        _event({"type":"order", "symbol":sym, "date":day.strftime("%Y-%m-%d"), "side":"sell", "limit_px":float(limit_px), "qty":float(q_sub), "reason":"limit_placed"})
                         # Same-day processing for newly placed limits (avoid next-day-only fills on daily backtests)
                         if _limit_touched(sym, day, "sell", float(limit_px)):
                             _apply_pending_fill(po, day=day, fill_px=float(limit_px), reason="limit_fill")
