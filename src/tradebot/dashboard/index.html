@@ -2610,7 +2610,6 @@ async function renderBacktest(res) {
       const detail = document.createElement('tr');
       detail.style.display = 'none';
       const rowsHtml = evs.length ? evs.slice().sort((a,b)=>String(a.type||'').localeCompare(String(b.type||''))).map(e=>{
-        const t = String(e.type||'').toLowerCase();
         let expPxNum = null;
         if (e.expected_price!=null) expPxNum = Number(e.expected_price);
         if ((expPxNum==null || !Number.isFinite(expPxNum)) && e.limit_px!=null) expPxNum = Number(e.limit_px);
@@ -2629,11 +2628,58 @@ async function renderBacktest(res) {
         return `<tr><td>${String(e.type||'').toUpperCase()}</td><td>${e.symbol||''}</td><td>${qty}</td><td>${expPx}</td><td>${px}</td><td>${notional}</td><td>${pnl}</td><td>${e.reason||''}</td></tr>`;
       }).join('') : `<tr><td colspan="8" class="muted">(no buys/sells)</td></tr>`;
 
+      // Trade-level drilldown for this day (from realized trades ledger)
+      const dayTrades = (res.trades || []);
+      const dayTradeActions = [];
+      for (const t of dayTrades) {
+        if (String(t.entry_date||'') === String(date)) {
+          dayTradeActions.push({
+            action: 'BUY',
+            symbol: t.symbol || '',
+            time: t.entry_time || '—',
+            price: t.entry_price,
+            qty: t.qty,
+            reason: t.reason || '',
+            bar_source: t.entry_bar_source,
+            bo: t.entry_bar_open, bh: t.entry_bar_high, bl: t.entry_bar_low, bc: t.entry_bar_close,
+          });
+        }
+        if (String(t.exit_date||'') === String(date)) {
+          dayTradeActions.push({
+            action: 'SELL',
+            symbol: t.symbol || '',
+            time: t.exit_time || '—',
+            price: t.exit_price,
+            qty: t.qty,
+            reason: t.reason || '',
+            pnl: t.pnl,
+            bar_source: t.exit_bar_source,
+            bo: t.exit_bar_open, bh: t.exit_bar_high, bl: t.exit_bar_low, bc: t.exit_bar_close,
+          });
+        }
+      }
+      const tradeRowsHtml = dayTradeActions.length ? dayTradeActions.map(a => {
+        const px = (a.price!=null) ? money(a.price) : '—';
+        const qty = (a.qty!=null) ? Number(a.qty).toFixed(6) : '—';
+        const pnl = (a.pnl!=null) ? money(a.pnl) : '—';
+        const bo = (a.bo!=null) ? money(a.bo) : '—';
+        const bh = (a.bh!=null) ? money(a.bh) : '—';
+        const bl = (a.bl!=null) ? money(a.bl) : '—';
+        const bc = (a.bc!=null) ? money(a.bc) : '—';
+        return `<tr><td>${a.action}</td><td>${a.symbol}</td><td>${a.time||'—'}</td><td>${qty}</td><td>${px}</td><td>${pnl}</td><td>${a.reason||''}</td><td>${a.bar_source||'—'}</td><td>O ${bo} H ${bh} L ${bl} C ${bc}</td></tr>`;
+      }).join('') : `<tr><td colspan="9" class="muted">(no realized trade executions this day)</td></tr>`;
+
       detail.innerHTML = `<td colspan="12">
-        <div class="tableWrap" style="max-height:220px; margin:8px 0;">
+        <div class="tableWrap" style="max-height:180px; margin:8px 0;">
           <table>
             <thead><tr><th>Type</th><th>Symbol</th><th>Qty</th><th>Expected Px</th><th>Fill Px</th><th>Notional</th><th>P/L</th><th>Reason</th></tr></thead>
             <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+        <div class="tableWrap" style="max-height:220px; margin:8px 0;">
+          <table>
+            <thead><tr><th>Action</th><th>Symbol</th><th>Time</th><th>Qty</th><th>Trade Px</th><th>P/L</th><th>Reason</th><th>Bar source</th><th>Execution bar</th></tr></thead>
+            <tbody>${tradeRowsHtml}</tbody>
           </table>
         </div>
       </td>`;
