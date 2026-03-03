@@ -552,12 +552,74 @@ def run_backtest(
 
     curve: list[dict] = []
 
+    def _bar_snapshot(sym: str, day_s: str) -> dict:
+        out = {
+            "bar_date": day_s,
+            "bar_source": None,
+            "bar_open": None,
+            "bar_high": None,
+            "bar_low": None,
+            "bar_close": None,
+            "bar_volume": None,
+        }
+        try:
+            df0 = bars_all.get(sym)
+            if df0 is None or len(df0) == 0:
+                return out
+            dkey = pd.Timestamp(day_s)
+            row = None
+            if dkey in df0.index:
+                row = df0.loc[dkey]
+                if isinstance(row, pd.DataFrame):
+                    row = row.iloc[-1]
+            else:
+                day_df = df0.loc[df0.index.normalize() == dkey]
+                if len(day_df):
+                    row = day_df.iloc[-1]
+            if row is None:
+                return out
+            out.update({
+                "bar_source": "daily_backtest_bars",
+                "bar_open": float(row.get("open")) if "open" in row else None,
+                "bar_high": float(row.get("high")) if "high" in row else None,
+                "bar_low": float(row.get("low")) if "low" in row else None,
+                "bar_close": float(row.get("close")) if "close" in row else None,
+                "bar_volume": float(row.get("volume")) if "volume" in row else None,
+            })
+        except Exception:
+            pass
+        return out
+
     def _record_trade(t: dict) -> None:
         """Record a realized trade (typically sells/trims/exits)."""
         # Ensure ledger always has explicit time fields for ticker reconciliation.
         t = dict(t)
         t.setdefault("entry_time", "09:30:00")
         t.setdefault("exit_time", "09:30:00")
+
+        # Attach entry/exit bar snapshots for drill-down in ledger views.
+        sym = str(t.get("symbol") or "").strip()
+        entry_date = str(t.get("entry_date") or "")
+        exit_date = str(t.get("exit_date") or "")
+        if sym and entry_date:
+            eb = _bar_snapshot(sym, entry_date)
+            t.setdefault("entry_bar_date", eb.get("bar_date"))
+            t.setdefault("entry_bar_source", eb.get("bar_source"))
+            t.setdefault("entry_bar_open", eb.get("bar_open"))
+            t.setdefault("entry_bar_high", eb.get("bar_high"))
+            t.setdefault("entry_bar_low", eb.get("bar_low"))
+            t.setdefault("entry_bar_close", eb.get("bar_close"))
+            t.setdefault("entry_bar_volume", eb.get("bar_volume"))
+        if sym and exit_date:
+            xb = _bar_snapshot(sym, exit_date)
+            t.setdefault("exit_bar_date", xb.get("bar_date"))
+            t.setdefault("exit_bar_source", xb.get("bar_source"))
+            t.setdefault("exit_bar_open", xb.get("bar_open"))
+            t.setdefault("exit_bar_high", xb.get("bar_high"))
+            t.setdefault("exit_bar_low", xb.get("bar_low"))
+            t.setdefault("exit_bar_close", xb.get("bar_close"))
+            t.setdefault("exit_bar_volume", xb.get("bar_volume"))
+
         trades.append(t)
         sym = str(t.get("symbol") or "").strip()
         pnl = float(t.get("pnl") or 0.0)
