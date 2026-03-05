@@ -8,6 +8,8 @@ from alpaca.data.requests import StockBarsRequest, CryptoBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.data.enums import DataFeed
 
+from tradebot.adapters.rate_limit import retry_on_rate_limit
+
 
 def _to_frame(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     # alpaca returns multi-index dataframe with symbol as top level sometimes
@@ -30,6 +32,7 @@ def _to_frame(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     return sub
 
 
+@retry_on_rate_limit(max_retries=5, initial_backoff=1.0)
 def fetch_stock_bars_range(
     stocks_client,
     symbols: list[str],
@@ -48,6 +51,7 @@ def fetch_stock_bars_range(
     return out
 
 
+@retry_on_rate_limit(max_retries=5, initial_backoff=1.0)
 def fetch_stock_bars_range_1m(
     stocks_client,
     symbols: list[str],
@@ -82,6 +86,7 @@ def fetch_stock_closes(stocks_client, symbols: list[str], *, lookback_days: int)
     return out
 
 
+@retry_on_rate_limit(max_retries=5, initial_backoff=1.0)
 def fetch_crypto_bars_range(
     crypto_client,
     symbols: list[str],
@@ -99,6 +104,7 @@ def fetch_crypto_bars_range(
     return out
 
 
+@retry_on_rate_limit(max_retries=5, initial_backoff=1.0)
 def fetch_crypto_bars_range_1m(
     crypto_client,
     symbols: list[str],
