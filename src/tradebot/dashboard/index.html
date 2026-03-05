@@ -322,7 +322,8 @@
           <button id="runPaperRebalanceEqBtn" class="secondary">Rebalance stocks now</button>
           <button id="runPaperRebalanceCrBtn" class="secondary">Rebalance crypto now</button>
           <button id="runScheduledRebalanceBtn" class="secondary">Run at configured time</button>
-          <button id="runRiskCheckBtn" class="secondary">Run risk-check</button>
+          <button id="runRiskCheckEqBtn" class="secondary">Risk-check stocks</button>
+          <button id="runRiskCheckCrBtn" class="secondary">Risk-check crypto</button>
           <button id="runFallbackSweepBtn" class="secondary">Run fallback sweep</button>
           <span id="runActionStatus" class="muted"></span>
         </div>
@@ -899,6 +900,7 @@
               </table>
             </div>
           </div>
+          <div style="margin-top:8px;" id="riskSummary"></div>
           <div style="margin-top:8px;"><details><summary class="muted">Raw JSON</summary><pre id="risk"></pre></details></div>
         </div>
       </div>
@@ -1535,7 +1537,9 @@ function _renderBtPvTimeline() {
   let maxYObserved = Math.max(...pts.map(p => p.v));
   if (!Number.isFinite(maxYObserved) || maxYObserved <= 0) maxYObserved = 1;
   const startV = pts[0].v;
-  const minY = startV;
+  let minYObserved = Math.min(...pts.map(p => p.v));
+  if (!Number.isFinite(minYObserved) || minYObserved <= 0) minYObserved = 1;
+  const minY = minYObserved;  // Use actual min, not start value
   let maxY = maxYObserved;
   if (!(maxY > minY)) maxY = minY * 1.001;
   const ySpan = (maxY - minY) || 1;
@@ -1599,7 +1603,7 @@ function _renderBtPvTimeline() {
 
   const delta = last.v - startV;
   const chg = startV ? (delta / startV) : 0;
-  meta.textContent = `points ${pts.length} • start ${money(startV)} • now ${money(last.v)} • Δ ${money(delta)} (${chg>=0?'+':''}${pct(chg)}) • y-range ${money(minY)} to ${money(maxY)} (start to peak)`;
+  meta.textContent = `points ${pts.length} • start ${money(startV)} • now ${money(last.v)} • Δ ${money(delta)} (${chg>=0?'+':''}${pct(chg)}) • y-range ${money(minY)} to ${money(maxY)} (min to max)`;
 }
 
 function _resetBtPvTimeline() {
@@ -2834,8 +2838,12 @@ async function main() {
   const lastRebalanceTs = artifacts.last_rebalance?.ts || artifacts.last_rebalance?.payload?.ts || '—';
   const lastRiskTs = artifacts.last_risk_check?.ts || artifacts.last_risk_check?.payload?.ts || '—';
   const riskPayload = artifacts.last_risk_check?.payload || {};
-  const riskAlerts = (Array.isArray(riskPayload.executed_liquidations) ? riskPayload.executed_liquidations.length : 0)
-    + (Array.isArray(riskPayload.exit_signals) ? riskPayload.exit_signals.length : 0);
+  const liquidationCount = Array.isArray(riskPayload.executed_liquidations) ? riskPayload.executed_liquidations.length : 0;
+  const exitSignalCount = Array.isArray(riskPayload.exit_signals) ? riskPayload.exit_signals.length : 0;
+  const riskAlerts = liquidationCount + exitSignalCount;
+  const liquidatedSyms = riskPayload.executed_liquidations?.map(l => l.symbol || '?').join(', ') || '';
+  const exitSyms = riskPayload.exit_signals?.map(e => e.symbol || '?').join(', ') || '';
+  const alertsTooltip = `Liquidations: ${liquidationCount}${liquidatedSyms ? ' (' + liquidatedSyms + ')' : ''} | Exit Signals: ${exitSignalCount}${exitSyms ? ' (' + exitSyms + ')' : ''}`;
   const dayDelta = (acct.day_change_equity==null ? '—' : (money(acct.day_change_equity) + ' (' + pct(acct.day_change_equity_pct) + ')'));
 
   const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
@@ -2848,10 +2856,37 @@ async function main() {
   setTxt('statusFreshness', health.ts || '—');
 
   setTxt('kpiEquity', money(acct.equity));
+  const kpiEquityEl = document.getElementById('kpiEquity');
+  if (kpiEquityEl) {
+    const equityTooltip = `Current: ${money(acct.equity)} | BOD: ${money(acct.bod_equity)} | Day Δ: ${money(acct.day_change_equity || 0)}`;
+    kpiEquityEl.title = equityTooltip;
+  }
+
   setTxt('kpiDay', dayDelta);
+  const kpiDayEl = document.getElementById('kpiDay');
+  if (kpiDayEl && acct.day_change_equity !== null && acct.day_change_equity !== undefined) {
+    const dayTooltip = `Day change: ${money(acct.day_change_equity)} (${pct(acct.day_change_equity_pct || 0)}) | Time: ${health.ts || '—'}`;
+    kpiDayEl.title = dayTooltip;
+  }
+
   setTxt('kpiDd', dd==null ? '—' : pct(dd));
+  const kpiDdEl = document.getElementById('kpiDd');
+  if (kpiDdEl) {
+    const ddTooltip = `Current drawdown: ${pct(dd || 0)} from peak | Peak: ${money(acct.bod_equity || 0)}`;
+    kpiDdEl.title = ddTooltip;
+  }
+
   setTxt('kpiAlerts', riskAlerts);
+  const kpiAlertsEl = document.getElementById('kpiAlerts');
+  if (kpiAlertsEl && alertsTooltip) kpiAlertsEl.title = alertsTooltip;
+
   setTxt('kpiOpenOrders', Array.isArray(openOrders) ? openOrders.length : 0);
+  const kpiOpenOrdersEl = document.getElementById('kpiOpenOrders');
+  if (kpiOpenOrdersEl) {
+    const openOrdersCount = Array.isArray(openOrders) ? openOrders.length : 0;
+    const orderTooltip = `Open orders: ${openOrdersCount} | Last rebalance: ${lastRebalanceTs}`;
+    kpiOpenOrdersEl.title = orderTooltip;
+  }
 
   const liveRuns = Array.isArray(liveRunsRes?.runs) ? liveRunsRes.runs : [];
   const liveEvents = Array.isArray(liveEventsRes?.events) ? liveEventsRes.events : [];
@@ -3456,13 +3491,28 @@ async function main() {
   } else {
     const x = curve.map(p => p.ts);
     const y = curve.map(p => Number(p.equity));
+    
+    // Get starting equity for reference line
+    const startEquity = (curve.length > 0 && curve[0].equity) ? Number(curve[0].equity) : (y.length > 0 ? y[0] : 100000);
+    
+    // Dynamically set y-axis range based on observed min/max
+    const minEquity = Math.min(...y);
+    const maxEquity = Math.max(...y);
+    const range = maxEquity - minEquity;
+    const padding = range * 0.05; // 5% padding
+    const yMin = minEquity - padding; // Allow going below start if losses occur
+    const yMax = maxEquity + padding;
+    
+    console.log('Equity curve y-axis: min=' + minEquity.toFixed(2) + ', max=' + maxEquity.toFixed(2) + ', yMin=' + yMin.toFixed(2) + ', yMax=' + yMax.toFixed(2));
+    
     ec.innerHTML = '<div id="equityPlot" style="height:320px;"></div>';
     Plotly.newPlot('equityPlot', [
-      {x, y, type:'scatter', mode:'lines', name:'Portfolio', line:{color:'#2563eb'}, hovertemplate:'%{x}<br>$%{y:,.2f}<extra></extra>'}
+      {x, y, type:'scatter', mode:'lines', name:'Portfolio', line:{color:'#2563eb'}, hovertemplate:'%{x}<br>$%{y:,.2f}<extra></extra>'},
+      {x, y: Array(x.length).fill(startEquity), type:'scatter', mode:'lines', name:'Starting Equity', line:{color:'#9ca3af', width:1, dash:'dash'}, hovertemplate:'$%{y:,.2f}<extra></extra>'}
     ], {
       margin:{l:50,r:20,t:10,b:40},
       xaxis:{title:'Time'},
-      yaxis:{title:'Equity'}
+      yaxis:{title:'Equity', range:[yMin, yMax], autorange:false}
     }, {displaylogo:false, responsive:true});
   }
 
@@ -4090,6 +4140,33 @@ async function main() {
   }
 
   document.getElementById('rebalance').textContent = artifacts.last_rebalance ? JSON.stringify(artifacts.last_rebalance, null, 2) : '(none yet)';
+  
+  // Populate risk summary
+  const riskSummaryEl = document.getElementById('riskSummary');
+  if (riskSummaryEl && artifacts.last_risk_check) {
+    const rk = artifacts.last_risk_check.payload || {};
+    const liqList = (rk.executed_liquidations || []);
+    const exitList = (rk.exit_signals || []);
+    let html = '<div style="margin-bottom:10px;">';
+    if (liqList.length > 0) {
+      html += '<div style="margin-bottom:8px;"><strong>Executed Liquidations (' + liqList.length + '):</strong><br>';
+      html += liqList.map(l => `<span style="font-family: ui-monospace; font-size:12px;">${l.symbol || '?'} - ${l.reason || 'portfolio'}</span>`).join('<br>');
+      html += '</div>';
+    }
+    if (exitList.length > 0) {
+      html += '<div><strong>Exit Signals (' + exitList.length + '):</strong><br>';
+      html += exitList.map(e => `<span style="font-family: ui-monospace; font-size:12px;">${e.symbol || '?'} - ${e.reason || 'risk'}</span>`).join('<br>');
+      html += '</div>';
+    }
+    if (liqList.length === 0 && exitList.length === 0) {
+      html += '<span class="muted">(no liquidations or exit signals)</span>';
+    }
+    html += '</div>';
+    riskSummaryEl.innerHTML = html;
+  } else if (riskSummaryEl) {
+    riskSummaryEl.innerHTML = '<span class="muted">(no risk check yet)</span>';
+  }
+  
   document.getElementById('risk').textContent = artifacts.last_risk_check ? JSON.stringify(artifacts.last_risk_check, null, 2) : '(none yet)';
 
   await renderExclusions();
@@ -4391,9 +4468,14 @@ document.getElementById('runScheduledRebalanceBtn')?.addEventListener('click', (
   runDashboardAction('rebalance', {wait_until_configured: true});
 });
 
-document.getElementById('runRiskCheckBtn')?.addEventListener('click', (e) => {
+document.getElementById('runRiskCheckEqBtn')?.addEventListener('click', (e) => {
   e.preventDefault();
-  runDashboardAction('risk-check');
+  runDashboardAction('risk-check', {asset_mode: 'stocks'});
+});
+
+document.getElementById('runRiskCheckCrBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  runDashboardAction('risk-check', {asset_mode: 'crypto'});
 });
 
 document.getElementById('runFallbackSweepBtn')?.addEventListener('click', (e) => {

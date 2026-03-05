@@ -66,6 +66,17 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     # Helper to identify crypto symbols (both "/" and "USD" suffix formats)
     def is_crypto_sym(sym: str) -> bool:
         return "/" in str(sym) or str(sym).endswith("USD")
+    
+    # Helper to normalize crypto symbols to canonical "/" format
+    def normalize_symbol(sym: str) -> str:
+        """Convert BTCUSD → BTC/USD for consistent matching."""
+        s = str(sym).upper().strip()
+        if "/" in s:
+            return s  # Already normalized
+        if s.endswith("USD") and len(s) > 3:
+            # BTCUSD → BTC/USD
+            return s[:-3] + "/" + s[-3:]
+        return s
 
     clients = make_alpaca_clients(env)
 
@@ -252,8 +263,9 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         equity_budget=equity_budget,
         crypto_budget=crypto_budget,
     )
-    target_map = {t.symbol: float(t.notional_usd) for t in targets}
-    class_map = {t.symbol: t.asset_class for t in targets}
+    # Normalize target symbols to match current_map (crypto: BTCUSD → BTC/USD)
+    target_map = {normalize_symbol(t.symbol): float(t.notional_usd) for t in targets}
+    class_map = {normalize_symbol(t.symbol): t.asset_class for t in targets}
     if run_asset_mode == "equities":
         # Keep only equities: not crypto
         target_map = {k:v for k,v in target_map.items() if not is_crypto_sym(k)}
@@ -270,29 +282,32 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     cur_price_map: dict[str, float] = {}
     sell_qty_by_symbol: dict[str, float] = {}
     for p in current_positions:
-        sym = getattr(p, "symbol", "")
+        sym = str(getattr(p, "symbol", "") or "").strip()
+        if not sym:
+            continue
+        # Normalize crypto symbols to canonical "/" format (BTCUSD → BTC/USD)
+        sym = normalize_symbol(sym)
         mv = float(getattr(p, "market_value", 0.0) or 0.0)
-        if sym:
-            current_map[sym] = mv
+        current_map[sym] = mv
+        try:
+            q_avail = float(getattr(p, "qty_available", 0.0) or 0.0)
+        except Exception:
+            q_avail = 0.0
+        if q_avail <= 0:
             try:
-                q_avail = float(getattr(p, "qty_available", 0.0) or 0.0)
+                q_avail = abs(float(getattr(p, "qty", 0.0) or 0.0))
             except Exception:
                 q_avail = 0.0
-            if q_avail <= 0:
-                try:
-                    q_avail = abs(float(getattr(p, "qty", 0.0) or 0.0))
-                except Exception:
-                    q_avail = 0.0
-            if q_avail > 0:
-                sell_qty_by_symbol[sym] = q_avail
-            try:
-                avg_entry_map[sym] = float(getattr(p, "avg_entry_price", 0.0) or 0.0)
-            except Exception:
-                pass
-            try:
-                cur_price_map[sym] = float(getattr(p, "current_price", 0.0) or 0.0)
-            except Exception:
-                pass
+        if q_avail > 0:
+            sell_qty_by_symbol[sym] = q_avail
+        try:
+            avg_entry_map[sym] = float(getattr(p, "avg_entry_price", 0.0) or 0.0)
+        except Exception:
+            pass
+        try:
+            cur_price_map[sym] = float(getattr(p, "current_price", 0.0) or 0.0)
+        except Exception:
+            pass
 
     # Strict asset-mode isolation: ignore out-of-scope holdings entirely.
     # crypto mode only sees crypto symbols (/ or USD suffix); equities mode only sees equity symbols.
@@ -370,9 +385,9 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     def _sell_cause(sym: str, cur_mv: float, tgt_mv: float) -> str:
         if sym in excluded:
             return "excluded_by_symbol_pnl_floor"
-        if run_asset_mode == "equities" and "/" in sym:
+        if run_asset_mode == "equities" and is_crypto_sym(sym):
             return "asset_mode_filtered_crypto"
-        if run_asset_mode == "crypto" and "/" not in sym:
+        if run_asset_mode == "crypto" and not is_crypto_sym(sym):
             return "asset_mode_filtered_equity"
         if tgt_mv <= 0 and cur_mv > 0 and sym not in selected_set:
             if cfg.rebalance.liquidation_mode == "liquidate_non_selected":

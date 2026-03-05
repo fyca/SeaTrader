@@ -9,7 +9,7 @@ limits:
   max_equity_positions: 6
   max_crypto_positions: 2
   min_stock_price: 5.0
-  min_crypto_price: 1.0
+  min_crypto_price: 1.01
   min_avg_dollar_volume_20d: 40000000.0
   min_avg_crypto_dollar_volume_20d: 500000.0
 risk:
@@ -58,7 +58,7 @@ execution:
   fallback_time_local: 06:30
   fallback_grace_seconds: 20
   extended_hours_start_time_local: 06:00
-  max_orders_per_run: 25
+  max_orders_per_run: 35
   max_single_order_notional_usd: null
   max_total_notional_usd: null
 scheduling:
@@ -110,7 +110,7 @@ strategies:
     exit_enabled: false
   crypto:
     entry_strategy:
-      id: Golden_cross
+      id: breakout_trend
       version: null
     exit_strategy: null
     exit_enabled: false

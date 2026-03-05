@@ -15,13 +15,15 @@ from tradebot.risk.drawdown import update_drawdown_state
 from tradebot.risk.exits import trend_break_exit
 from tradebot.util.config import load_config
 from tradebot.strategies.registry import get_strategy
-from tradebot.strategies.resolver import resolve_for_risk_check, strategy_snapshot, validate_strategy_refs
+from tradebot.strategies.resolver import resolve_for_risk_check, resolve_for_rebalance, strategy_snapshot, validate_strategy_refs
 from tradebot.util.env import load_env
 from tradebot.util.state import load_state, save_state
 from tradebot.util.artifacts import write_artifact
 from tradebot.util.equity_curve import append_equity_point
 from tradebot.util.market_hours import get_market_status
 from tradebot.util.live_ledger import append_live_run, append_live_events
+from tradebot.universe.equities import list_tradable_equities
+from tradebot.universe.crypto import list_tradable_crypto
 
 
 def _fallback_convert_open_limits(cfg, clients, market_status: dict) -> list[dict]:
@@ -147,6 +149,91 @@ def _fallback_convert_open_limits(cfg, clients, market_status: dict) -> list[dic
     return converted
 
 
+def preview_rebalance_selections(cfg, clients) -> dict:
+    """Preview what the rebalance strategy would select without running a full rebalance.
+    
+    Returns:
+        {
+            "stocks_would_select": [...],
+            "crypto_would_select": [...],
+            "held_stocks": [...],
+            "held_crypto": [...],
+            "stocks_to_add": [...],      # selected but not held
+            "stocks_to_remove": [...],   # held but not selected
+            "crypto_to_add": [...],
+            "crypto_to_remove": [...],
+        }
+    """
+    try:
+        # Fetch universes
+        eq_univ = list_tradable_equities(clients.trading, exclude_leveraged_etfs=cfg.universe.exclude_leveraged_etfs)
+        cr_univ = list_tradable_crypto(clients.trading)
+        
+        # Build candidate symbol lists (same logic as rebalance)
+        try:
+            from tradebot.universe.sp500 import get_sp500_symbols
+            sp500 = set(get_sp500_symbols())
+        except Exception:
+            sp500 = set()
+        
+        eq_all = [x.symbol for x in eq_univ]
+        eq_symbols = [s for s in eq_all if s in sp500] if sp500 else eq_all
+        eq_symbols = eq_symbols[:500]
+        
+        cr_all = cfg.universe.crypto_symbols_allowlist or [x.symbol for x in cr_univ]
+        cr_symbols = [s for s in cr_all if str(s).endswith("USD")]
+        cr_symbols = cr_symbols[:200]
+        
+        # Fetch bars
+        eq_bars = fetch_stock_bars(clients.stocks, eq_symbols, lookback_days=cfg.signals.lookback_days)
+        cr_bars = fetch_crypto_bars(clients.crypto, cr_symbols, lookback_days=cfg.signals.lookback_days)
+        
+        # Resolve entry strategies
+        resolved = resolve_for_rebalance(cfg)
+        eq_strategy_id = resolved["stocks_entry"].strategy_id
+        cr_strategy_id = resolved["crypto_entry"].strategy_id
+        
+        eq_strat = get_strategy(eq_strategy_id)
+        cr_strat = get_strategy(cr_strategy_id)
+        
+        # Run strategy selections
+        eq_sel, _ = eq_strat.select_equities(bars=eq_bars, cfg=cfg)
+        cr_sel, _ = cr_strat.select_crypto(bars=cr_bars, cfg=cfg)
+        
+        # Get current positions
+        positions = clients.trading.get_all_positions()
+        held_stocks = [p.symbol for p in positions if float(p.qty) != 0.0 and "/" not in p.symbol]
+        held_crypto = [p.symbol for p in positions if float(p.qty) != 0.0 and "/" in p.symbol]
+        
+        eq_sel_set = set(eq_sel)
+        cr_sel_set = set(cr_sel)
+        held_stocks_set = set(held_stocks)
+        held_crypto_set = set(held_crypto)
+        
+        return {
+            "stocks_would_select": list(eq_sel),
+            "crypto_would_select": list(cr_sel),
+            "held_stocks": held_stocks,
+            "held_crypto": held_crypto,
+            "stocks_to_add": list(eq_sel_set - held_stocks_set),
+            "stocks_to_remove": list(held_stocks_set - eq_sel_set),
+            "crypto_to_add": list(cr_sel_set - held_crypto_set),
+            "crypto_to_remove": list(held_crypto_set - cr_sel_set),
+        }
+    except Exception as ex:
+        return {
+            "error": str(ex),
+            "stocks_would_select": [],
+            "crypto_would_select": [],
+            "held_stocks": [],
+            "held_crypto": [],
+            "stocks_to_add": [],
+            "stocks_to_remove": [],
+            "crypto_to_add": [],
+            "crypto_to_remove": [],
+        }
+
+
 def _symbols_bought_today(clients, tz_name: str) -> set[str]:
     out: set[str] = set()
     try:
@@ -202,6 +289,9 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
     acct = clients.trading.get_account()
     equity = float(acct.equity)
     market_status = get_market_status(clients.trading)
+    
+    # Preview what rebalance strategy would select (to inform exit decisions)
+    rebalance_preview = preview_rebalance_selections(cfg, clients)
 
     state = load_state()
     dd_trigger = cfg.risk.portfolio_dd_stop if cfg.risk.portfolio_dd_stop is not None else cfg.risk.max_drawdown_freeze
@@ -230,6 +320,8 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
         eq_syms = []
 
     exit_plans = []
+    stocks_to_remove = set(rebalance_preview.get("stocks_to_remove", []))
+    crypto_to_remove = set(rebalance_preview.get("crypto_to_remove", []))
 
     stop_pct = cfg.risk.per_asset_stop_loss_pct
     if stop_pct is not None:
@@ -288,7 +380,13 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                     volumes = df["volume"].dropna() if "volume" in df.columns else None
                     ctx = EvalContext(closes=closes, ann_factor=252.0, highs=highs, lows=lows, opens=opens, volumes=volumes)
                     if eval_rule(ctx, user_exit_eq):
-                        exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": "user_exit_rule", "last_close": last_px})
+                        exit_plans.append({
+                            "symbol": sym,
+                            "asset_class": "equity",
+                            "reason": "user_exit_rule",
+                            "last_close": last_px,
+                            "strategy_removing": sym in stocks_to_remove,
+                        })
                         continue
                 except Exception:
                     pass
@@ -301,7 +399,15 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                     avg_entry = float(pos.avg_entry_price)
                     stop_level = avg_entry * (1 - stop_pct)
                     if last_px <= stop_level:
-                        exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": f"stop_loss_{int(stop_pct*100)}%", "last_close": last_px, "stop_level": stop_level, "avg_entry": avg_entry})
+                        exit_plans.append({
+                            "symbol": sym,
+                            "asset_class": "equity",
+                            "reason": f"stop_loss_{int(stop_pct*100)}%",
+                            "last_close": last_px,
+                            "stop_level": stop_level,
+                            "avg_entry": avg_entry,
+                            "strategy_removing": sym in stocks_to_remove,
+                        })
                         continue
 
             if trail_eq_enabled and (trail_eq_pct is not None) and trail_eq_pct > 0:
@@ -315,12 +421,27 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                     if armed:
                         trail_level = peak * (1 - trail_eq_pct)
                         if last_px <= trail_level:
-                            exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": "trailing_stop_stocks", "last_close": last_px, "trail_level": trail_level, "trail_peak": peak})
+                            exit_plans.append({
+                                "symbol": sym,
+                                "asset_class": "equity",
+                                "reason": "trailing_stop_stocks",
+                                "last_close": last_px,
+                                "trail_level": trail_level,
+                                "trail_peak": peak,
+                                "strategy_removing": sym in stocks_to_remove,
+                            })
                             continue
 
             should, reason, last, maL = trend_break_exit(closes, ma_long=cfg.signals.equity.ma_long)
             if should:
-                exit_plans.append({"symbol": sym, "asset_class": "equity", "reason": reason, "last_close": last, "ma_long": maL})
+                exit_plans.append({
+                    "symbol": sym,
+                    "asset_class": "equity",
+                    "reason": reason,
+                    "last_close": last,
+                    "ma_long": maL,
+                    "strategy_removing": sym in stocks_to_remove,
+                })
 
     if cr_syms:
         cr_bars = fetch_crypto_bars(clients.crypto, cr_syms, lookback_days=cfg.signals.lookback_days)
@@ -342,7 +463,13 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                     volumes = df["volume"].dropna() if "volume" in df.columns else None
                     ctx = EvalContext(closes=closes, ann_factor=365.0, highs=highs, lows=lows, opens=opens, volumes=volumes)
                     if eval_rule(ctx, user_exit_cr):
-                        exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": "user_exit_rule", "last_close": last_px})
+                        exit_plans.append({
+                            "symbol": sym,
+                            "asset_class": "crypto",
+                            "reason": "user_exit_rule",
+                            "last_close": last_px,
+                            "strategy_removing": sym in crypto_to_remove,
+                        })
                         continue
                 except Exception:
                     pass
@@ -353,7 +480,15 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                     avg_entry = float(pos.avg_entry_price)
                     stop_level = avg_entry * (1 - stop_pct)
                     if last_px <= stop_level:
-                        exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": f"stop_loss_{int(stop_pct*100)}%", "last_close": last_px, "stop_level": stop_level, "avg_entry": avg_entry})
+                        exit_plans.append({
+                            "symbol": sym,
+                            "asset_class": "crypto",
+                            "reason": f"stop_loss_{int(stop_pct*100)}%",
+                            "last_close": last_px,
+                            "stop_level": stop_level,
+                            "avg_entry": avg_entry,
+                            "strategy_removing": sym in crypto_to_remove,
+                        })
                         continue
 
             if trail_cr_enabled and (trail_cr_pct is not None) and trail_cr_pct > 0:
@@ -367,12 +502,27 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
                     if armed:
                         trail_level = peak * (1 - trail_cr_pct)
                         if last_px <= trail_level:
-                            exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": "trailing_stop_crypto", "last_close": last_px, "trail_level": trail_level, "trail_peak": peak})
+                            exit_plans.append({
+                                "symbol": sym,
+                                "asset_class": "crypto",
+                                "reason": "trailing_stop_crypto",
+                                "last_close": last_px,
+                                "trail_level": trail_level,
+                                "trail_peak": peak,
+                                "strategy_removing": sym in crypto_to_remove,
+                            })
                             continue
 
             should, reason, last, maL = trend_break_exit(closes, ma_long=cfg.signals.crypto.ma_long)
             if should:
-                exit_plans.append({"symbol": sym, "asset_class": "crypto", "reason": reason, "last_close": last, "ma_long": maL})
+                exit_plans.append({
+                    "symbol": sym,
+                    "asset_class": "crypto",
+                    "reason": reason,
+                    "last_close": last,
+                    "ma_long": maL,
+                    "strategy_removing": sym in crypto_to_remove,
+                })
 
     blocked_same_day: list[dict] = []
     if bool(getattr(cfg.risk, "block_same_day_roundtrip", True)) and exit_plans:
@@ -395,7 +545,8 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
     if exit_plans:
         print("\nExit signals:")
         for e in exit_plans:
-            print(f"- SELL {e['symbol']:12s} ({e['asset_class']}) reason={e['reason']}")
+            safe_note = " [strategy removing]" if e.get("strategy_removing") else ""
+            print(f"- SELL {e['symbol']:12s} ({e['asset_class']}) reason={e['reason']}{safe_note}")
     if blocked_same_day:
         print("\nSame-day roundtrip guard blocked exits:")
         for e in blocked_same_day:
@@ -475,6 +626,7 @@ def cmd_risk_check(args: argparse.Namespace) -> int:
             "crypto_exit_enabled": bool(cfg.strategies.crypto.exit_enabled),
         },
         "strategy_snapshot": strategy_snapshot(cfg),
+        "rebalance_preview": rebalance_preview,  # What the rebalance strategy would select
         "equity": equity,
         "peak_equity": dd_state.peak_equity,
         "drawdown": dd_state.drawdown,

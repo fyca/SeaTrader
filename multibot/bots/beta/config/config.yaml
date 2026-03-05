@@ -52,7 +52,7 @@ execution:
     order_type: market
     limit_offset_bps: 10.0
     fallback_to_market_at_open: true
-    fallback_time_local: 00:02
+    fallback_time_local: 00:00
   extended_hours: true
   fallback_to_market_at_open: true
   fallback_time_local: 06:30
@@ -114,5 +114,7 @@ strategies:
     entry_strategy:
       id: breakout_trend
       version: null
-    exit_strategy: null
-    exit_enabled: false
+    exit_strategy:
+      id: crypto_exit_capital_protect
+      version: null
+    exit_enabled: true

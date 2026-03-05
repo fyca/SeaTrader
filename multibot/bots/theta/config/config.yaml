@@ -9,7 +9,7 @@ limits:
   max_equity_positions: 14
   max_crypto_positions: 7
   min_stock_price: 5.0
-  min_crypto_price: 1.0
+  min_crypto_price: 1.01
   min_avg_dollar_volume_20d: 15000000.0
   min_avg_crypto_dollar_volume_20d: 100000.0
 risk:

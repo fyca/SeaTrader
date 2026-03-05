@@ -226,6 +226,7 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                 cr_day=str(getattr(p, "rebalance_day_crypto", None) or getattr(p, "rebalance_day", "MON")),
             )
             _last_prog_log = {"done": -1}
+            _last_progress = {"progress": 0, "total": 1, "current_equity": None}
 
             def prog(done, total, current_equity=None):
                 st = {"state": "running", "progress": done, "total": total}
@@ -234,6 +235,9 @@ def start_backtest(*, config_path: str, params: dict) -> str:
                         st["current_equity"] = float(current_equity)
                     except Exception:
                         pass
+                _last_progress["progress"] = int(done)
+                _last_progress["total"] = max(1, int(total))
+                _last_progress["current_equity"] = st.get("current_equity")
                 _write(status_path, st)
                 last_done = int(_last_prog_log.get("done", -1))
                 if (done == total) or (done - last_done >= 10) or (last_done < 0):
@@ -387,8 +391,19 @@ def start_backtest(*, config_path: str, params: dict) -> str:
             payload["metrics"]["timing"]["write_seconds"] = round(float(t_write_end - t_write_start), 4)
             payload["metrics"]["timing"]["total_seconds"] = round(float(t_write_end - t_job_start), 4)
             _write(result_path, payload)
-            _write(status_path, {"state": "done", "progress": 1, "total": 1})
-            _log("backtest_done", total_seconds=payload["metrics"]["timing"].get("total_seconds"))
+            done_progress = int(_last_progress.get("progress") or 0)
+            done_total = max(1, int(_last_progress.get("total") or 1))
+            done_status = {
+                "state": "done",
+                "progress": done_progress,
+                "total": done_total,
+                "completed": True,
+                "result_ready": True,
+            }
+            if _last_progress.get("current_equity") is not None:
+                done_status["current_equity"] = _last_progress.get("current_equity")
+            _write(status_path, done_status)
+            _log("backtest_done", total_seconds=payload["metrics"]["timing"].get("total_seconds"), progress=done_progress, total=done_total)
         except BacktestStopped:
             _write(status_path, {"state": "stopped", "progress": 0, "total": 1})
             _log("backtest_stopped")

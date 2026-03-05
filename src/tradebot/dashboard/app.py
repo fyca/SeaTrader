@@ -49,7 +49,6 @@ def create_app(*, config_path: str) -> FastAPI:
         "rebalance_last_run": None,
         "rebalance_last_state": None,
         "rebalance_last_error": None,
-
         "risk_daily_enabled": False,
         "risk_daily_started_at": None,
         "risk_next_run": None,
@@ -57,6 +56,11 @@ def create_app(*, config_path: str) -> FastAPI:
         "risk_last_state": None,
         "risk_last_error": None,
     }
+    
+    # Bars cache: {(asset_class, tuple(sorted_symbols), lookback_days): (bars_dict, timestamp)}
+    # Expires after 30 seconds to allow endpoints to reuse recent fetches
+    bars_cache: dict = {}
+    bars_cache_ttl_seconds = 30
 
     # Static assets (themes, icons, etc.)
     static_dir = Path(__file__).with_name("static")
