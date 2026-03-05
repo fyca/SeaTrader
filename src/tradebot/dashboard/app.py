@@ -28,6 +28,7 @@ from tradebot.util.state import load_state, save_state
 from tradebot.adapters.bars import fetch_stock_bars, fetch_crypto_bars
 from tradebot.util.market_hours import get_market_status
 from tradebot.util.live_ledger import get_runs as live_ledger_runs, get_events as live_ledger_events
+from tradebot.dashboard.client_pool import init_client_pool, get_pooled_clients
 
 
 def _read_json(path: Path):
@@ -61,6 +62,12 @@ def create_app(*, config_path: str) -> FastAPI:
     # Expires after 30 seconds to allow endpoints to reuse recent fetches
     bars_cache: dict = {}
     bars_cache_ttl_seconds = 30
+    
+    # Client pooling: create Alpaca clients once, reuse across all requests
+    # This prevents memory bloat from creating hundreds of new clients
+    env = load_env()
+    pooled_clients = make_alpaca_clients(env)
+    init_client_pool(pooled_clients)
 
     # Static assets (themes, icons, etc.)
     static_dir = Path(__file__).with_name("static")
@@ -322,8 +329,7 @@ def create_app(*, config_path: str) -> FastAPI:
         st = load_state()
         excluded = sorted(set([str(s).upper() for s in (st.excluded_symbols or []) if str(s).strip()]))
 
-        env = load_env()
-        clients = make_alpaca_clients(env)
+        clients = get_pooled_clients()
 
         pos_map: dict[str, dict] = {}
         try:
@@ -457,15 +463,13 @@ def create_app(*, config_path: str) -> FastAPI:
 
     @app.get("/api/market-status")
     def market_status():
-        env = load_env()
-        clients = make_alpaca_clients(env)
+        clients = get_pooled_clients()
         return get_market_status(clients.trading)
 
     @app.get("/api/positions")
     def positions():
         """Held positions only (Alpaca positions)."""
-        env = load_env()
-        clients = make_alpaca_clients(env)
+        clients = get_pooled_clients()
         pos = clients.trading.get_all_positions()
         out = []
         for p in pos:
