@@ -149,25 +149,61 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
     cr_all = cfg.universe.crypto_symbols_allowlist or [x.symbol for x in cr_univ]
     cr_symbols = [s for s in cr_all if str(s).endswith("USD")]
 
+    # 2) Resolve strategies early so we can prefilter symbol universe before pulling bars
+    resolved = resolve_for_rebalance(cfg)
+    eq_strategy_id = resolved["stocks_entry"].strategy_id
+    cr_strategy_id = resolved["crypto_entry"].strategy_id
+    eq_strat = get_strategy(eq_strategy_id)
+    cr_strat = get_strategy(cr_strategy_id)
+
+    # Apply symbol exclusion floor BEFORE bar fetch to avoid wasted API pulls
+    excluded = set([str(s).upper() for s in (state.excluded_symbols or [])])
+    floor = cfg.rebalance.symbol_pnl_floor_pct
+    if floor is not None:
+        for p in clients.trading.get_all_positions():
+            sym = str(getattr(p, "symbol", "") or "").upper()
+            if not sym:
+                continue
+            plpc = float(getattr(p, "unrealized_plpc", 0.0) or 0.0) if cfg.rebalance.symbol_pnl_floor_include_unrealized else 0.0
+            if plpc <= float(floor):
+                excluded.add(sym)
+
+    if excluded:
+        eq_symbols = [s for s in eq_symbols if str(s).upper() not in excluded]
+        cr_symbols = [s for s in cr_symbols if str(s).upper() not in excluded]
+
+    # Optional strategy-aware prefilter hook (if strategy implements it)
+    # Signature expected: prefilter_equity_symbols(symbols=[...], cfg=cfg) -> list[str]
+    # and/or prefilter_crypto_symbols(symbols=[...], cfg=cfg) -> list[str]
+    try:
+        if hasattr(eq_strat, "prefilter_equity_symbols"):
+            pre = eq_strat.prefilter_equity_symbols(symbols=list(eq_symbols), cfg=cfg)
+            if isinstance(pre, list):
+                eq_symbols = [str(s) for s in pre if str(s)]
+    except Exception as e:
+        print(f"[yellow]Strategy prefilter warning (equities):[/yellow] {e}")
+
+    try:
+        if hasattr(cr_strat, "prefilter_crypto_symbols"):
+            pre = cr_strat.prefilter_crypto_symbols(symbols=list(cr_symbols), cfg=cfg)
+            if isinstance(pre, list):
+                cr_symbols = [str(s) for s in pre if str(s)]
+    except Exception as e:
+        print(f"[yellow]Strategy prefilter warning (crypto):[/yellow] {e}")
+
     # Limit data pulls to manageable sizes
     eq_symbols = eq_symbols[:500]
     cr_symbols = cr_symbols[:200]
 
-    print(f"Universe candidates: equities={len(eq_symbols)} crypto={len(cr_symbols)}")
-
+    print(f"Universe candidates after prefilter: equities={len(eq_symbols)} crypto={len(cr_symbols)}")
     print(f"[rebalance] Phase 2/6: fetching bars (equities={len(eq_symbols)}, crypto={len(cr_symbols)})…")
-    # 2) Data
+
+    # 3) Data
     eq_bars = fetch_stock_bars(clients.stocks, eq_symbols, lookback_days=cfg.signals.lookback_days)
     cr_bars = fetch_crypto_bars(clients.crypto, cr_symbols, lookback_days=cfg.signals.lookback_days)
 
-    # 3) Strategy selection (per-asset strategy refs supported; legacy strategy_id fallback)
-    resolved = resolve_for_rebalance(cfg)
-    eq_strategy_id = resolved["stocks_entry"].strategy_id
-    cr_strategy_id = resolved["crypto_entry"].strategy_id
+    # 4) Strategy selection (per-asset strategy refs supported; legacy strategy_id fallback)
     print(f"[rebalance] Phase 3/6: evaluating entry strategies stocks='{eq_strategy_id}' crypto='{cr_strategy_id}'…")
-
-    eq_strat = get_strategy(eq_strategy_id)
-    cr_strat = get_strategy(cr_strategy_id)
 
     try:
         eq_sel, eq_sig_details = eq_strat.select_equities(bars=eq_bars, cfg=cfg)
@@ -239,23 +275,11 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                 d_txt = str(d)
             print(f"  {sym}: {d_txt}")
 
-    # Apply symbol exclusion floor (parity with backtest, unrealized-based in live).
-    excluded = set([str(s).upper() for s in (state.excluded_symbols or [])])
-    floor = cfg.rebalance.symbol_pnl_floor_pct
-    if floor is not None:
-        for p in clients.trading.get_all_positions():
-            sym = str(getattr(p, "symbol", "") or "").upper()
-            if not sym:
-                continue
-            plpc = float(getattr(p, "unrealized_plpc", 0.0) or 0.0) if cfg.rebalance.symbol_pnl_floor_include_unrealized else 0.0
-            if plpc <= float(floor):
-                excluded.add(sym)
-
+    # Apply exclusions to selected symbols as a final guard, then persist exclusions
     if excluded:
         eq_sel = [s for s in eq_sel if str(s).upper() not in excluded]
         cr_sel = [s for s in cr_sel if str(s).upper() not in excluded]
 
-    # Persist exclusions across runs
     state.excluded_symbols = sorted(excluded)
     save_state(state)
 

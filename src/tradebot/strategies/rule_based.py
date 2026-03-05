@@ -11,6 +11,31 @@ class RuleBasedStrategy:
         self.id = spec.get("id")
         self.name = spec.get("name") or self.id
 
+    def _prefilter_symbols(self, symbols: list[str]) -> list[str]:
+        """Optional static universe prefilter from strategy spec.
+
+        Supports:
+          spec.universe.include_symbols: ["AAPL", "MSFT", ...]
+          spec.universe.exclude_symbols: ["TSLA", ...]
+        This runs before bar fetch to reduce API load.
+        """
+        uni = self.spec.get("universe") or {}
+        include = {str(s).upper() for s in (uni.get("include_symbols") or []) if str(s).strip()}
+        exclude = {str(s).upper() for s in (uni.get("exclude_symbols") or []) if str(s).strip()}
+
+        out = [str(s).upper() for s in symbols if str(s).strip()]
+        if include:
+            out = [s for s in out if s in include]
+        if exclude:
+            out = [s for s in out if s not in exclude]
+        return out
+
+    def prefilter_equity_symbols(self, *, symbols: list[str], cfg):
+        return self._prefilter_symbols(symbols)
+
+    def prefilter_crypto_symbols(self, *, symbols: list[str], cfg):
+        return self._prefilter_symbols(symbols)
+
     def _select(self, *, bars: dict[str, pd.DataFrame], cfg, is_crypto: bool):
         entry_rule = self.spec.get("entry") or {"all": []}
         factors = self.spec.get("score_factors") or []
