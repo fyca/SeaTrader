@@ -14,6 +14,7 @@ from tradebot.adapters.bars import fetch_stock_bars, fetch_crypto_bars
 from tradebot.risk.drawdown import update_drawdown_state
 from tradebot.risk.exits import trend_break_exit
 from tradebot.util.config import load_config
+from tradebot.util.run_lock import RunLock
 from tradebot.strategies.registry import get_strategy
 from tradebot.strategies.resolver import resolve_for_risk_check, resolve_for_rebalance, strategy_snapshot, validate_strategy_refs
 from tradebot.util.env import load_env
@@ -275,6 +276,12 @@ def _symbols_bought_today(clients, tz_name: str) -> set[str]:
 
 
 def cmd_risk_check(args: argparse.Namespace) -> int:
+    # Check if rebalance is currently running; skip risk-check if it is
+    lock = RunLock()
+    if lock.is_rebalance_running():
+        print("[yellow]Rebalance is running[/yellow]; skipping risk-check to prevent conflicts")
+        return 0
+    
     cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
     ref_errors = validate_strategy_refs(cfg)
     if ref_errors:

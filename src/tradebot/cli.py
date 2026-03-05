@@ -23,6 +23,7 @@ from alpaca.trading.enums import TimeInForce
 from tradebot.execution.guardrails import check_order_guardrails
 from tradebot.risk.drawdown import update_drawdown_state
 from tradebot.util.state import load_state, save_state
+from tradebot.util.run_lock import RunLock
 from tradebot.commands.risk_check import cmd_risk_check
 from tradebot.commands.dashboard import cmd_dashboard
 from tradebot.util.artifacts import write_artifact
@@ -33,10 +34,18 @@ from tradebot.util.live_ledger import append_live_run, append_live_events
 
 def cmd_rebalance(args: argparse.Namespace) -> int:
     run_id = str(uuid.uuid4())
+    
+    # Acquire run lock to prevent concurrent risk-check execution
+    lock = RunLock()
+    if not lock.acquire_rebalance_lock():
+        print("[yellow]Rebalance already running[/yellow]; skipping")
+        return 1
+    
     # Optional preset override
     cfg = load_config(args.config, preset_override=getattr(args, "preset", None))
     ref_errors = validate_strategy_refs(cfg)
     if ref_errors:
+        lock.release_rebalance_lock()
         raise RuntimeError("Invalid strategy references: " + "; ".join(ref_errors))
     run_asset_mode = str(getattr(args, "asset_mode", None) or "both").lower()
     if run_asset_mode not in ("both", "equities", "crypto"):
@@ -530,6 +539,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
                 "dry_run": bool(dry_run),
             },
         )
+        lock.release_rebalance_lock()
         return 0
 
     # Hard safety: only allow placing when both config + env indicate paper
@@ -556,6 +566,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
             kind="rebalance_execution",
             payload={"state": "skipped", "reason": "no_plans_after_market_hours_guard", "paper": bool(env.paper), "dry_run": bool(dry_run)},
         )
+        lock.release_rebalance_lock()
         return 0
 
     gr = check_order_guardrails(
@@ -818,6 +829,7 @@ def cmd_rebalance(args: argparse.Namespace) -> int:
         qty_txt = f" qty={o.qty}" if (o.qty is not None and float(o.qty) > 0) else ""
         lim_txt = f" limit={o.limit_price}" if (o.limit_price is not None) else ""
         print(f"- {o.side.upper():4s} {o.symbol:12s} ${o.notional_usd:,.2f}{qty_txt} type={o.order_type}{lim_txt} id={o.id}")
+    lock.release_rebalance_lock()
     return 0
 
 
