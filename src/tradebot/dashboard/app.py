@@ -211,9 +211,8 @@ def create_app(*, config_path: str) -> FastAPI:
         entry = spec.get("entry") or {"all": []}
         exit_rule = spec.get("exit") or {"any": []}
         factors = spec.get("score_factors") or []
-
-        env = load_env()
-        clients = make_alpaca_clients(env)
+        
+        clients = get_pooled_clients()
 
         # fetch recent bars for just this symbol
         # Accept common crypto variants in preview input: BTC/USD, BTCUSD, BTC-USD, BTCUSD.PERP
@@ -412,8 +411,7 @@ def create_app(*, config_path: str) -> FastAPI:
 
     @app.get("/api/account")
     def account():
-        env = load_env()
-        clients = make_alpaca_clients(env)
+        clients = get_pooled_clients()
         acct = clients.trading.get_account()
 
         def _f(x, d=0.0):
@@ -493,8 +491,7 @@ def create_app(*, config_path: str) -> FastAPI:
 
         Adds estimated price/qty for notional market orders using last daily close.
         """
-        env = load_env()
-        clients = make_alpaca_clients(env)
+        clients = get_pooled_clients()
 
         # held positions
         held: dict[str, dict] = {}
@@ -620,8 +617,7 @@ def create_app(*, config_path: str) -> FastAPI:
         return s.upper()
 
     def _orders_by_status(status, limit: int = 500, include_current_price: bool = False):
-        env = load_env()
-        clients = make_alpaca_clients(env)
+        clients = get_pooled_clients()
         from alpaca.trading.requests import GetOrdersRequest
 
         req = GetOrdersRequest(status=status, limit=limit)
