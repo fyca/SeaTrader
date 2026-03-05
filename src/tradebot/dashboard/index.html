@@ -904,6 +904,18 @@
           <div style="margin-top:8px;"><details><summary class="muted">Raw JSON</summary><pre id="risk"></pre></details></div>
         </div>
       </div>
+      <div class="card col-12">
+        <h2>Bar fetch stats</h2>
+        <div class="muted" id="barFetchMeta">(none yet)</div>
+        <div class="tableWrap" style="margin-top:8px;">
+          <table>
+            <thead>
+              <tr><th>Time (UTC)</th><th>Kind</th><th>TF</th><th>Requested</th><th>With Data</th><th>Total Rows</th></tr>
+            </thead>
+            <tbody id="barFetchRows"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div class="card col-12" id="card-orders">
@@ -4168,6 +4180,29 @@ async function main() {
   }
   
   document.getElementById('risk').textContent = artifacts.last_risk_check ? JSON.stringify(artifacts.last_risk_check, null, 2) : '(none yet)';
+
+  // Bar fetch stats
+  try {
+    const bfs = artifacts.last_bar_fetch_stats || {};
+    const ev = Array.isArray(bfs.events) ? bfs.events : [];
+    const rows = document.getElementById('barFetchRows');
+    const meta = document.getElementById('barFetchMeta');
+    if (rows && meta) {
+      rows.innerHTML = '';
+      const tail = ev.slice(-20).reverse();
+      meta.textContent = tail.length ? `showing ${tail.length} most recent fetch events` : '(none yet)';
+      for (const e of tail) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${String(e.ts||'').replace('T',' ').replace('Z','')}</td><td>${e.kind||''}</td><td>${e.timeframe||''}</td><td>${Number(e.requested_symbols||0)}</td><td>${Number(e.symbols_with_data||0)}</td><td>${Number(e.total_rows||0)}</td>`;
+        rows.appendChild(tr);
+      }
+      if (!tail.length) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="6" class="muted">(no fetch stats yet)</td>`;
+        rows.appendChild(tr);
+      }
+    }
+  } catch (_) {}
 
   await renderExclusions();
 }
