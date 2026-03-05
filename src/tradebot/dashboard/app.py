@@ -1748,6 +1748,7 @@ def create_app(*, config_path: str) -> FastAPI:
             "last_rebalance": _read_json(base / "last_rebalance.json"),
             "last_risk_check": _read_json(base / "last_risk_check.json"),
             "last_placed_orders": _read_json(base / "last_placed_orders.json"),
+            "last_bar_fetch_stats": _read_json(base / "last_bar_fetch_stats.json"),
         }
 
     @app.get("/api/equity-curve")

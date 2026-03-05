@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import json
 
 import pandas as pd
 
@@ -12,7 +14,7 @@ from tradebot.adapters.rate_limit import retry_on_rate_limit
 
 
 def _log_fetch_summary(kind: str, timeframe: str, symbols: list[str], out: dict[str, pd.DataFrame]) -> None:
-    """Emit a compact fetch summary for debugging/forensics."""
+    """Emit and persist a compact fetch summary for debugging/forensics."""
     requested = len(symbols)
     with_data = 0
     total_rows = 0
@@ -24,7 +26,33 @@ def _log_fetch_summary(kind: str, timeframe: str, symbols: list[str], out: dict[
         if n > 0:
             with_data += 1
             total_rows += n
+
+    evt = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "kind": kind,
+        "timeframe": timeframe,
+        "requested_symbols": requested,
+        "symbols_with_data": with_data,
+        "total_rows": total_rows,
+    }
     print(f"[bars] {kind} {timeframe}: requested_symbols={requested} symbols_with_data={with_data} total_rows={total_rows}")
+
+    # Persist latest summary for dashboard/UI visibility
+    try:
+        p = Path("data/last_bar_fetch_stats.json")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        existing = {"events": []}
+        if p.exists():
+            try:
+                existing = json.loads(p.read_text()) or {"events": []}
+            except Exception:
+                existing = {"events": []}
+        events = list(existing.get("events") or [])
+        events.append(evt)
+        events = events[-200:]
+        p.write_text(json.dumps({"events": events, "latest": evt}, indent=2))
+    except Exception:
+        pass
 
 
 def _to_frame(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
