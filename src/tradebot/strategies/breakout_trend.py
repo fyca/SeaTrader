@@ -9,6 +9,16 @@ class BreakoutTrendStrategy:
     id = "breakout_trend"
     name = "Breakout trend (20D high + trend/vol filter)"
 
+    def _prefilter(self, symbols: list[str], *, is_crypto: bool):
+        # Hook for pre-bar universe filtering; currently pass-through.
+        return [str(s) for s in symbols if str(s)]
+
+    def prefilter_equity_symbols(self, *, symbols: list[str], cfg):
+        return self._prefilter(symbols, is_crypto=False)
+
+    def prefilter_crypto_symbols(self, *, symbols: list[str], cfg):
+        return self._prefilter(symbols, is_crypto=True)
+
     def _select(self, *, bars: dict[str, pd.DataFrame], cfg, is_crypto: bool):
         ok: list[tuple[str, float]] = []
         details: dict[str, dict] = {}

@@ -9,6 +9,16 @@ class BaselineTrendVolStrategy:
     id = "baseline_trendvol"
     name = "Baseline trend/vol"
 
+    def _prefilter(self, symbols: list[str], *, is_crypto: bool):
+        # Hook for pre-bar universe filtering; currently pass-through.
+        return [str(s) for s in symbols if str(s)]
+
+    def prefilter_equity_symbols(self, *, symbols: list[str], cfg):
+        return self._prefilter(symbols, is_crypto=False)
+
+    def prefilter_crypto_symbols(self, *, symbols: list[str], cfg):
+        return self._prefilter(symbols, is_crypto=True)
+
     def select_equities(self, *, bars: dict[str, pd.DataFrame], cfg):
         ok: list[tuple[str, float, float]] = []
         details: dict[str, dict] = {}

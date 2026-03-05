@@ -10,6 +10,16 @@ class PullbackInTrendStrategy:
     id = "pullback_in_trend"
     name = "Pullback-in-trend (above MA_long, near MA_short)"
 
+    def _prefilter(self, symbols: list[str], *, is_crypto: bool):
+        # Hook for pre-bar universe filtering; currently pass-through.
+        return [str(s) for s in symbols if str(s)]
+
+    def prefilter_equity_symbols(self, *, symbols: list[str], cfg):
+        return self._prefilter(symbols, is_crypto=False)
+
+    def prefilter_crypto_symbols(self, *, symbols: list[str], cfg):
+        return self._prefilter(symbols, is_crypto=True)
+
     def _select(self, *, bars: dict[str, pd.DataFrame], cfg, is_crypto: bool):
         sp = cfg.signals.crypto if is_crypto else cfg.signals.equity
         ann_factor = 365.0 if is_crypto else 252.0

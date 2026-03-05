@@ -11,6 +11,22 @@ from alpaca.data.enums import DataFeed
 from tradebot.adapters.rate_limit import retry_on_rate_limit
 
 
+def _log_fetch_summary(kind: str, timeframe: str, symbols: list[str], out: dict[str, pd.DataFrame]) -> None:
+    """Emit a compact fetch summary for debugging/forensics."""
+    requested = len(symbols)
+    with_data = 0
+    total_rows = 0
+    for _s, df in out.items():
+        try:
+            n = int(len(df)) if df is not None else 0
+        except Exception:
+            n = 0
+        if n > 0:
+            with_data += 1
+            total_rows += n
+    print(f"[bars] {kind} {timeframe}: requested_symbols={requested} symbols_with_data={with_data} total_rows={total_rows}")
+
+
 def _to_frame(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     # alpaca returns multi-index dataframe with symbol as top level sometimes
     if df is None or len(df) == 0:
@@ -48,6 +64,7 @@ def fetch_stock_bars_range(
     out: dict[str, pd.DataFrame] = {}
     for sym in symbols:
         out[sym] = _to_frame(df, sym)
+    _log_fetch_summary("stocks", "1d", symbols, out)
     return out
 
 
@@ -66,6 +83,7 @@ def fetch_stock_bars_range_1m(
     out: dict[str, pd.DataFrame] = {}
     for sym in symbols:
         out[sym] = _to_frame(df, sym)
+    _log_fetch_summary("stocks", "1m", symbols, out)
     return out
 
 
@@ -101,6 +119,7 @@ def fetch_crypto_bars_range(
     out: dict[str, pd.DataFrame] = {}
     for sym in symbols:
         out[sym] = _to_frame(df, sym)
+    _log_fetch_summary("crypto", "1d", symbols, out)
     return out
 
 
@@ -118,6 +137,7 @@ def fetch_crypto_bars_range_1m(
     out: dict[str, pd.DataFrame] = {}
     for sym in symbols:
         out[sym] = _to_frame(df, sym)
+    _log_fetch_summary("crypto", "1m", symbols, out)
     return out
 
 
