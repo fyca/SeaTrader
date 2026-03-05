@@ -722,7 +722,7 @@ def create_app(*, config_path: str) -> FastAPI:
         env = load_env()
         if not env.paper:
             raise HTTPException(status_code=400, detail="Refusing: APCA_PAPER is not true")
-        clients = make_alpaca_clients(env)
+        clients = get_pooled_clients()
         res = clients.trading.cancel_orders()
         return {"ok": True, "result": str(res)}
 
@@ -836,8 +836,7 @@ def create_app(*, config_path: str) -> FastAPI:
                         sec_eq, when_eq = _seconds_until_local_hhmm(eq_tm, tz_name)
                         waits.append(("equities", sec_eq, when_eq))
                     else:
-                        env2 = load_env()
-                        clients2 = make_alpaca_clients(env2)
+                        clients2 = get_pooled_clients()
                         sec_eq, when_eq, note_eq = _seconds_until_weekly_equity_market_day(eq_day, eq_tm, tz_name, clients2.trading)
                         waits.append(("equities", sec_eq, when_eq))
                         if note_eq:
